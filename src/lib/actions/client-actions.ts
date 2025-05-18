@@ -3,7 +3,7 @@
 
 import db from '@/lib/db';
 import type { Client } from '@/lib/types';
-import type { ResultSetHeader, RowDataPacket } from 'mysql2/promise';
+import type { ResultSetHeader, RowDataPacket, PoolConnection } from 'mysql2/promise';
 
 /**
  * Finds a client by name or creates a new one if not found.
@@ -37,15 +37,19 @@ export async function findOrCreateClientByName(clientName: string): Promise<Clie
       [trimmedClientName]
     );
 
-    if (result.insertId) {
+    if (result.insertId && result.insertId > 0) {
       console.log(`[ClientAction] Successfully created client: ID ${result.insertId}, Name ${trimmedClientName}`);
       return { id: String(result.insertId), name: trimmedClientName };
     } else {
-      console.error('[ClientAction] Failed to create client: No insertId returned.', result);
-      throw new Error('Failed to create client: No insertId returned.');
+      console.error('[ClientAction] Failed to create client: insertId is 0 or not returned. This often means the `id` column is not AUTO_INCREMENT.', result);
+      throw new Error('Failed to create client: No valid insertId returned. Check if `id` column is AUTO_INCREMENT.');
     }
   } catch (error: any) {
     console.error('[ClientAction] Original DB error in findOrCreateClientByName:', error);
+    // Avoid re-throwing if it's the custom error we just threw
+    if (error.message.includes('No valid insertId returned')) {
+        throw error;
+    }
     console.error(`[ClientAction] Failed to find or create client "${clientName}". Details: ${error.message}`);
     throw new Error(`Failed to find or create client "${clientName}".`);
   } finally {
@@ -71,4 +75,3 @@ export async function getAllClientsFromDB(): Promise<Client[]> {
     connection.release();
   }
 }
-

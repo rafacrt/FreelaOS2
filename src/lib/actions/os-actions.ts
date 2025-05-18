@@ -14,7 +14,7 @@ const generateNewOSNumero = async (connection: PoolConnection): Promise<string> 
   const [rows] = await connection.query<RowDataPacket[]>("SELECT MAX(CAST(numero AS UNSIGNED)) as maxNumero FROM os_table");
   const maxNumero = rows[0]?.maxNumero || 0;
   const newNumeroInt = Number(maxNumero) + 1;
-  return String(newNumeroInt).padStart(6, '0');
+  return String(newNumeroInt).padStart(6, '0'); // Ensure 6 digits with leading zeros
 };
 
 export async function createOSInDB(data: CreateOSData): Promise<OS> {
@@ -29,6 +29,7 @@ export async function createOSInDB(data: CreateOSData): Promise<OS> {
     const client = await findOrCreateClientByName(data.cliente);
     if (!client || !client.id) {
         console.error('[OSAction] Failed to get client ID for:', data.cliente);
+        await connection.rollback(); // Rollback if client creation fails
         throw new Error('Failed to get client ID.');
     }
     console.log(`[OSAction] Client resolved: ID ${client.id}, Name ${client.name}`);
@@ -41,6 +42,7 @@ export async function createOSInDB(data: CreateOSData): Promise<OS> {
       const partner = await findOrCreatePartnerByName(data.parceiro);
       if (!partner || !partner.id) {
           console.error('[OSAction] Failed to get partner ID for:', data.parceiro);
+          await connection.rollback(); // Rollback if partner creation fails
           throw new Error('Failed to get partner ID.');
       }
       partnerId = partner.id;
@@ -56,11 +58,19 @@ export async function createOSInDB(data: CreateOSData): Promise<OS> {
     console.log(`[OSAction] New OS numero generated: ${newOsNumero}`);
 
     // 4. Create OS
-    // Handle optional programadoPara date carefully
-    const programadoParaDate = data.programadoPara && data.programadoPara.trim() !== '' ? new Date(data.programadoPara) : null;
-    if (programadoParaDate && isNaN(programadoParaDate.getTime())) {
-        console.warn(`[OSAction] Invalid programadoPara date string received: "${data.programadoPara}". Setting to null.`);
-        // programadoParaDate = null; // It will already be null or an invalid date object which DB might reject or handle as null
+    let programadoParaDate: Date | null = null;
+    if (data.programadoPara && data.programadoPara.trim() !== '') {
+        const parsedDate = new Date(data.programadoPara);
+        // Check if the date is valid. The input type="date" should give YYYY-MM-DD.
+        // Appending T00:00:00Z to ensure it's treated as UTC midnight for storage if only date is given.
+        if (!isNaN(parsedDate.getTime())) {
+            // To store just the date part, we can format it back to YYYY-MM-DD string for MySQL DATE type
+            // Or if the column is DATETIME, ensure it's a full valid datetime.
+            // For a DATE column, passing a Date object directly is usually fine, MySQL driver handles it.
+             programadoParaDate = parsedDate;
+        } else {
+            console.warn(`[OSAction] Invalid programadoPara date string received: "${data.programadoPara}". Setting to null.`);
+        }
     }
 
 
@@ -70,11 +80,11 @@ export async function createOSInDB(data: CreateOSData): Promise<OS> {
       parceiro_id: partnerId ? parseInt(partnerId, 10) : null,
       projeto: data.projeto,
       tarefa: data.tarefa,
-      observacoes: data.observacoes || '',
-      tempoTrabalhado: data.tempoTrabalhado || null, // Ensure empty string becomes null
+      observacoes: data.observacoes || '', // Ensure empty string becomes empty string, not null, if column is NOT NULL
+      tempoTrabalhado: data.tempoTrabalhado || null, // Allow null if field is empty
       status: data.status || OSStatus.NA_FILA,
-      dataAbertura: new Date(), // Use current datetime
-      programadoPara: programadoParaDate,
+      dataAbertura: new Date(), 
+      programadoPara: programadoParaDate, // Use the Date object or null
       isUrgent: data.isUrgent || false,
       dataFinalizacao: null,
       dataInicioProducao: null,
@@ -96,7 +106,7 @@ export async function createOSInDB(data: CreateOSData): Promise<OS> {
         osDataForDB.tempoTrabalhado,
         osDataForDB.status,
         osDataForDB.dataAbertura,
-        osDataForDB.programadoPara, // Use the potentially null Date object
+        osDataForDB.programadoPara,
         osDataForDB.isUrgent,
         osDataForDB.dataFinalizacao,
         osDataForDB.dataInicioProducao,
@@ -104,21 +114,21 @@ export async function createOSInDB(data: CreateOSData): Promise<OS> {
       ]
     );
 
-    if (!result.insertId) {
-      console.error('[OSAction] Failed to create OS: No insertId returned from DB.', result);
-      throw new Error('Failed to create OS: No insertId returned.');
+    if (!result.insertId || result.insertId === 0) {
+      console.error('[OSAction] Failed to create OS: insertId is 0 or not returned. This often means the `id` column in os_table is not AUTO_INCREMENT.', result);
+      await connection.rollback();
+      throw new Error('Failed to create OS: No valid insertId returned from DB. Check AUTO_INCREMENT on os_table.id.');
     }
     console.log(`[OSAction] OS successfully inserted with ID: ${result.insertId}`);
 
     await connection.commit();
     console.log('[OSAction] Transaction committed.');
 
-    // Construct the OS object to return to the client (matching store's OS type)
     const createdOS: OS = {
       id: String(result.insertId),
       numero: newOsNumero,
-      cliente: client.name, // Use client name from resolved client
-      parceiro: partnerName, // Use partner name if exists from resolved partner
+      cliente: client.name, 
+      parceiro: partnerName, 
       clientId: client.id,
       partnerId: partnerId ?? undefined,
       projeto: data.projeto,
@@ -127,29 +137,26 @@ export async function createOSInDB(data: CreateOSData): Promise<OS> {
       tempoTrabalhado: data.tempoTrabalhado || '',
       status: data.status || OSStatus.NA_FILA,
       dataAbertura: osDataForDB.dataAbertura.toISOString(),
-      programadoPara: programadoParaDate ? programadoParaDate.toISOString().split('T')[0] : undefined, // Format YYYY-MM-DD for consistency
+      programadoPara: programadoParaDate ? programadoParaDate.toISOString().split('T')[0] : undefined,
       isUrgent: data.isUrgent || false,
-      // dataInicioProducao and tempoProducaoMinutos will be set when status changes via other actions
     };
     console.log('[OSAction] OS object constructed to return to client:', createdOS);
     return createdOS;
 
   } catch (error: any) {
-    await connection.rollback();
+    await connection.rollback(); // Ensure rollback on any error within the try block
     console.error('[OSAction] Original DB error in createOSInDB:', error);
-    console.error(`[OSAction] Failed to create OS. Details: ${error.message}`);
-    // Explicitly check if error is an instance of Error to access message property
-    if (error instanceof Error) {
-        throw new Error(`Failed to create OS: ${error.message}`);
+    if (error.message.includes('No valid insertId returned')) {
+        throw error;
     }
-    throw new Error('Failed to create OS due to an unknown error.');
+    console.error(`[OSAction] Failed to create OS. Details: ${error.message}`);
+    throw new Error(`Failed to create OS: ${error.message}`);
   } finally {
     connection.release();
     console.log('[OSAction] Connection released.');
   }
 }
 
-// Placeholder for future getAllOSFromDB - this is more complex due to joins needed
 export async function getAllOSFromDB(): Promise<OS[]> {
   const connection = await db.getConnection();
   try {
@@ -195,4 +202,3 @@ export async function getAllOSFromDB(): Promise<OS[]> {
     console.log('[OSAction] Connection released after fetching all OS.');
   }
 }
-
