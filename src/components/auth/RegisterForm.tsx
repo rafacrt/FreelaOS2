@@ -1,7 +1,8 @@
 
 'use client';
 
-import { useFormState, useFormStatus } from 'react-dom';
+import { useActionState } from 'react'; // Correct: useActionState from 'react'
+import { useFormStatus } from 'react-dom'; // Correct: useFormStatus from 'react-dom'
 import { registerUserAction } from '@/lib/actions/auth-actions';
 import { useEffect, useState } from 'react';
 import { AlertCircle, UserPlus } from 'lucide-react';
@@ -28,7 +29,7 @@ function SubmitButton() {
 
 export default function RegisterForm() {
   const router = useRouter();
-  const [state, formAction] = useFormState(registerUserAction, { message: null, type: undefined, redirect: undefined });
+  const [state, formAction] = useActionState(registerUserAction, { message: null, type: undefined, redirect: undefined });
   const [message, setMessage] = useState('');
   const [messageType, setMessageType] = useState<'success' | 'error' | undefined>(undefined);
 
@@ -37,7 +38,6 @@ export default function RegisterForm() {
       setMessage(state.message);
       setMessageType(state.type);
       if (state.type === 'success' && state.redirect) {
-        // Delay redirect slightly to allow user to see success message
         setTimeout(() => {
             router.push(state.redirect!);
         }, 1500);

@@ -1,11 +1,12 @@
 
 'use client';
 
-import { useActionState, useFormStatus } from 'react';
+import { useActionState } from 'react'; // Correct: useActionState from 'react'
+import { useFormStatus } from 'react-dom'; // Correct: useFormStatus from 'react-dom'
 import { loginAction } from '@/lib/actions/auth-actions';
 import { useEffect, useState } from 'react';
 import { AlertCircle, LogIn } from 'lucide-react';
-import { useRouter } from 'next/navigation'; // Import for potential redirection after login
+import { useRouter } from 'next/navigation';
 
 interface AuthFormProps {
   initialMessage?: string;
@@ -31,9 +32,6 @@ function SubmitButton() {
 }
 
 export default function AuthForm({ initialMessage, initialMessageType }: AuthFormProps) {
-  // The 'redirect' property might not be directly part of the state from loginAction,
-  // as redirection is often handled by calling redirect() within the action itself.
-  // However, if loginAction is designed to return a redirect path, this structure is fine.
   const [state, formAction] = useActionState(loginAction, { message: initialMessage || null, type: initialMessageType || undefined, redirect: undefined });
   const [message, setMessage] = useState(initialMessage || '');
   const [messageType, setMessageType] = useState<'success' | 'error' | undefined>(initialMessageType);
@@ -44,9 +42,6 @@ export default function AuthForm({ initialMessage, initialMessageType }: AuthFor
       setMessage(state.message);
       setMessageType(state.type);
     }
-    // Handle redirection if the action state indicates it
-    // Note: Direct redirection within Server Actions is usually preferred using `redirect()` from `next/navigation`.
-    // This client-side redirect based on state is a fallback or alternative.
     if (state?.type === 'success' && state?.redirect) {
       router.push(state.redirect);
     }
