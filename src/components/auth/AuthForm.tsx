@@ -1,5 +1,8 @@
 
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> 988ed2c (vc não pode colocar tudo isso já no projeto? (essa questão do bcrypt) onde meu trabalho seja unicamente criar as tabelas via sql lá no banco? vc cria uma área para cadastro de usuário, e o primeiro usuário registrado, já vira super admin, e do segundo em diante precisa de aprovação)
 'use client';
 
 import { useFormState, useFormStatus } from 'react-dom';
@@ -80,8 +83,11 @@ export default function AuthForm({ initialMessage, initialMessageType }: AuthFor
     </form>
   );
 }
+<<<<<<< HEAD
 =======
 // This file is no longer needed and will be deleted.
 // If you re-introduce login, you can recreate it.
 // For now, access is direct to the dashboard.
 >>>>>>> 8e19822 (remova a parte do login que fizemos alguns passos atrás)
+=======
+>>>>>>> 988ed2c (vc não pode colocar tudo isso já no projeto? (essa questão do bcrypt) onde meu trabalho seja unicamente criar as tabelas via sql lá no banco? vc cria uma área para cadastro de usuário, e o primeiro usuário registrado, já vira super admin, e do segundo em diante precisa de aprovação)

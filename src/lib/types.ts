@@ -20,8 +20,8 @@ export interface OS {
   numero: string;
   cliente: string;
   parceiro?: string;
-  clientId: string; // ID do cliente no banco
-  partnerId?: string; // ID do parceiro no banco
+  clientId: string; 
+  partnerId?: string; 
   projeto: string;
   tarefa: string;
   observacoes: string;
