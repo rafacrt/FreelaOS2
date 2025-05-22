@@ -2,7 +2,103 @@
 /* Use system font stack */
 body {
   font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  background-color: var(--bs-body-bg); /* Ensure body background uses Bootstrap variable */
+  color: var(--bs-body-color); /* Ensure body text color uses Bootstrap variable */
 }
+
+/* Define HSL variables for the new theme */
+:root {
+  --background: 0 0% 100%; /* Light background */
+  --foreground: 222.2 84% 4.9%; /* Dark text */
+
+  --card: 0 0% 100%;
+  --card-foreground: 222.2 84% 4.9%;
+
+  --popover: 0 0% 100%;
+  --popover-foreground: 222.2 84% 4.9%;
+
+  --primary: 30 100% 55%; /* Orange */
+  --primary-foreground: 0 0% 100%; /* White text on orange */
+
+  --secondary: 210 100% 50%; /* Blue */
+  --secondary-foreground: 0 0% 100%; /* White text on blue */
+
+  --muted: 210 40% 96.1%;
+  --muted-foreground: 215.4 16.3% 46.9%;
+
+  --accent: 30 100% 55%; /* Orange for accent */
+  --accent-foreground: 0 0% 100%; /* White text on orange accent */
+
+  --destructive: 0 84.2% 60.2%;
+  --destructive-foreground: 0 0% 98%;
+
+  --border: 214.3 31.8% 91.4%;
+  --input: 214.3 31.8% 91.4%;
+  --ring: 30 100% 55%; /* Orange for focus rings */
+
+  --radius: 0.5rem;
+
+  /* Bootstrap variable overrides using our HSL theme */
+  --bs-primary-hsl: var(--primary);
+  --bs-secondary-hsl: var(--secondary);
+  /* For text, Bootstrap uses -rgb vars for opacity control, convert HSL to RGB if needed or use direct color */
+  --bs-primary: hsl(var(--primary));
+  --bs-primary-rgb: 45,100%,55%; /* Orange as RGB - Note: This needs to be the actual R,G,B values, not H,S,L */
+  /* For orange hsl(30, 100%, 55%) -> approx rgb(255, 145, 25) */
+  --bs-primary-rgb-values: 255, 145, 25;
+  /* For blue hsl(210, 100%, 50%) -> approx rgb(0, 123, 255) */
+  --bs-secondary-rgb-values: 0, 123, 255;
+
+
+  --bs-body-color: hsl(var(--foreground));
+  --bs-body-bg: hsl(var(--background));
+  --bs-link-color: hsl(var(--primary));
+  --bs-link-hover-color: hsl(var(--primary) / 0.8); /* Slightly darker orange on hover */
+}
+
+[data-bs-theme="dark"] {
+  --background: 222.2 84% 4.9%; /* Dark background */
+  --foreground: 0 0% 98%; /* Light text */
+
+  --card: 222.2 84% 4.9%;
+  --card-foreground: 0 0% 98%;
+
+  --popover: 222.2 84% 4.9%;
+  --popover-foreground: 0 0% 98%;
+
+  --primary: 30 100% 55%; /* Orange - can adjust for dark mode if needed, e.g., slightly less saturated */
+  --primary-foreground: 0 0% 100%; /* White text on orange */
+
+  --secondary: 210 100% 60%; /* Lighter Blue for dark mode */
+  --secondary-foreground: 0 0% 100%;
+
+  --muted: 217.2 32.6% 17.5%;
+  --muted-foreground: 215 20.2% 65.1%;
+
+  --accent: 30 100% 55%; /* Orange for accent */
+  --accent-foreground: 0 0% 100%;
+
+  --destructive: 0 62.8% 30.6%;
+  --destructive-foreground: 0 0% 98%;
+
+  --border: 217.2 32.6% 17.5%;
+  --input: 217.2 32.6% 17.5%;
+  --ring: 30 100% 55%; /* Orange for focus rings */
+
+  /* Bootstrap variable overrides for dark mode */
+  --bs-primary: hsl(var(--primary));
+  /* For orange hsl(30, 100%, 55%) -> approx rgb(255, 145, 25) */
+  --bs-primary-rgb-values: 255, 145, 25;
+  /* For blue hsl(210, 100%, 60%) -> approx rgb(51, 149, 255) */
+  --bs-secondary-rgb-values: 51, 149, 255;
+
+
+  --bs-body-color: hsl(var(--foreground));
+  --bs-body-bg: hsl(var(--background));
+  --bs-link-color: hsl(var(--primary));
+  --bs-link-hover-color: hsl(var(--primary) / 0.8);
+}
+
 
 /* Basic hover lift effect for OSCard */
 .hover-lift .card {
@@ -239,91 +335,91 @@ body {
 [data-bs-theme="dark"] {
     /* Ensure background is dark */
     body {
-      background-color: #212529; /* Bootstrap dark background color */
-      color: #dee2e6; /* Bootstrap dark text color */
+      background-color: hsl(var(--background)) !important;
+      color: hsl(var(--foreground)) !important;
     }
 
     /* Adjust card background and border in dark mode */
     .card {
-        background-color: #343a40; /* Slightly lighter than body */
-        border-color: #495057 !important; /* Darker border */
+        background-color: hsl(var(--card));
+        border-color: hsl(var(--border)) !important;
     }
 
     /* Adjust card header/footer background */
      .card-header, .card-footer {
-        background-color: #3a4147; /* Slightly different shade for header/footer */
-        border-color: #495057 !important;
+        background-color: hsl(var(--card) / 0.8); /* Slightly different shade for header/footer */
+        border-color: hsl(var(--border)) !important;
     }
 
     /* Ensure text within cards is readable */
     .card-body, .card-title, .card-subtitle, .card-text {
-       color: #dee2e6; /* Light text for dark background */
+       color: hsl(var(--card-foreground));
     }
     .text-muted {
-        color: #adb5bd !important; /* Lighter muted text */
+        color: hsl(var(--muted-foreground)) !important;
     }
     .text-primary {
-        color: #6ea8fe !important; /* Adjust primary color for dark mode if needed */
+        color: hsl(var(--primary)) !important;
     }
-    .text-primary-emphasis { /* Ensure emphasis colors have contrast */
-         color: #8fbcff !important;
+    .text-primary-emphasis {
+         color: hsl(var(--primary) / 0.9) !important; /* Adjust for emphasis */
     }
      .text-secondary-emphasis {
-         color: #adb5bd !important;
+         color: hsl(var(--secondary) / 0.9) !important;
      }
     .text-success-emphasis {
-         color: #75b798 !important;
+         color: hsl(145 63% 49% / 0.9) !important; /* Example success color */
      }
      .text-info-emphasis {
-         color: #6bceee !important;
+         color: hsl(188 78% 41% / 0.9) !important; /* Example info color */
      }
      .text-warning-emphasis {
-         color: #ffda6a !important;
+         color: hsl(45 100% 51% / 0.9) !important; /* Example warning color */
      }
      .text-danger-emphasis {
-         color: #ff8f8f !important;
+         color: hsl(0 72% 51% / 0.9) !important; /* Example danger color */
      }
 
 
     /* Adjust form controls for dark mode */
     .form-control, .form-select {
-        background-color: #495057;
-        color: #dee2e6;
-        border-color: #6c757d;
+        background-color: hsl(var(--input));
+        color: hsl(var(--foreground));
+        border-color: hsl(var(--border));
     }
     .form-control::placeholder {
-        color: #adb5bd;
+        color: hsl(var(--muted-foreground));
     }
      .form-control:focus, .form-select:focus {
-        background-color: #495057;
-        color: #dee2e6;
-        border-color: #80bdff; /* Bootstrap focus color */
-        box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25); /* Bootstrap focus shadow */
+        background-color: hsl(var(--input));
+        color: hsl(var(--foreground));
+        border-color: hsl(var(--ring)); /* Use ring color for focus border */
+        box-shadow: 0 0 0 0.25rem hsla(var(--ring) / 0.25);
      }
-     .form-control-plaintext { /* Plaintext for dark mode */
-        color: #dee2e6;
+     .form-control-plaintext {
+        color: hsl(var(--foreground));
      }
 
 
     /* Adjust buttons for dark mode */
     .btn-outline-secondary {
-        color: #adb5bd;
-        border-color: #6c757d;
+        color: hsl(var(--secondary-foreground));
+        border-color: hsl(var(--secondary));
     }
     .btn-outline-secondary:hover {
-        color: #fff;
-        background-color: #6c757d;
-        border-color: #6c757d;
+        color: hsl(var(--secondary-foreground));
+        background-color: hsl(var(--secondary));
+        border-color: hsl(var(--secondary));
     }
     .btn-light { /* Adjust light buttons */
-        background-color: #495057;
-        border-color: #495057;
-        color: #dee2e6;
+        background-color: hsl(var(--muted));
+        border-color: hsl(var(--muted));
+        color: hsl(var(--muted-foreground));
     }
      .btn-light:hover {
-        background-color: #5a6268;
-        border-color: #5a6268;
-        color: #fff;
+        background-color: hsl(var(--muted) / 0.9);
+        border-color: hsl(var(--muted) / 0.9);
+        color: hsl(var(--muted-foreground));
      }
 
 
@@ -334,108 +430,118 @@ body {
 
     /* Adjust background for subtle variations */
     .bg-light {
-      background-color: #343a40 !important; /* Override Bootstrap light */
+      background-color: hsl(var(--muted) / 0.5) !important; /* Override Bootstrap light */
     }
      .bg-light-subtle {
-        background-color: #3a4147 !important;
+        background-color: hsl(var(--muted) / 0.3) !important;
      }
      .bg-body {
-        background-color: #212529 !important; /* Ensure bg-body matches dark body */
+        background-color: hsl(var(--background)) !important; /* Ensure bg-body matches dark body */
      }
 
 
     /* Fix DayPicker styles for dark mode */
     .rdp {
-        --rdp-cell-size: auto; /* Let cell size be determined by grid */
-        --rdp-accent-color: #6ea8fe; /* Use a light blue */
-        --rdp-background-color: #495057; /* Darker background for selected */
-        --rdp-accent-color-dark: #6ea8fe;
-        --rdp-background-color-dark: #495057;
+        --rdp-cell-size: auto;
+        --rdp-accent-color: hsl(var(--primary));
+        --rdp-background-color: hsl(var(--primary) / 0.1);
+        --rdp-accent-color-dark: hsl(var(--primary));
+        --rdp-background-color-dark: hsl(var(--primary) / 0.2);
         --rdp-outline: 2px solid var(--rdp-accent-color);
         --rdp-outline-selected: 3px solid var(--rdp-accent-color);
-        --rdp-selected-color: #fff; /* Text color for selected day */
-        color: #dee2e6; /* Default text color */
-        background-color: transparent; /* Let container handle background */
+        --rdp-selected-color: hsl(var(--primary-foreground));
+        color: hsl(var(--foreground));
+        background-color: transparent;
     }
      .rdp-table {
-        border-color: #495057 !important; /* Ensure table borders are visible */
+        border-color: hsl(var(--border)) !important;
      }
      .rdp-cell {
-        border-color: #495057 !important; /* Ensure cell borders are visible */
+        border-color: hsl(var(--border)) !important;
      }
 
      .rdp-head_cell {
-        color: #adb5bd; /* Lighter muted color for weekdays */
-        border-color: #495057 !important; /* Ensure head cell borders are visible */
+        color: hsl(var(--muted-foreground));
+        border-color: hsl(var(--border)) !important;
      }
 
     /* Dark mode for DayContent elements */
     .rdp-day .bg-light-subtle {
-        background-color: #495057 !important; /* Darker subtle background for OS items */
+        background-color: hsl(var(--muted) / 0.2) !important;
     }
      .rdp-day .text-dark {
-        color: #dee2e6 !important; /* Ensure strong text is light */
+        color: hsl(var(--foreground)) !important;
      }
-      .rdp-day .border-start {
-         /* Ensure border colors are distinct if needed, but rely on status class */
-      }
-
 
     .rdp-button:hover:not([disabled]):not(.rdp-day_selected) {
-      background-color: #495057; /* Darker hover */
+      background-color: hsl(var(--accent) / 0.1);
     }
      .rdp-button:focus-visible:not([disabled]) {
-         border: none; /* Remove default border */
-         box-shadow: 0 0 0 2px var(--rdp-accent-color); /* Use box-shadow for focus */
-         z-index: 2; /* Ensure focus ring is visible */
+         border: none;
+         box-shadow: 0 0 0 2px var(--rdp-accent-color);
+         z-index: 2;
      }
     .rdp-caption_label {
-        color: #dee2e6;
+        color: hsl(var(--foreground));
     }
-     .rdp-caption_dropdowns { /* Style dropdowns */
-        background-color: #495057;
+     .rdp-caption_dropdowns {
+        background-color: hsl(var(--input));
      }
      .rdp-dropdown {
-        background-color: #495057;
-        color: #dee2e6;
-        border: 1px solid #6c757d;
-        border-radius: .25rem; /* Match Bootstrap */
+        background-color: hsl(var(--input));
+        color: hsl(var(--foreground));
+        border: 1px solid hsl(var(--border));
+        border-radius: .25rem;
      }
       .rdp-dropdown:focus-visible {
-         border-color: #80bdff;
-         box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+         border-color: hsl(var(--ring));
+         box-shadow: 0 0 0 0.25rem hsla(var(--ring) / 0.25);
          outline: none;
       }
 
     /* Dark mode for urgent OS details page */
-    /* Remove global background from [data-bs-theme="dark"] .os-details-urgent */
     [data-bs-theme="dark"] .os-details-urgent .card {
-        border-color: var(--bs-danger, #842029) !important;
-        background-color: var(--bs-danger-bg-subtle, #3A2426) !important; /* Darker red subtle background for the card */
+        border-color: hsl(var(--destructive)) !important;
+        background-color: hsla(var(--destructive) / 0.1) !important;
     }
     [data-bs-theme="dark"] .os-details-urgent .card-header {
-        background-color: var(--bs-danger-bg-subtle, #3A2426) !important; /* Match card or slightly different */
-        border-bottom-color: var(--bs-danger-border-subtle, #a33a42) !important;
-        color: var(--bs-danger-text-emphasis, #ff8f8f) !important;
+        background-color: hsla(var(--destructive) / 0.15) !important;
+        border-bottom-color: hsla(var(--destructive) / 0.3) !important;
+        color: hsl(var(--destructive-foreground)) !important;
     }
     [data-bs-theme="dark"] .os-details-urgent .card-header .card-title,
     [data-bs-theme="dark"] .os-details-urgent .card-header .card-subtitle,
-    [data-bs-theme="dark"] .os-details-urgent .text-primary { /* text-primary within urgent card */
-        color: var(--bs-danger-text-emphasis, #ff8f8f) !important;
+    [data-bs-theme="dark"] .os-details-urgent .text-primary {
+        color: hsl(var(--destructive-foreground)) !important;
     }
     [data-bs-theme="dark"] .os-details-urgent .text-muted {
-        color: var(--bs-danger-text-emphasis, #e67c73) !important;
+        color: hsl(var(--destructive-foreground) / 0.8) !important;
         opacity: 0.85;
     }
      [data-bs-theme="dark"] .os-details-urgent .form-control,
      [data-bs-theme="dark"] .os-details-urgent .form-select {
-        border-color: var(--bs-danger, #842029);
-        background-color: #495057; /* Keep consistent with other dark form controls */
-        color: #dee2e6;
+        border-color: hsl(var(--destructive));
+        background-color: hsl(var(--input));
+        color: hsl(var(--foreground));
     }
     [data-bs-theme="dark"] .os-details-urgent .form-control:focus,
     [data-bs-theme="dark"] .os-details-urgent .form-select:focus {
-        border-color: var(--bs-danger, #842029);
-        box-shadow: 0 0 0 0.25rem rgba(132, 32, 41, 0.35); /* Darker red shadow */
+        border-color: hsl(var(--destructive));
+        box-shadow: 0 0 0 0.25rem hsla(var(--destructive) / 0.35);
     }
+}
+
+/* Ensure Bootstrap --bs-primary-rgb is defined based on HSL for components that need it */
+:root {
+  /* Convert HSL(30, 100%, 55%) to RGB: approx 255, 145, 25 */
+  --bs-primary-rgb: 255,145,25;
+  /* Convert HSL(210, 100%, 50%) to RGB: approx 0, 123, 255 */
+  --bs-secondary-rgb: 0,123,255;
+}
+
+[data-bs-theme="dark"] {
+  /* Convert HSL(30, 100%, 55%) to RGB: approx 255, 145, 25 */
+  --bs-primary-rgb: 255,145,25;
+  /* Convert HSL(210, 100%, 60%) to RGB: approx 51, 149, 255 */
+  --bs-secondary-rgb: 51,149,255;
 }

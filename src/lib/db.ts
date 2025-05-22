@@ -18,12 +18,19 @@ const dbConfig = {
 
 const pool = mysql.createPool(dbConfig);
 
+pool.on('error', (err) => {
+  console.error('[DB Pool Error] Erro inesperado no pool de conexões:', err);
+});
+
 export const testConnection = async () => {
   let connection;
   try {
     console.log(`[DB Test] Tentando conectar com: host=${dbConfig.host}, port=${dbConfig.port}, user=${dbConfig.user}, database=${dbConfig.database}`);
     connection = await pool.getConnection();
     console.log('✅ Conectado ao banco MySQL com sucesso usando o pool.');
+    // Perform a simple query to ensure the database is responsive
+    await connection.query('SELECT 1');
+    console.log('✅ Query de teste ("SELECT 1") executada com sucesso.');
     return true;
   } catch (error: any) {
     console.error('❌ Erro ao conectar ao banco MySQL usando o pool.');
@@ -38,13 +45,13 @@ export const testConnection = async () => {
         console.error(`   👉 ER_BAD_DB_ERROR: O banco de dados "${dbConfig.database}" não existe.`);
       }
     }
-    if (error.errno) console.error(`   Número do Erro: ${error.errno}`);
+    if (error.errno) console.error(`   Número do Erro (errno): ${error.errno}`);
     if (error.sqlState) console.error(`   SQLState: ${error.sqlState}`);
     return false;
   } finally {
     if (connection) {
       connection.release();
-      console.log('🔚 Conexão com o banco liberada.');
+      console.log('🔚 Conexão de teste com o banco liberada.');
     }
   }
 };

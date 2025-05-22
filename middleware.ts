@@ -1,35 +1,49 @@
 
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
+import { getSessionFromToken } from '@/lib/auth-edge'; // Import from Edge-safe auth file
+import { AUTH_COOKIE_NAME } from '@/lib/constants'; 
 
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Avoid processing for static assets and API routes
+  const publicPaths = ['/login', '/register', '/health'];
+
   if (
     pathname.startsWith('/_next/') ||
     pathname.startsWith('/api/') ||
-    pathname.includes('.') // Assume files with extensions are static assets
-   ) {
-    // console.log(`[Middleware] Ignoring static/API asset: ${pathname}`);
+    pathname.includes('.') 
+  ) {
     return NextResponse.next();
   }
 
-  console.log(`[Middleware] Processing request for path: ${pathname}`);
+  const tokenValue = request.cookies.get(AUTH_COOKIE_NAME)?.value;
+  const session = await getSessionFromToken(tokenValue); // Use Edge-safe getSessionFromToken
 
-  // Redirect from "/" to "/dashboard"
-  if (pathname === '/') {
-    console.log('[Middleware] Redirecting from / to /dashboard');
-    return NextResponse.redirect(new URL('/dashboard', request.url));
+  if (publicPaths.includes(pathname)) {
+    if (session && pathname !== '/health') {
+      return NextResponse.redirect(new URL('/dashboard', request.url));
+    }
+    return NextResponse.next();
   }
 
-  // For any other path, allow it to proceed.
-  // This is important for /dashboard, /os/[id], etc.
-  console.log(`[Middleware] Allowing request to proceed for path: ${pathname}`);
+  if (!session) {
+    const loginUrl = new URL('/login', request.url);
+    return NextResponse.redirect(loginUrl);
+  }
+  
+  if (!session.isApproved) {
+     console.log(`[Middleware] User ${session.username} is not approved. Redirecting to /login with status.`);
+     const loginUrl = new URL('/login', request.url);
+     loginUrl.searchParams.set('status', 'not_approved');
+     const response = NextResponse.redirect(loginUrl);
+     response.cookies.delete(AUTH_COOKIE_NAME); 
+     return response;
+  }
+
   return NextResponse.next();
 }
 
 export const config = {
-  // Matcher ensures middleware runs for relevant paths
   matcher: ['/((?!api|_next/static|_next/image|favicon.ico).*)'],
 };

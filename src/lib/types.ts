@@ -16,49 +16,51 @@ export const ALL_OS_STATUSES: OSStatus[] = [
 ];
 
 export interface OS {
-  id: string; // Will be the DB auto-incremented ID (as string)
-  numero: string; // 6-digit sequential number
-  cliente: string; // Name of the client
-  parceiro?: string; // Name of the partner
-  clientId: string; // Foreign key to clients table
-  partnerId?: string; // Foreign key to partners table (nullable)
+  id: string;
+  numero: string;
+  cliente: string;
+  parceiro?: string;
+  clientId: string; 
+  partnerId?: string; 
   projeto: string;
   tarefa: string;
   observacoes: string;
   tempoTrabalhado?: string;
   status: OSStatus;
-  dataAbertura: string; // ISO Date string (includes time)
-  dataFinalizacao?: string; // ISO Date string
-  programadoPara?: string; // ISO Date string (optional, YYYY-MM-DD format expected from input)
+  dataAbertura: string; // ISO string
+  dataFinalizacao?: string; // ISO string
+  programadoPara?: string; // YYYY-MM-DD string
   isUrgent: boolean;
-  dataInicioProducao?: string; // ISO Date string when status moves to 'Em Produção'
-  tempoProducaoMinutos?: number; // Calculated duration in minutes from 'Em Produção' to 'Finalizado'
+  dataInicioProducao?: string; // ISO string
+  tempoProducaoMinutos?: number;
 }
 
 export interface User {
   id: string;
   username: string;
+  isAdmin: boolean;
+  isApproved: boolean;
+  // Do not include password_hash here for security when passing user object around
 }
 
-// For CreateOSForm - keeps taking names
 export interface CreateOSData {
-  cliente: string; // Name of the client
-  parceiro?: string; // Name of the partner
+  cliente: string;
+  parceiro?: string;
   projeto: string;
   tarefa: string;
   observacoes: string;
   tempoTrabalhado?: string;
   status: OSStatus;
-  programadoPara?: string;
+  programadoPara?: string; // YYYY-MM-DD
   isUrgent: boolean;
 }
 
 export interface Client {
-    id: string; // Will be the DB auto-incremented ID (as string)
+    id: string;
     name: string;
 }
 
 export interface Partner {
-    id: string; // Will be the DB auto-incremented ID (as string)
+    id: string;
     name: string;
 }

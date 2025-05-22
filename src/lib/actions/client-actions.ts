@@ -8,16 +8,17 @@ import type { ResultSetHeader, RowDataPacket, PoolConnection } from 'mysql2/prom
 /**
  * Finds a client by name or creates a new one if not found.
  * Returns the client object (either existing or newly created).
+ * Accepts an optional existing connection to participate in a transaction.
  */
-export async function findOrCreateClientByName(clientName: string): Promise<Client> {
+export async function findOrCreateClientByName(clientName: string, existingConnection?: PoolConnection): Promise<Client> {
   if (!clientName || clientName.trim() === '') {
     throw new Error('Client name cannot be empty.');
   }
 
-  const connection = await db.getConnection();
+  const connection = existingConnection || await db.getConnection();
   try {
     const trimmedClientName = clientName.trim();
-    console.log(`[ClientAction] Attempting to find client: "${trimmedClientName}"`);
+    console.log(`[ClientAction] Attempting to find client: "${trimmedClientName}" using ${existingConnection ? 'existing' : 'new'} connection.`);
     // Check if client exists
     const [existingClients] = await connection.query<RowDataPacket[]>(
       'SELECT id, name FROM clients WHERE name = ?',
@@ -41,8 +42,8 @@ export async function findOrCreateClientByName(clientName: string): Promise<Clie
       console.log(`[ClientAction] Successfully created client: ID ${result.insertId}, Name ${trimmedClientName}`);
       return { id: String(result.insertId), name: trimmedClientName };
     } else {
-      console.error('[ClientAction] Failed to create client: insertId is 0 or not returned. This often means the `id` column is not AUTO_INCREMENT.', result);
-      throw new Error('Failed to create client: No valid insertId returned. Check if `id` column is AUTO_INCREMENT.');
+      console.error('[ClientAction] Failed to create client: insertId is 0 or not returned. This often means the `id` column is not AUTO_INCREMENT or a DB constraint failed.', result);
+      throw new Error('Failed to create client: No valid insertId returned. Check if `id` column is AUTO_INCREMENT and for other DB constraints.');
     }
   } catch (error: any) {
     console.error('[ClientAction] Original DB error in findOrCreateClientByName:', error);
@@ -53,7 +54,10 @@ export async function findOrCreateClientByName(clientName: string): Promise<Clie
     console.error(`[ClientAction] Failed to find or create client "${clientName}". Details: ${error.message}`);
     throw new Error(`Failed to find or create client "${clientName}".`);
   } finally {
-    connection.release();
+    // Only release the connection if we acquired it in this function
+    if (!existingConnection && connection) {
+      connection.release();
+    }
   }
 }
 
@@ -72,6 +76,6 @@ export async function getAllClientsFromDB(): Promise<Client[]> {
     console.error(`[ClientAction] Failed to fetch clients. Details: ${error.message}`);
     throw new Error('Failed to fetch clients from database.');
   } finally {
-    connection.release();
+    if (connection) connection.release();
   }
 }

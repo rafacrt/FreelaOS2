@@ -3,20 +3,21 @@
 
 import db from '@/lib/db';
 import type { Partner } from '@/store/os-store'; // Using Partner type from store as it's compatible
-import type { ResultSetHeader, RowDataPacket } from 'mysql2/promise';
+import type { ResultSetHeader, RowDataPacket, PoolConnection } from 'mysql2/promise';
 
 /**
  * Finds a partner by name or creates a new one if not found.
  * Returns the partner object (either existing or newly created).
+ * Accepts an optional existing connection to participate in a transaction.
  */
-export async function findOrCreatePartnerByName(partnerName: string): Promise<Partner> {
+export async function findOrCreatePartnerByName(partnerName: string, existingConnection?: PoolConnection): Promise<Partner> {
   if (!partnerName || partnerName.trim() === '') {
     throw new Error('Partner name cannot be empty.');
   }
-  const connection = await db.getConnection();
+  const connection = existingConnection || await db.getConnection();
   try {
     const trimmedPartnerName = partnerName.trim();
-    console.log(`[PartnerAction] Attempting to find partner: "${trimmedPartnerName}"`);
+    console.log(`[PartnerAction] Attempting to find partner: "${trimmedPartnerName}" using ${existingConnection ? 'existing' : 'new'} connection.`);
     // Check if partner exists
     const [existingPartners] = await connection.query<RowDataPacket[]>(
       'SELECT id, name FROM partners WHERE name = ?',
@@ -35,13 +36,13 @@ export async function findOrCreatePartnerByName(partnerName: string): Promise<Pa
       'INSERT INTO partners (name) VALUES (?)',
       [trimmedPartnerName]
     );
-    
+
     if (result.insertId && result.insertId > 0) {
       console.log(`[PartnerAction] Successfully created partner: ID ${result.insertId}, Name ${trimmedPartnerName}`);
       return { id: String(result.insertId), name: trimmedPartnerName };
     } else {
-      console.error('[PartnerAction] Failed to create partner: insertId is 0 or not returned. This often means the `id` column is not AUTO_INCREMENT.', result);
-      throw new Error('Failed to create partner: No valid insertId returned. Check if `id` column is AUTO_INCREMENT.');
+      console.error('[PartnerAction] Failed to create partner: insertId is 0 or not returned. This often means the `id` column is not AUTO_INCREMENT or a DB constraint failed.', result);
+      throw new Error('Failed to create partner: No valid insertId returned. Check if `id` column is AUTO_INCREMENT and for other DB constraints.');
     }
   } catch (error: any) {
     console.error('[PartnerAction] Original DB error in findOrCreatePartnerByName:', error);
@@ -51,7 +52,10 @@ export async function findOrCreatePartnerByName(partnerName: string): Promise<Pa
     console.error(`[PartnerAction] Failed to find or create partner "${partnerName}". Details: ${error.message}`);
     throw new Error(`Failed to find or create partner "${partnerName}".`);
   } finally {
-    connection.release();
+    // Only release the connection if we acquired it in this function
+    if (!existingConnection && connection) {
+      connection.release();
+    }
   }
 }
 
@@ -70,6 +74,6 @@ export async function getAllPartnersFromDB(): Promise<Partner[]> {
     console.error(`[PartnerAction] Failed to fetch partners. Details: ${error.message}`);
     throw new Error('Failed to fetch partners from database.');
   } finally {
-    connection.release();
+    if (connection) connection.release();
   }
 }
