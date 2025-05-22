@@ -1,4 +1,5 @@
 
+<<<<<<< HEAD
 'use client';
 
 import { useFormState, useFormStatus } from 'react-dom';
@@ -79,3 +80,8 @@ export default function AuthForm({ initialMessage, initialMessageType }: AuthFor
     </form>
   );
 }
+=======
+// This file is no longer needed and will be deleted.
+// If you re-introduce login, you can recreate it.
+// For now, access is direct to the dashboard.
+>>>>>>> 8e19822 (remova a parte do login que fizemos alguns passos atrás)

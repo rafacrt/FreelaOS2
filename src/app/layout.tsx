@@ -1,9 +1,12 @@
 
-import type { Metadata } from 'next';
+import type {Metadata} from 'next';
 import './globals.css';
 import Providers from '@/components/Providers';
 import Script from 'next/script';
 import ThemeProvider from '@/components/theme/ThemeProvider';
+// Toaster removed as login toasts are no longer needed.
+// If you need toasts for other purposes, you can re-add it.
+// import { Toaster } from '@/components/ui/toaster'; 
 
 export const metadata: Metadata = {
   title: 'FreelaOS', // Updated title
@@ -35,6 +38,7 @@ export default function RootLayout({
                <div className="page-transition-container d-flex flex-column flex-grow-1">
                  {children}
                </div>
+               {/* <Toaster /> */} {/* Toaster removed */}
             </Providers>
             <Script
                 src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
