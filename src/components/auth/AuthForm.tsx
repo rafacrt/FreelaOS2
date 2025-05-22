@@ -1,14 +1,11 @@
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
->>>>>>> 988ed2c (vc não pode colocar tudo isso já no projeto? (essa questão do bcrypt) onde meu trabalho seja unicamente criar as tabelas via sql lá no banco? vc cria uma área para cadastro de usuário, e o primeiro usuário registrado, já vira super admin, e do segundo em diante precisa de aprovação)
 'use client';
 
-import { useFormState, useFormStatus } from 'react-dom';
+import { useActionState, useFormStatus } from 'react';
 import { loginAction } from '@/lib/actions/auth-actions';
 import { useEffect, useState } from 'react';
 import { AlertCircle, LogIn } from 'lucide-react';
+import { useRouter } from 'next/navigation'; // Import for potential redirection after login
 
 interface AuthFormProps {
   initialMessage?: string;
@@ -34,16 +31,26 @@ function SubmitButton() {
 }
 
 export default function AuthForm({ initialMessage, initialMessageType }: AuthFormProps) {
-  const [state, formAction] = useFormState(loginAction, { message: initialMessage || null, type: initialMessageType || undefined });
+  // The 'redirect' property might not be directly part of the state from loginAction,
+  // as redirection is often handled by calling redirect() within the action itself.
+  // However, if loginAction is designed to return a redirect path, this structure is fine.
+  const [state, formAction] = useActionState(loginAction, { message: initialMessage || null, type: initialMessageType || undefined, redirect: undefined });
   const [message, setMessage] = useState(initialMessage || '');
   const [messageType, setMessageType] = useState<'success' | 'error' | undefined>(initialMessageType);
+  const router = useRouter();
 
   useEffect(() => {
     if (state?.message) {
       setMessage(state.message);
       setMessageType(state.type);
     }
-  }, [state]);
+    // Handle redirection if the action state indicates it
+    // Note: Direct redirection within Server Actions is usually preferred using `redirect()` from `next/navigation`.
+    // This client-side redirect based on state is a fallback or alternative.
+    if (state?.type === 'success' && state?.redirect) {
+      router.push(state.redirect);
+    }
+  }, [state, router]);
   
   return (
     <form action={formAction} className="space-y-4">
@@ -83,11 +90,3 @@ export default function AuthForm({ initialMessage, initialMessageType }: AuthFor
     </form>
   );
 }
-<<<<<<< HEAD
-=======
-// This file is no longer needed and will be deleted.
-// If you re-introduce login, you can recreate it.
-// For now, access is direct to the dashboard.
->>>>>>> 8e19822 (remova a parte do login que fizemos alguns passos atrás)
-=======
->>>>>>> 988ed2c (vc não pode colocar tudo isso já no projeto? (essa questão do bcrypt) onde meu trabalho seja unicamente criar as tabelas via sql lá no banco? vc cria uma área para cadastro de usuário, e o primeiro usuário registrado, já vira super admin, e do segundo em diante precisa de aprovação)

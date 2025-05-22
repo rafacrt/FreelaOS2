@@ -1,4 +1,3 @@
-
 // src/lib/auth-edge.ts
 // This file contains authentication logic that is safe to run in the Edge Runtime.
 // It does NOT include database interactions.
