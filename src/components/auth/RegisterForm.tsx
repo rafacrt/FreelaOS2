@@ -1,12 +1,11 @@
 
 'use client';
 
-import { useActionState } from 'react'; // Correct: useActionState from 'react'
-import { useFormStatus } from 'react-dom'; // Correct: useFormStatus from 'react-dom'
+import { useFormState, useFormStatus } from 'react-dom';
 import { registerUserAction } from '@/lib/actions/auth-actions';
-import { useEffect, useState } from 'react';
-import { AlertCircle, UserPlus } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { AlertCircle, UserPlus } from 'lucide-react';
+// import { toast } from '@/components/ui/use-toast';  // This import is present but not used.
 
 
 function SubmitButton() {
@@ -29,7 +28,7 @@ function SubmitButton() {
 
 export default function RegisterForm() {
   const router = useRouter();
-  const [state, formAction] = useActionState(registerUserAction, { message: null, type: undefined, redirect: undefined });
+  const [state, formAction] = useFormState(registerUserAction, { message: null, type: undefined, redirect: undefined });
   const [message, setMessage] = useState('');
   const [messageType, setMessageType] = useState<'success' | 'error' | undefined>(undefined);
 
@@ -37,10 +36,19 @@ export default function RegisterForm() {
     if (state?.message) {
       setMessage(state.message);
       setMessageType(state.type);
+      // if (state.type === 'error' && state.message) {
+      //   toast({
+      //     variant: "destructive",
+      //     title: "Erro de Registro",
+      //     description: state.message,
+      //   });
+      // }
+      // Redirection logic
       if (state.type === 'success' && state.redirect) {
+        // Delay redirect slightly to allow user to see success message
         setTimeout(() => {
             router.push(state.redirect!);
-        }, 1500);
+        }, state.message ? 1500 : 500); // Shorter delay if no specific message
       }
     }
   }, [state, router]);
