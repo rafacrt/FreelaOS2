@@ -8,17 +8,14 @@ import { useTheme } from '@/hooks/useTheme';
 import { logoutAction } from '@/lib/actions/auth-actions';
 import { usePathname } from 'next/navigation';
 
-interface HeaderProps {
-  user: User | null;
-}
-
-// New Abstract Logo SVG (Orange and Blue)
+// Updated Abstract Logo SVG (Orange Theme)
 const FreelaOSLogo = () => (
   <svg width="28" height="28" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <rect width="100" height="100" rx="15" fill="hsl(var(--primary))"/> {/* Orange background */}
+    <rect width="100" height="100" rx="15" fill="hsl(var(--primary))"/> {/* Main Orange background */}
     <path d="M25 75V25L50 50L25 75Z" fill="hsl(var(--primary-foreground))"/> {/* White/Light foreground element */}
     <path d="M75 25V75L50 50L75 25Z" fill="hsl(var(--primary-foreground))"/>
-    <rect x="45" y="15" width="10" height="70" fill="hsl(var(--secondary))"/> {/* Blue accent */}
+    {/* Changed blue accent to a slightly different orange or primary-foreground for simplicity */}
+    <rect x="45" y="15" width="10" height="70" fill="hsl(var(--primary-foreground))"/>
   </svg>
 );
 
@@ -40,7 +37,7 @@ export default function Header({ user }: HeaderProps) {
       <div className="container">
         <Link href={user ? "/dashboard" : "/login"} className="navbar-brand d-flex align-items-center">
           <FreelaOSLogo />
-          <span className="fs-5 fw-bold ms-2" style={{ color: 'hsl(var(--primary))' }}>FreelaOS</span> {/* Removed "Minimal" */}
+          <span className="fs-5 fw-bold ms-2" style={{ color: 'hsl(var(--primary))' }}>FreelaOS</span>
         </Link>
 
         <div className="d-flex align-items-center ms-auto">
@@ -79,3 +76,5 @@ export default function Header({ user }: HeaderProps) {
     </header>
   );
 }
+
+    

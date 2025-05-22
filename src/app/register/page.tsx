@@ -2,13 +2,14 @@
 import RegisterForm from '@/components/auth/RegisterForm';
 import Link from 'next/link';
 
-// New Abstract Logo SVG (Orange and Blue) to match Header
+// Updated Abstract Logo SVG (Orange Theme)
 const FreelaOSRegisterLogo = () => (
   <svg width="48" height="48" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" className="mb-2">
-    <rect width="100" height="100" rx="15" fill="hsl(var(--primary))"/>
-    <path d="M25 75V25L50 50L25 75Z" fill="hsl(var(--primary-foreground))"/>
+    <rect width="100" height="100" rx="15" fill="hsl(var(--primary))"/> {/* Main Orange background */}
+    <path d="M25 75V25L50 50L25 75Z" fill="hsl(var(--primary-foreground))"/> {/* White/Light foreground element */}
     <path d="M75 25V75L50 50L75 25Z" fill="hsl(var(--primary-foreground))"/>
-    <rect x="45" y="15" width="10" height="70" fill="hsl(var(--secondary))"/>
+    {/* Changed blue accent to a slightly different orange or primary-foreground for simplicity */}
+    <rect x="45" y="15" width="10" height="70" fill="hsl(var(--primary-foreground))"/>
   </svg>
 );
 
@@ -34,3 +35,5 @@ export default function RegisterPage() {
     </div>
   );
 }
+
+    

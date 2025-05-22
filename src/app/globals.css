@@ -20,8 +20,8 @@ body {
   --primary: 30 100% 55%; /* Orange */
   --primary-foreground: 0 0% 100%; /* White text on orange */
 
-  --secondary: 210 100% 50%; /* Blue */
-  --secondary-foreground: 0 0% 100%; /* White text on blue */
+  --secondary: 30 90% 50%; /* Slightly different Orange for secondary, or a neutral gray e.g. 220 10% 50% */
+  --secondary-foreground: 0 0% 100%; /* White text on orange secondary */
 
   --muted: 210 40% 96.1%;
   --muted-foreground: 215.4 16.3% 46.9%;
@@ -43,11 +43,12 @@ body {
   --bs-secondary-hsl: var(--secondary);
   /* For text, Bootstrap uses -rgb vars for opacity control, convert HSL to RGB if needed or use direct color */
   --bs-primary: hsl(var(--primary));
-  --bs-primary-rgb: 45,100%,55%; /* Orange as RGB - Note: This needs to be the actual R,G,B values, not H,S,L */
+  --bs-secondary: hsl(var(--secondary));
+
   /* For orange hsl(30, 100%, 55%) -> approx rgb(255, 145, 25) */
   --bs-primary-rgb-values: 255, 145, 25;
-  /* For blue hsl(210, 100%, 50%) -> approx rgb(0, 123, 255) */
-  --bs-secondary-rgb-values: 0, 123, 255;
+  /* For orange secondary hsl(30, 90%, 50%) -> approx rgb(255, 136, 0) */
+  --bs-secondary-rgb-values: 255, 136, 0;
 
 
   --bs-body-color: hsl(var(--foreground));
@@ -69,7 +70,7 @@ body {
   --primary: 30 100% 55%; /* Orange - can adjust for dark mode if needed, e.g., slightly less saturated */
   --primary-foreground: 0 0% 100%; /* White text on orange */
 
-  --secondary: 210 100% 60%; /* Lighter Blue for dark mode */
+  --secondary: 30 90% 60%; /* Lighter Orange for dark mode secondary */
   --secondary-foreground: 0 0% 100%;
 
   --muted: 217.2 32.6% 17.5%;
@@ -87,10 +88,11 @@ body {
 
   /* Bootstrap variable overrides for dark mode */
   --bs-primary: hsl(var(--primary));
+  --bs-secondary: hsl(var(--secondary));
   /* For orange hsl(30, 100%, 55%) -> approx rgb(255, 145, 25) */
   --bs-primary-rgb-values: 255, 145, 25;
-  /* For blue hsl(210, 100%, 60%) -> approx rgb(51, 149, 255) */
-  --bs-secondary-rgb-values: 51, 149, 255;
+  /* For orange secondary hsl(30, 90%, 60%) -> approx rgb(255, 157, 51) */
+  --bs-secondary-rgb-values: 255, 157, 51;
 
 
   --bs-body-color: hsl(var(--foreground));
@@ -403,8 +405,8 @@ body {
 
     /* Adjust buttons for dark mode */
     .btn-outline-secondary {
-        color: hsl(var(--secondary-foreground));
-        border-color: hsl(var(--secondary));
+        color: hsl(var(--secondary-foreground)); /* Will use orange foreground */
+        border-color: hsl(var(--secondary)); /* Orange border */
     }
     .btn-outline-secondary:hover {
         color: hsl(var(--secondary-foreground));
@@ -535,13 +537,15 @@ body {
 :root {
   /* Convert HSL(30, 100%, 55%) to RGB: approx 255, 145, 25 */
   --bs-primary-rgb: 255,145,25;
-  /* Convert HSL(210, 100%, 50%) to RGB: approx 0, 123, 255 */
-  --bs-secondary-rgb: 0,123,255;
+  /* Convert HSL(30, 90%, 50%) to RGB: approx 255, 136, 0 */
+  --bs-secondary-rgb: 255,136,0;
 }
 
 [data-bs-theme="dark"] {
   /* Convert HSL(30, 100%, 55%) to RGB: approx 255, 145, 25 */
   --bs-primary-rgb: 255,145,25;
-  /* Convert HSL(210, 100%, 60%) to RGB: approx 51, 149, 255 */
-  --bs-secondary-rgb: 51,149,255;
+  /* Convert HSL(30, 90%, 60%) to RGB: approx 255, 157, 51 */
+  --bs-secondary-rgb: 255,157,51;
 }
+
+    
