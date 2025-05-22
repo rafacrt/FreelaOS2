@@ -38,7 +38,8 @@ yarn-error.log*
 next-env.d.ts
 
 .genkit/*
-.env*
+.env
+.env.example
 .db.sql
 
 # firebase
