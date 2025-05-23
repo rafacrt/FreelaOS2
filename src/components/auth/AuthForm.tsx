@@ -4,7 +4,7 @@
 import { useActionState, useEffect, useState } from 'react';
 import { useFormStatus } from 'react-dom';
 import { loginAction } from '@/lib/actions/auth-actions';
-import type { AuthActionState } from '@/lib/types'; 
+import type { AuthActionState } from '@/lib/types';
 import { AlertCircle, LogIn } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
@@ -40,8 +40,10 @@ export default function AuthForm({ initialMessage, initialMessageType }: AuthFor
     redirect: undefined,
   };
 
+  // Use useActionState
   const [state, formAction] = useActionState<AuthActionState, FormData>(loginAction, initialState);
 
+  // Local state to manage the message display, initialized from props or action state
   const [displayMessage, setDisplayMessage] = useState(initialState.message);
   const [displayMessageType, setDisplayMessageType] = useState(initialState.type);
 
@@ -49,20 +51,22 @@ export default function AuthForm({ initialMessage, initialMessageType }: AuthFor
     if (state?.message) {
       setDisplayMessage(state.message);
       setDisplayMessageType(state.type);
-    } else if (initialState.message && !state?.message) { 
-      // Ensure initial message persists if action hasn't returned a new one
+    } else if (initialState.message && !state?.message) {
+      // Persist initial message if action hasn't returned a new one
       setDisplayMessage(initialState.message);
       setDisplayMessageType(initialState.type);
     }
+  }, [state?.message, state?.type, initialState.message, initialState.type]);
 
 
+  useEffect(() => {
+    console.log("[AuthForm] Redirection useEffect. state.type:", state?.type, "state.redirect:", state?.redirect);
     if (state?.type === 'success' && state?.redirect) {
-      const timer = setTimeout(() => {
-        router.push(state.redirect!);
-      }, state.message ? 1000 : 100); 
-      return () => clearTimeout(timer);
+      console.log(`[AuthForm] Success state detected. Redirecting to: ${state.redirect}`);
+      // No timeout for now, redirect immediately
+      router.push(state.redirect);
     }
-  }, [state, router, initialState.message, initialState.type]);
+  }, [state?.type, state?.redirect, router]); // Specific dependencies
 
   return (
     <form action={formAction} className="space-y-4">

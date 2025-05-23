@@ -18,24 +18,6 @@ if (typeof process === 'undefined' || typeof process.env === 'undefined') {
 let JWT_SECRET_KEY = process.env.JWT_SECRET;
 let key: Uint8Array;
 
-if (!JWT_SECRET_KEY || (typeof JWT_SECRET_KEY === 'string' && JWT_SECRET_KEY.trim() === '')) {
-  JWT_SECRET_KEY = 'DEFAULT_INSECURE_JWT_SECRET_REPLACE_IN_ENV_LOCAL_IMMEDIATELY_12345'; // Fallback for local dev
-  console.warn('**************************************************************************************');
-  console.warn('*                                 ATENÇÃO DE SEGURANÇA                                 *');
-  console.warn('*                                                                                    *');
-  console.warn('* A variável de ambiente JWT_SECRET não foi definida no arquivo .env.local.          *');
-  console.warn('* Para fins de desenvolvimento local, uma CHAVE PADRÃO E INSEGURA está sendo usada.  *');
-  console.warn('*                                                                                    *');
-  console.warn('* ==> NÃO USE ESTA CONFIGURAÇÃO EM PRODUÇÃO OU QUALQUER AMBIENTE REAL. <==           *');
-  console.warn('*                                                                                    *');
-  console.warn('* Crie um arquivo .env.local na raiz do projeto e adicione:                          *');
-  console.warn('* JWT_SECRET=SUA_CHAVE_SECRETA_FORTE_E_ALEATORIA_AQUI                               *');
-  console.warn('* E reinicie o servidor Next.js.                                                     *');
-  console.warn('**************************************************************************************');
-} else {
-  console.log(`[Auth-Edge] JWT_SECRET LIDO COM SUCESSO do ambiente. Length: ${JWT_SECRET_KEY.length}.`);
-}
-
 try {
   if (typeof JWT_SECRET_KEY !== 'string') {
     console.error('[Auth-Edge] CRITICAL ERROR: JWT_SECRET_KEY is not a string before TextEncoder.encode. Type:', typeof JWT_SECRET_KEY);
