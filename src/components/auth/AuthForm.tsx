@@ -1,9 +1,10 @@
 
 'use client';
 
-import { useActionState, useEffect, useState } from 'react'; // Correct: useActionState from 'react'
-import { useFormStatus } from 'react-dom'; // Correct: useFormStatus from 'react-dom'
+import { useActionState, useEffect, useState } from 'react';
+import { useFormStatus } from 'react-dom';
 import { loginAction } from '@/lib/actions/auth-actions';
+import type { AuthActionState } from '@/lib/types'; // Import the type
 import { AlertCircle, LogIn } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
@@ -31,37 +32,41 @@ function SubmitButton() {
 }
 
 export default function AuthForm({ initialMessage, initialMessageType }: AuthFormProps) {
-  // Initialize state for the action with a default structure
-  const [state, formAction] = useActionState(loginAction, { 
-    message: initialMessage || null, 
-    type: initialMessageType || undefined, 
-    redirect: undefined 
-  });
-
-  const [message, setMessage] = useState(initialMessage || '');
-  const [messageType, setMessageType] = useState<'success' | 'error' | undefined>(initialMessageType);
   const router = useRouter();
+
+  // Define a compatible initial state
+  const initialState: AuthActionState = {
+    message: initialMessage || null,
+    type: initialMessageType || undefined,
+    redirect: undefined,
+  };
+
+  const [state, formAction] = useActionState<AuthActionState, FormData>(loginAction, initialState);
+
+  // Local state to manage messages based on the action's result or initial props
+  const [displayMessage, setDisplayMessage] = useState(initialState.message);
+  const [displayMessageType, setDisplayMessageType] = useState(initialState.type);
 
   useEffect(() => {
     if (state?.message) {
-      setMessage(state.message);
-      setMessageType(state.type);
+      setDisplayMessage(state.message);
+      setDisplayMessageType(state.type);
     }
     if (state?.type === 'success' && state?.redirect) {
-      // Delay redirect slightly for success message to be seen
+      // Delay redirect slightly for success message to be seen if present
       const timer = setTimeout(() => {
         router.push(state.redirect!);
-      }, state.message ? 1000 : 200); // Shorter delay if no specific message
+      }, state.message ? 1000 : 100); // Shorter delay if no specific message
       return () => clearTimeout(timer);
     }
   }, [state, router]);
-  
+
   return (
     <form action={formAction} className="space-y-4">
-      {message && (
-        <div className={`alert ${messageType === 'error' ? 'alert-danger' : 'alert-success'} d-flex align-items-center p-2`} role="alert">
-          {messageType === 'error' && <AlertCircle size={18} className="me-2 flex-shrink-0" />}
-          <small>{message}</small>
+      {displayMessage && (
+        <div className={`alert ${displayMessageType === 'error' ? 'alert-danger' : 'alert-success'} d-flex align-items-center p-2`} role="alert">
+          {displayMessageType === 'error' && <AlertCircle size={18} className="me-2 flex-shrink-0" />}
+          <small>{displayMessage}</small>
         </div>
       )}
       <div className="mb-3">

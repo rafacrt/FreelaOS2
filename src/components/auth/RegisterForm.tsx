@@ -1,9 +1,10 @@
 
 'use client';
 
-import { useActionState, useEffect, useState } from 'react'; // Correct: useActionState from 'react'
-import { useFormStatus } from 'react-dom'; // Correct: useFormStatus from 'react-dom'
+import { useActionState, useEffect, useState } from 'react';
+import { useFormStatus } from 'react-dom';
 import { registerUserAction } from '@/lib/actions/auth-actions';
+import type { AuthActionState } from '@/lib/types'; // Import the type
 import { useRouter } from 'next/navigation';
 import { AlertCircle, UserPlus } from 'lucide-react';
 
@@ -27,33 +28,37 @@ function SubmitButton() {
 
 export default function RegisterForm() {
   const router = useRouter();
-  const [state, formAction] = useActionState(registerUserAction, { 
-    message: null, 
-    type: undefined, 
-    redirect: undefined 
-  });
-  const [message, setMessage] = useState('');
-  const [messageType, setMessageType] = useState<'success' | 'error' | undefined>(undefined);
+
+  const initialState: AuthActionState = {
+    message: null,
+    type: undefined,
+    redirect: undefined,
+  };
+
+  const [state, formAction] = useActionState<AuthActionState, FormData>(registerUserAction, initialState);
+
+  const [displayMessage, setDisplayMessage] = useState(initialState.message);
+  const [displayMessageType, setDisplayMessageType] = useState(initialState.type);
 
   useEffect(() => {
     if (state?.message) {
-      setMessage(state.message);
-      setMessageType(state.type);
+      setDisplayMessage(state.message);
+      setDisplayMessageType(state.type);
     }
     if (state?.type === 'success' && state?.redirect) {
       const timer = setTimeout(() => {
           router.push(state.redirect!);
-      }, state.message ? 1500 : 500); 
+      }, state.message ? 1500 : 500);
       return () => clearTimeout(timer);
     }
   }, [state, router]);
 
   return (
     <form action={formAction} className="space-y-4">
-      {message && (
-         <div className={`alert ${messageType === 'error' ? 'alert-danger' : 'alert-success'} d-flex align-items-center p-2`} role="alert">
-          {messageType === 'error' && <AlertCircle size={18} className="me-2 flex-shrink-0" />}
-          <small>{message}</small>
+      {displayMessage && (
+         <div className={`alert ${displayMessageType === 'error' ? 'alert-danger' : 'alert-success'} d-flex align-items-center p-2`} role="alert">
+          {displayMessageType === 'error' && <AlertCircle size={18} className="me-2 flex-shrink-0" />}
+          <small>{displayMessage}</small>
         </div>
       )}
       <div className="mb-3">

@@ -20,8 +20,8 @@ export interface OS {
   numero: string;
   cliente: string;
   parceiro?: string;
-  clientId: string; 
-  partnerId?: string; 
+  clientId: string;
+  partnerId?: string;
   projeto: string;
   tarefa: string;
   observacoes: string;
@@ -64,3 +64,10 @@ export interface Partner {
     id: string;
     name: string;
 }
+
+// State type for authentication server actions
+export type AuthActionState = {
+  message: string | null;
+  type?: 'success' | 'error';
+  redirect?: string;
+};
