@@ -5,7 +5,8 @@ import { useActionState, useEffect } from 'react';
 import { useFormStatus } from 'react-dom';
 import { devLoginAction } from '@/lib/actions/auth-actions';
 import type { AuthActionState } from '@/lib/types';
-import { useRouter } from 'next/navigation'; // Import useRouter
+// useRouter não é mais necessário aqui, o Next.js lida com o redirect da action
+// import { useRouter } from 'next/navigation';
 import { LogIn } from 'lucide-react';
 
 function SubmitDevButton() {
@@ -27,27 +28,29 @@ function SubmitDevButton() {
 }
 
 export default function DevLoginButton() {
-  const router = useRouter();
+  // const router = useRouter(); // Removido
   const initialState: AuthActionState = {
     message: null,
     type: undefined,
     redirect: undefined,
   };
 
+  // useActionState agora lida com o redirecionamento se a action retornar um estado com `redirect`
   const [state, formAction] = useActionState<AuthActionState, FormData>(devLoginAction, initialState);
 
   useEffect(() => {
+    // Apenas logamos o estado para depuração. O redirecionamento é feito pelo Next.js.
     console.log("[DevLoginButton] State from devLoginAction:", state);
-    if (state?.type === 'success' && state?.redirect) {
-      console.log(`[DevLoginButton] Success! Redirecting to ${state.redirect}`);
-      router.push(state.redirect);
-    } else if (state?.type === 'error' && state?.message) {
-      // Optionally, display the error message from devLoginAction if it fails
-      // For now, we'll just log it, as the main form handles general errors.
+    if (state?.type === 'error' && state?.message) {
       console.error(`[DevLoginButton] Dev login failed: ${state.message}`);
-      // alert(`Dev Login Error: ${state.message}`); // Or some other UI feedback
+      // Poderia exibir state.message em um alerta ou toast se desejado
     }
-  }, [state, router]);
+    // Não é mais necessário chamar router.push() aqui
+    // if (state?.type === 'success' && state?.redirect) {
+    //   console.log(`[DevLoginButton] Success! Next.js should handle redirect to ${state.redirect}`);
+    //   // router.push(state.redirect); // Removido
+    // }
+  }, [state]);
 
   return (
     <form action={formAction}>
