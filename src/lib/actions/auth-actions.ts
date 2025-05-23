@@ -3,8 +3,7 @@
 
 import { cookies } from 'next/headers';
 import bcrypt from 'bcrypt';
-import type { ResultSetHeader, RowDataPacket } from 'mysql2/promise';
-import type { PoolConnection } from 'mysql2/promise';
+import type { ResultSetHeader, RowDataPacket, PoolConnection } from 'mysql2/promise';
 import db from '../db';
 import { AUTH_COOKIE_NAME, SESSION_MAX_AGE } from '../constants';
 import { encryptPayload } from '../auth-edge';
@@ -27,9 +26,12 @@ async function createSessionCookie(userId: string, username: string, isAdmin: bo
       sameSite: 'lax',
     });
     console.log(`[AuthAction createSessionCookie] Session cookie SET for user: ${username}. Token (first 20 chars): ${token ? token.substring(0,20)+'...' : 'N/A'}`);
-  } catch (error) {
+  } catch (error: any) {
     console.error('[AuthAction createSessionCookie] CRITICAL ERROR encrypting payload or setting cookie:', error);
-    throw error; // Re-throw para a action tratar
+    // Em vez de lançar, retorne um estado de erro para AuthActionState
+    // Esta função é um helper, então o erro deve ser tratado por quem a chama.
+    // No entanto, é melhor lançar aqui para que a action que a chamou possa capturar.
+    throw new Error('Falha ao criar cookie de sessão: ' + error.message);
   }
 }
 
@@ -43,26 +45,27 @@ export async function loginAction(
 
   // Modo de Login de Desenvolvimento
   const devLoginEnabled = process.env.DEV_LOGIN_ENABLED === "true";
-  console.log(`[LoginAction] DEV_LOGIN_ENABLED: ${devLoginEnabled}`);
+  const DEV_USERNAME = process.env.DEV_USERNAME || "dev";
+  const DEV_PASSWORD = process.env.DEV_PASSWORD || "dev";
+
+  console.log(`[LoginAction] DEV_LOGIN_ENABLED: ${devLoginEnabled}, Input User: ${username}`);
 
   if (devLoginEnabled) {
-    console.log('[LoginAction] DEV_LOGIN_ENABLED is true. Checking dev credentials.');
-    const DEV_USERNAME = process.env.DEV_USERNAME || "dev";
-    const DEV_PASSWORD = process.env.DEV_PASSWORD || "dev";
-
+    console.log(`[LoginAction] Dev login mode active. Expected dev user: ${DEV_USERNAME}`);
     if (username === DEV_USERNAME && password === DEV_PASSWORD) {
-      console.log(`[LoginAction] Dev login successful for user: ${DEV_USERNAME}`);
+      console.log(`[LoginAction] Dev credentials MATCH for user: ${DEV_USERNAME}`);
       try {
         await createSessionCookie('dev-admin-001', DEV_USERNAME, true, true); // Dev user is admin and approved
+        console.log(`[LoginAction] Dev session cookie created for ${DEV_USERNAME}.`);
         return { message: 'Login de desenvolvimento bem-sucedido!', type: 'success', redirect: '/dashboard' };
       } catch (error: any) {
-        console.error('[LoginAction] EXCEPTION during DEV login session creation:', error);
-        return { message: 'Erro ao criar sessão de desenvolvimento. Verifique os logs.', type: 'error' };
+        console.error('[LoginAction] EXCEPTION during DEV login session creation:', error.message, error.stack);
+        return { message: `Erro ao criar sessão de desenvolvimento: ${error.message}`, type: 'error' };
       }
     } else {
       // Se o login de dev está habilitado mas as credenciais não batem com as de dev,
       // não prossegue para o login do banco para evitar confusão.
-      console.warn(`[LoginAction] Dev login FAILED. Provided user: ${username}. Expected dev user: ${DEV_USERNAME}. Dev login mode active.`);
+      console.warn(`[LoginAction] Dev login FAILED. Provided user: ${username}. Expected dev user: ${DEV_USERNAME}.`);
       return { message: 'Credenciais de desenvolvimento inválidas.', type: 'error' };
     }
   }
@@ -106,12 +109,14 @@ export async function loginAction(
       errorMessage = 'Erro de banco de dados ao tentar fazer login.';
     } else if (error.message?.includes('JWT_SECRET')) {
       errorMessage = 'Erro de configuração interna do servidor (JWT). Contate o suporte.';
+    } else if (error.message?.includes('Falha ao criar cookie de sessão')) {
+      errorMessage = error.message; // Usa a mensagem de erro da createSessionCookie
     }
     return { message: errorMessage, type: 'error' };
   }
 }
 
-export async function devLoginAction(prevState: any, formData: FormData): Promise<AuthActionState> {
+export async function devLoginAction(prevState: AuthActionState, formData: FormData): Promise<AuthActionState> {
   console.log('[DevLoginAction] Initiated.');
   const devLoginEnabledEnv = process.env.DEV_LOGIN_ENABLED;
   console.log(`[DevLoginAction] Raw DEV_LOGIN_ENABLED from env: "${devLoginEnabledEnv}"`);
@@ -131,7 +136,7 @@ export async function devLoginAction(prevState: any, formData: FormData): Promis
     return { message: 'Login de desenvolvimento rápido bem-sucedido!', type: 'success', redirect: '/dashboard' };
   } catch (error: any) {
     console.error('[DevLoginAction] EXCEPTION during mock session creation:', error.message, error.stack);
-    return { message: 'Erro ao criar sessão de desenvolvimento rápida. Verifique os logs do servidor.', type: 'error' };
+    return { message: `Erro ao criar sessão de desenvolvimento rápida: ${error.message}`, type: 'error' };
   }
 }
 
@@ -197,13 +202,20 @@ export async function registerUserAction(
     await connection.commit();
     console.log(`[RegisterAction] User ${username} registered successfully. ID: ${result.insertId}, isAdmin: ${isAdmin}, isApproved: ${isApproved}. Transaction committed.`);
     
-    // Se for o primeiro usuário E o login de dev NÃO estiver habilitado globalmente, auto-logar.
-    // Se o login de dev estiver habilitado, melhor redirecionar para o login para evitar conflitos de sessão.
-    if (isFirstUser && process.env.DEV_LOGIN_ENABLED !== "true") {
+    const devLoginEnabled = process.env.DEV_LOGIN_ENABLED === "true";
+
+    if (isFirstUser && !devLoginEnabled) {
       console.log(`[RegisterAction] First user detected and DEV_LOGIN_ENABLED is not true. Creating session cookie for ${username}.`);
-      await createSessionCookie(String(result.insertId), username, isAdmin, isApproved);
-      return { message: 'Registro e login bem-sucedidos como administrador!', type: 'success', redirect: '/dashboard' };
-    } else if (isFirstUser && process.env.DEV_LOGIN_ENABLED === "true") {
+      try {
+        await createSessionCookie(String(result.insertId), username, isAdmin, isApproved);
+        return { message: 'Registro e login bem-sucedidos como administrador!', type: 'success', redirect: '/dashboard' };
+      } catch (error: any) {
+         console.error('[RegisterAction] Failed to create session for first user:', error.message);
+         // Mesmo que a criação da sessão falhe, o usuário foi registrado.
+         // Melhor redirecionar para o login com uma mensagem sobre a falha da sessão.
+         return { message: `Conta de administrador criada, mas houve um erro ao iniciar a sessão (${error.message}). Por favor, tente fazer login.`, type: 'error', redirect: '/login' };
+      }
+    } else if (isFirstUser && devLoginEnabled) {
        console.log(`[RegisterAction] First user registered in DEV_LOGIN_ENABLED mode. Redirecting to login for this new admin or dev user.`);
        return { message: 'Conta de administrador criada! Faça login com suas credenciais.', type: 'success', redirect: '/login' };
     } else {
@@ -242,5 +254,9 @@ export async function logoutAction(): Promise<AuthActionState> {
   } else {
     console.log('[LogoutAction] No session cookie found to delete.');
   }
+  // No need to return a message here, as we'll redirect immediately.
+  // The redirect itself will be handled by Next.js based on this action's successful completion.
+  // However, to align with AuthActionState, we can return a success message.
   return { message: 'Você foi desconectado.', type: 'success', redirect: '/login?status=logged_out' };
 }
+
