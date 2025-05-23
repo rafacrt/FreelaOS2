@@ -13,14 +13,13 @@ import type { ResultSetHeader, RowDataPacket } from 'mysql2/promise';
 async function createSessionCookie(userId: string, username: string, isAdmin: boolean, isApproved: boolean) {
   const cookieStore = cookies();
   const expires = new Date(Date.now() + SESSION_MAX_AGE * 1000);
-  // Ensure payload is serializable, Date object for expires in cookieStore.set is fine
   const sessionPayload = { userId, username, isAdmin, isApproved, expires: expires.toISOString() }; 
   const token = await encryptPayload(sessionPayload);
 
   cookieStore.set(AUTH_COOKIE_NAME, token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
-    expires, // Pass Date object here
+    expires,
     path: '/',
     sameSite: 'lax',
   });
@@ -35,8 +34,8 @@ export async function loginAction(prevState: any, formData: FormData) {
     return { message: 'Usuário e senha são obrigatórios.', type: 'error' as const };
   }
 
+  console.log(`[LoginAction] Attempting login for user: ${username}`);
   try {
-    console.log(`[LoginAction] Attempting login for user: ${username}`);
     const user = await getUserByUsername(username);
 
     if (!user) {
@@ -56,18 +55,23 @@ export async function loginAction(prevState: any, formData: FormData) {
     }
 
     await createSessionCookie(user.id, user.username, user.isAdmin, user.isApproved);
-    console.log(`[LoginAction] Login successful for user: ${username}. Redirecting to /dashboard.`);
+    console.log(`[LoginAction] Login successful for user: ${username}.`);
+    // Do not redirect here directly; return a state that indicates success for the client to handle.
+    // The form's useEffect will handle redirection.
+    return { message: 'Login bem-sucedido!', type: 'success' as const, redirect: '/dashboard' };
+
   } catch (error: any) {
-    console.error('[LoginAction] Error during login:', error);
-    if (error.message?.includes('ECONNREFUSED')) {
-        return { message: 'Erro ao conectar ao banco de dados. Tente novamente mais tarde.', type: 'error' as const};
+    console.error('[LoginAction] Critical error during login process for user:', username, error);
+    let errorMessage = 'Ocorreu um erro inesperado durante o login. Tente novamente.';
+    if (error.message?.includes('ECONNREFUSED') || error.message?.includes('connect ETIMEDOUT')) {
+        errorMessage = 'Erro de conexão com o banco de dados. O servidor de banco de dados está acessível?';
+    } else if (error.message?.includes('Database error')) {
+        errorMessage = 'Erro de banco de dados ao tentar fazer login.';
     }
-    if (error.message?.includes('Database error')) {
-        return { message: 'Erro de banco de dados ao tentar fazer login.', type: 'error' as const };
-    }
-    return { message: 'Ocorreu um erro inesperado. Tente novamente.', type: 'error' as const };
+    return { message: errorMessage, type: 'error' as const };
   }
-  redirect('/dashboard');
+  // This line should not be reached if returning state above, but as a fallback:
+  // redirect('/dashboard'); 
 }
 
 export async function registerUserAction(prevState: any, formData: FormData) {
@@ -81,10 +85,12 @@ export async function registerUserAction(prevState: any, formData: FormData) {
     return { message: 'A senha deve ter pelo menos 6 caracteres.', type: 'error' as const };
   }
 
-  const connection = await db.getConnection();
+  let connection;
   try {
-    await connection.beginTransaction();
     console.log(`[RegisterAction] Attempting registration for user: ${username}`);
+    connection = await db.getConnection();
+    await connection.beginTransaction();
+    
 
     const [existingUsers] = await connection.query<RowDataPacket[]>(
       'SELECT id FROM users WHERE username = ?',
@@ -105,40 +111,41 @@ export async function registerUserAction(prevState: any, formData: FormData) {
     const isFirstUser = allUsersCountResult[0].count === 0;
 
     const isAdmin = isFirstUser;
-    const isApproved = isFirstUser; // First user is admin and approved
+    const isApproved = isFirstUser;
 
     const [result] = await connection.execute<ResultSetHeader>(
-      'INSERT INTO users (username, password_hash, is_admin, is_approved) VALUES (?, ?, ?, ?)',
+      'INSERT INTO users (username, password_hash, is_admin, is_approved, created_at, updated_at) VALUES (?, ?, ?, ?, NOW(), NOW())',
       [username, hashedPassword, isAdmin, isApproved]
     );
 
     if (!result.insertId) {
       await connection.rollback();
-      console.error('[RegisterAction] Failed to insert user into database.');
+      console.error('[RegisterAction] Failed to insert user into database. insertId is 0. Check AUTO_INCREMENT on users.id.');
       return { message: 'Erro ao registrar usuário. Tente novamente.', type: 'error' as const };
     }
 
     await connection.commit();
-    console.log(`[RegisterAction] User ${username} registered successfully. isFirstUser: ${isFirstUser}, isAdmin: ${isAdmin}, isApproved: ${isApproved}`);
+    console.log(`[RegisterAction] User ${username} registered successfully. ID: ${result.insertId}, isFirstUser: ${isFirstUser}, isAdmin: ${isAdmin}, isApproved: ${isApproved}`);
 
     if (isFirstUser) {
+      // Automatically log in the first user
       await createSessionCookie(String(result.insertId), username, isAdmin, isApproved);
-      redirect('/dashboard'); 
+      return { message: 'Registro e login bem-sucedidos como administrador!', type: 'success' as const, redirect: '/dashboard' };
     } else {
-      redirect('/login?status=pending_approval');
+      return { message: 'Registro bem-sucedido! Sua conta aguarda aprovação de um administrador.', type: 'success' as const, redirect: '/login?status=pending_approval' };
     }
   } catch (error: any) {
-    await connection.rollback();
-    console.error('[RegisterAction] Error during registration:', error);
-    if (error.message?.includes('ECONNREFUSED')) {
-        return { message: 'Erro ao conectar ao banco de dados durante o registro.', type: 'error' as const};
+    if (connection) await connection.rollback();
+    console.error('[RegisterAction] Critical error during registration for user:', username, error);
+    let errorMessage = 'Ocorreu um erro inesperado durante o registro. Tente novamente.';
+     if (error.message?.includes('ECONNREFUSED') || error.message?.includes('connect ETIMEDOUT')) {
+        errorMessage = 'Erro de conexão com o banco de dados durante o registro.';
+    } else if (error.message?.includes('Database error')) {
+        errorMessage = 'Erro de banco de dados ao tentar registrar.';
     }
-    if (error.message?.includes('Database error')) {
-        return { message: 'Erro de banco de dados ao tentar registrar.', type: 'error' as const };
-    }
-    return { message: 'Ocorreu um erro inesperado durante o registro. Tente novamente.', type: 'error' as const };
+    return { message: errorMessage, type: 'error' as const };
   } finally {
-    connection.release();
+    if (connection) connection.release();
   }
 }
 
@@ -146,7 +153,6 @@ export async function logoutAction() {
   const cookieStore = cookies();
   const token = cookieStore.get(AUTH_COOKIE_NAME)?.value;
   if (token) {
-    // Optional: blacklist the token on the server if you have such a mechanism
     cookieStore.delete(AUTH_COOKIE_NAME);
     console.log('[AuthAction logoutAction] Session cookie deleted.');
   } else {

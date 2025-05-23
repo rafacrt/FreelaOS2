@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useActionState } from 'react'; // Correct: useActionState from 'react'
+import { useActionState, useEffect, useState } from 'react'; // Correct: useActionState from 'react'
 import { useFormStatus } from 'react-dom'; // Correct: useFormStatus from 'react-dom'
 import { loginAction } from '@/lib/actions/auth-actions';
 import { AlertCircle, LogIn } from 'lucide-react';
@@ -31,7 +31,13 @@ function SubmitButton() {
 }
 
 export default function AuthForm({ initialMessage, initialMessageType }: AuthFormProps) {
-  const [state, formAction] = useActionState(loginAction, { message: initialMessage || null, type: initialMessageType || undefined, redirect: undefined });
+  // Initialize state for the action with a default structure
+  const [state, formAction] = useActionState(loginAction, { 
+    message: initialMessage || null, 
+    type: initialMessageType || undefined, 
+    redirect: undefined 
+  });
+
   const [message, setMessage] = useState(initialMessage || '');
   const [messageType, setMessageType] = useState<'success' | 'error' | undefined>(initialMessageType);
   const router = useRouter();
@@ -40,24 +46,13 @@ export default function AuthForm({ initialMessage, initialMessageType }: AuthFor
     if (state?.message) {
       setMessage(state.message);
       setMessageType(state.type);
-      // if (state.type === 'error' && state.message) {
-      //   toast({
-      //     variant: "destructive",
-      //     title: "Erro de Login",
-      //     description: state.message,
-      //   });
-      // } else if (state.type === 'success' && state.message) {
-      //   // Success messages are often handled by redirection or a specific UI change
-      //   // rather than a toast, but you could add one if desired.
-      //   // For example, a "Logged out" message from /login?status=logged_out
-      //   toast({
-      //     title: "Sucesso",
-      //     description: state.message,
-      //   });
-      // }
     }
     if (state?.type === 'success' && state?.redirect) {
-      router.push(state.redirect);
+      // Delay redirect slightly for success message to be seen
+      const timer = setTimeout(() => {
+        router.push(state.redirect!);
+      }, state.message ? 1000 : 200); // Shorter delay if no specific message
+      return () => clearTimeout(timer);
     }
   }, [state, router]);
   
