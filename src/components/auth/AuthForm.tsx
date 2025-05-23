@@ -4,7 +4,7 @@
 import { useActionState, useEffect, useState } from 'react';
 import { useFormStatus } from 'react-dom';
 import { loginAction } from '@/lib/actions/auth-actions';
-import type { AuthActionState } from '@/lib/types'; // Import the type
+import type { AuthActionState } from '@/lib/types'; 
 import { AlertCircle, LogIn } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
@@ -34,7 +34,6 @@ function SubmitButton() {
 export default function AuthForm({ initialMessage, initialMessageType }: AuthFormProps) {
   const router = useRouter();
 
-  // Define a compatible initial state
   const initialState: AuthActionState = {
     message: initialMessage || null,
     type: initialMessageType || undefined,
@@ -43,7 +42,6 @@ export default function AuthForm({ initialMessage, initialMessageType }: AuthFor
 
   const [state, formAction] = useActionState<AuthActionState, FormData>(loginAction, initialState);
 
-  // Local state to manage messages based on the action's result or initial props
   const [displayMessage, setDisplayMessage] = useState(initialState.message);
   const [displayMessageType, setDisplayMessageType] = useState(initialState.type);
 
@@ -51,15 +49,20 @@ export default function AuthForm({ initialMessage, initialMessageType }: AuthFor
     if (state?.message) {
       setDisplayMessage(state.message);
       setDisplayMessageType(state.type);
+    } else if (initialState.message && !state?.message) { 
+      // Ensure initial message persists if action hasn't returned a new one
+      setDisplayMessage(initialState.message);
+      setDisplayMessageType(initialState.type);
     }
+
+
     if (state?.type === 'success' && state?.redirect) {
-      // Delay redirect slightly for success message to be seen if present
       const timer = setTimeout(() => {
         router.push(state.redirect!);
-      }, state.message ? 1000 : 100); // Shorter delay if no specific message
+      }, state.message ? 1000 : 100); 
       return () => clearTimeout(timer);
     }
-  }, [state, router]);
+  }, [state, router, initialState.message, initialState.type]);
 
   return (
     <form action={formAction} className="space-y-4">
