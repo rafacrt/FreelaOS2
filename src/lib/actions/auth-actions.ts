@@ -6,8 +6,8 @@ import bcrypt from 'bcrypt';
 import type { ResultSetHeader, RowDataPacket, PoolConnection } from 'mysql2/promise';
 import db from '../db';
 import { AUTH_COOKIE_NAME, SESSION_MAX_AGE } from '../constants';
-import { encryptPayload } from '../auth-edge';
-import { getUserByUsername } from '../auth';
+import { encryptPayload } from '../auth-edge'; // For creating JWT
+import { getUserByUsername } from '../auth'; // For DB lookups (Node.js runtime)
 import type { AuthActionState } from '../types';
 
 async function createSessionCookie(userId: string, username: string, isAdmin: boolean, isApproved: boolean) {
@@ -23,14 +23,11 @@ async function createSessionCookie(userId: string, username: string, isAdmin: bo
       secure: process.env.NODE_ENV === 'production',
       expires,
       path: '/',
-      sameSite: 'lax',
+      sameSite: 'lax', // Recommended for most cases
     });
     console.log(`[AuthAction createSessionCookie] Session cookie SET for user: ${username}. Token (first 20 chars): ${token ? token.substring(0,20)+'...' : 'N/A'}`);
   } catch (error: any) {
     console.error('[AuthAction createSessionCookie] CRITICAL ERROR encrypting payload or setting cookie:', error);
-    // Em vez de lançar, retorne um estado de erro para AuthActionState
-    // Esta função é um helper, então o erro deve ser tratado por quem a chama.
-    // No entanto, é melhor lançar aqui para que a action que a chamou possa capturar.
     throw new Error('Falha ao criar cookie de sessão: ' + error.message);
   }
 }
@@ -43,34 +40,33 @@ export async function loginAction(
   const username = formData.get('username') as string;
   const password = formData.get('password') as string;
 
-  // Modo de Login de Desenvolvimento
-  const devLoginEnabled = process.env.DEV_LOGIN_ENABLED === "true";
-  const DEV_USERNAME = process.env.DEV_USERNAME || "dev";
-  const DEV_PASSWORD = process.env.DEV_PASSWORD || "dev";
+  const devLoginEnabledEnv = process.env.DEV_LOGIN_ENABLED;
+  const devUsernameEnv = process.env.DEV_USERNAME || "dev";
+  const devPasswordEnv = process.env.DEV_PASSWORD || "dev";
 
-  console.log(`[LoginAction] DEV_LOGIN_ENABLED: ${devLoginEnabled}, Input User: ${username}`);
+  console.log(`[LoginAction] Raw DEV_LOGIN_ENABLED from env: "${devLoginEnabledEnv}"`);
+  console.log(`[LoginAction] Input User: ${username}, Dev User from env: ${devUsernameEnv}`);
 
-  if (devLoginEnabled) {
-    console.log(`[LoginAction] Dev login mode active. Expected dev user: ${DEV_USERNAME}`);
-    if (username === DEV_USERNAME && password === DEV_PASSWORD) {
-      console.log(`[LoginAction] Dev credentials MATCH for user: ${DEV_USERNAME}`);
+  if (devLoginEnabledEnv === "true") {
+    console.log(`[LoginAction] Dev login mode is active. Expected dev user: ${devUsernameEnv}`);
+    if (username === devUsernameEnv && password === devPasswordEnv) {
+      console.log(`[LoginAction] Dev credentials MATCH for user: ${devUsernameEnv}`);
       try {
-        await createSessionCookie('dev-admin-001', DEV_USERNAME, true, true); // Dev user is admin and approved
-        console.log(`[LoginAction] Dev session cookie created for ${DEV_USERNAME}.`);
+        await createSessionCookie('dev-admin-001', devUsernameEnv, true, true);
+        console.log(`[LoginAction] Dev session cookie created for ${devUsernameEnv}.`);
         return { message: 'Login de desenvolvimento bem-sucedido!', type: 'success', redirect: '/dashboard' };
       } catch (error: any) {
         console.error('[LoginAction] EXCEPTION during DEV login session creation:', error.message, error.stack);
         return { message: `Erro ao criar sessão de desenvolvimento: ${error.message}`, type: 'error' };
       }
     } else {
-      // Se o login de dev está habilitado mas as credenciais não batem com as de dev,
-      // não prossegue para o login do banco para evitar confusão.
-      console.warn(`[LoginAction] Dev login FAILED. Provided user: ${username}. Expected dev user: ${DEV_USERNAME}.`);
-      return { message: 'Credenciais de desenvolvimento inválidas.', type: 'error' };
+      console.warn(`[LoginAction] Dev login mode active, but credentials did NOT match. Provided user: ${username}. Expected dev user: ${devUsernameEnv}. Proceeding to DB login as fallback.`);
+      // Fall through to normal DB login if dev credentials don't match but dev login is enabled.
+      // OR, you might want to return an error here:
+      // return { message: 'Credenciais de desenvolvimento inválidas.', type: 'error' };
     }
   }
 
-  // Lógica de Login Normal (Banco de Dados)
   console.log(`[LoginAction] Attempting DB login for user: ${username}`);
   if (!username || !password) {
     return { message: 'Usuário e senha são obrigatórios.', type: 'error' };
@@ -97,20 +93,20 @@ export async function loginAction(
 
     await createSessionCookie(String(user.id), user.username, user.isAdmin, user.isApproved);
     console.log(`[LoginAction] DB Login successful for user: ${username}. Preparing success state.`);
-
     return { message: 'Login bem-sucedido!', type: 'success', redirect: '/dashboard' };
 
   } catch (error: any) {
-    console.error('[LoginAction] EXCEPTION during DB login process for user:', username, 'Error:', error.message, error.stack, error.code);
+    console.error('[LoginAction] EXCEPTION during DB login process for user:', username);
+    console.error('[LoginAction] Error Details:', error.message, error.code, error.stack);
     let errorMessage = 'Ocorreu um erro inesperado durante o login. Tente novamente.';
-    if (error.code === 'ECONNREFUSED' || error.message?.includes('ECONNREFUSED') || error.message?.includes('connect ETIMEDOUT')) {
-      errorMessage = 'Erro de conexão com o banco de dados. O servidor de banco de dados está acessível?';
+    if (error.code === 'ECONNREFUSED' || error.message?.includes('ECONNREFUSED')) {
+      errorMessage = 'Falha na conexão com o banco de dados. Verifique se o servidor de banco de dados está acessível e as configurações de conexão estão corretas no ambiente do servidor.';
     } else if (error.message?.includes('Database error')) {
       errorMessage = 'Erro de banco de dados ao tentar fazer login.';
-    } else if (error.message?.includes('JWT_SECRET')) {
+    } else if (error.message?.includes('JWT_SECRET') || error.message?.includes('JWT key not initialized')) {
       errorMessage = 'Erro de configuração interna do servidor (JWT). Contate o suporte.';
     } else if (error.message?.includes('Falha ao criar cookie de sessão')) {
-      errorMessage = error.message; // Usa a mensagem de erro da createSessionCookie
+      errorMessage = error.message; 
     }
     return { message: errorMessage, type: 'error' };
   }
@@ -127,10 +123,11 @@ export async function devLoginAction(prevState: AuthActionState, formData: FormD
   }
 
   const devUserId = 'dev-button-admin-001';
-  const devUsername = 'dev-button-admin';
+  const devUsername = 'dev-button-admin'; // Using a distinct username for this specific dev button login
   console.log(`[DevLoginAction] DEV_LOGIN_ENABLED is "true". Creating mock session for ${devUsername}.`);
 
   try {
+    // Ensure createSessionCookie is called correctly
     await createSessionCookie(devUserId, devUsername, true, true); // Mock admin, approved
     console.log(`[DevLoginAction] Mock session cookie created for ${devUsername}. Preparing success state.`);
     return { message: 'Login de desenvolvimento rápido bem-sucedido!', type: 'success', redirect: '/dashboard' };
@@ -185,7 +182,7 @@ export async function registerUserAction(
     console.log(`[RegisterAction] Is first user check: ${isFirstUser}`);
 
     const isAdmin = isFirstUser;
-    const isApproved = isFirstUser;
+    const isApproved = isFirstUser; // First user is auto-approved
 
     const [result] = await connection.execute<ResultSetHeader>(
       'INSERT INTO users (username, password_hash, is_admin, is_approved, created_at, updated_at) VALUES (?, ?, ?, ?, NOW(), NOW())',
@@ -194,9 +191,9 @@ export async function registerUserAction(
     console.log(`[RegisterAction] User insertion result: insertId ${result.insertId}`);
 
     if (!result.insertId) {
-      await connection.rollback();
-      console.error('[RegisterAction] Failed to insert user into database. insertId is 0. Check AUTO_INCREMENT on users.id.');
-      return { message: 'Erro ao registrar usuário (DB Insert). Tente novamente.', type: 'error' };
+      await connection.rollback(); // Important to rollback before throwing
+      console.error('[RegisterAction] Failed to insert user into database. insertId is 0. Check AUTO_INCREMENT on users.id.', result);
+      return { message: 'Erro ao registrar usuário (DB Insert). Verifique se `id` é AUTO_INCREMENT. Tente novamente.', type: 'error' };
     }
 
     await connection.commit();
@@ -205,20 +202,19 @@ export async function registerUserAction(
     const devLoginEnabled = process.env.DEV_LOGIN_ENABLED === "true";
 
     if (isFirstUser && !devLoginEnabled) {
-      console.log(`[RegisterAction] First user detected and DEV_LOGIN_ENABLED is not true. Creating session cookie for ${username}.`);
+      console.log(`[RegisterAction] First user registered and DEV_LOGIN_ENABLED is not true. Creating session cookie for ${username}.`);
       try {
         await createSessionCookie(String(result.insertId), username, isAdmin, isApproved);
         return { message: 'Registro e login bem-sucedidos como administrador!', type: 'success', redirect: '/dashboard' };
       } catch (error: any) {
          console.error('[RegisterAction] Failed to create session for first user:', error.message);
-         // Mesmo que a criação da sessão falhe, o usuário foi registrado.
-         // Melhor redirecionar para o login com uma mensagem sobre a falha da sessão.
          return { message: `Conta de administrador criada, mas houve um erro ao iniciar a sessão (${error.message}). Por favor, tente fazer login.`, type: 'error', redirect: '/login' };
       }
     } else if (isFirstUser && devLoginEnabled) {
        console.log(`[RegisterAction] First user registered in DEV_LOGIN_ENABLED mode. Redirecting to login for this new admin or dev user.`);
        return { message: 'Conta de administrador criada! Faça login com suas credenciais.', type: 'success', redirect: '/login' };
     } else {
+      // Subsequent users are not auto-approved or auto-logged-in
       return { message: 'Registro bem-sucedido! Sua conta aguarda aprovação de um administrador.', type: 'success', redirect: '/login?status=pending_approval' };
     }
   } catch (error: any) {
@@ -226,13 +222,14 @@ export async function registerUserAction(
       console.log('[RegisterAction] Error occurred, rolling back transaction.');
       await connection.rollback();
     }
-    console.error('[RegisterAction] EXCEPTION during registration for user:', username, 'Error:', error.message, error.stack, error.code);
+    console.error('[RegisterAction] EXCEPTION during registration for user:', username);
+    console.error('[RegisterAction] Error Details:', error.message, error.code, error.stack); // Log the full error
     let errorMessage = 'Ocorreu um erro inesperado durante o registro. Tente novamente.';
-     if (error.code === 'ECONNREFUSED' || error.message?.includes('ECONNREFUSED') || error.message?.includes('connect ETIMEDOUT')) {
-        errorMessage = 'Erro de conexão com o banco de dados durante o registro.';
-    } else if (error.message?.includes('Database error')) {
-        errorMessage = 'Erro de banco de dados ao tentar registrar.';
-    } else if (error.message?.includes('JWT_SECRET')) {
+     if (error.code === 'ECONNREFUSED' || error.message?.includes('ECONNREFUSED')) {
+        errorMessage = 'Falha na conexão com o banco de dados durante o registro.';
+    } else if (error.message?.includes('Database error') || error.sqlMessage) { // Check for sqlMessage
+        errorMessage = `Erro de banco de dados ao tentar registrar: ${error.sqlMessage || error.message}`;
+    } else if (error.message?.includes('JWT_SECRET') || error.message?.includes('JWT key not initialized')) {
         errorMessage = 'Erro de configuração interna do servidor (JWT Reg). Contate o suporte.';
     }
     return { message: errorMessage, type: 'error' };
@@ -254,9 +251,7 @@ export async function logoutAction(): Promise<AuthActionState> {
   } else {
     console.log('[LogoutAction] No session cookie found to delete.');
   }
-  // No need to return a message here, as we'll redirect immediately.
-  // The redirect itself will be handled by Next.js based on this action's successful completion.
-  // However, to align with AuthActionState, we can return a success message.
+  // For logout, a direct redirect is usually fine as client state doesn't need to react to a message.
+  // However, to be consistent with AuthActionState, we return a redirect instruction.
   return { message: 'Você foi desconectado.', type: 'success', redirect: '/login?status=logged_out' };
 }
-
