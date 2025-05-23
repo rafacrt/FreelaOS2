@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -9,36 +8,34 @@ import OSGrid from '@/components/os-grid/OSGrid';
 import { CreateOSDialog } from '@/components/os/CreateOSDialog';
 import { Calendar, Users, FileText as ReportIcon } from 'lucide-react';
 import type { User } from '@/lib/types';
-import { getSession } from '@/lib/auth'; // For client-side session access if needed
+// getSession is not directly used here anymore because AuthenticatedLayout manages user state.
+// If direct session access is needed for other reasons, it would involve client-side getCookie and getSessionFromToken.
 
 const ANIMATION_PLAYED_KEY = 'freelaos_animation_played';
 
 export default function DashboardPage() {
   const [isClient, setIsClient] = useState(false);
   const [showAnimation, setShowAnimation] = useState(false);
-  const [currentUser, setCurrentUser] = useState<User | null>(null); // Store user from session
+  // User state will be primarily driven by AuthenticatedLayout's props or context if needed
+  // For this component, we assume AuthenticatedLayout handles the current user.
 
   useEffect(() => {
     setIsClient(true);
     
-    async function fetchUserAndCheckAnimation() {
-        const sessionUser = await getSession(); // Client-side getSession
-        setCurrentUser(sessionUser);
-
-        try {
-          const animationPlayed = sessionStorage.getItem(ANIMATION_PLAYED_KEY);
-          if (animationPlayed !== 'true' && sessionUser) { // Only show animation if logged in
-            setShowAnimation(true);
-          } else {
-            setShowAnimation(false);
-          }
-        } catch (error) {
-          console.warn("Session storage not available or error accessing it:", error);
-          setShowAnimation(false);
-        }
+    // Check if animation should be played.
+    // This relies on AuthenticatedLayout successfully passing user info or a global user state.
+    // For simplicity, we'll assume if this page loads, user is authenticated by middleware.
+    try {
+      const animationPlayed = sessionStorage.getItem(ANIMATION_PLAYED_KEY);
+      if (animationPlayed !== 'true') {
+        setShowAnimation(true);
+      } else {
+        setShowAnimation(false);
+      }
+    } catch (error) {
+      console.warn("Session storage not available or error accessing it:", error);
+      setShowAnimation(false); // Default to no animation if sessionStorage fails
     }
-    fetchUserAndCheckAnimation();
-
   }, []);
 
   const handleAnimationComplete = () => {
@@ -50,12 +47,7 @@ export default function DashboardPage() {
     }
   };
   
-  // AuthenticatedLayout will handle the main loading and auth check.
-  // This component assumes it's rendered within an authenticated context.
-
   if (!isClient) {
-    // AuthenticatedLayout handles initial loading screen, so this might not be strictly necessary
-    // but can be a fallback or for specific Dashboard loading.
     return (
       <AuthenticatedLayout>
         <div className="d-flex flex-column align-items-center justify-content-center text-center p-4" style={{ minHeight: 'calc(100vh - 200px)' }}>
@@ -68,7 +60,7 @@ export default function DashboardPage() {
     );
   }
   
-  if (showAnimation && currentUser) { // Only show animation if there's a user
+  if (showAnimation) { 
     return (
       <AuthenticatedLayout>
         <PostLoginAnimation onAnimationComplete={handleAnimationComplete} />
