@@ -15,10 +15,13 @@ const FreelaOSLogo = () => (
     <path d="M25 75V25L50 50L25 75Z" fill="hsl(var(--primary-foreground))"/> {/* White/Light foreground element */}
     <path d="M75 25V75L50 50L75 25Z" fill="hsl(var(--primary-foreground))"/>
     {/* Changed blue accent to a slightly different orange or primary-foreground for simplicity */}
-    <rect x="45" y="15" width="10" height="70" fill="hsl(var(--primary-foreground))"/>
+    <rect x="45" y="15" width="10" height="70" fill="hsl(var(--primary))"/>
   </svg>
 );
 
+interface HeaderProps {
+  user: User | null;
+}
 
 export default function Header({ user }: HeaderProps) {
   const { theme, toggleTheme } = useTheme();
@@ -27,8 +30,6 @@ export default function Header({ user }: HeaderProps) {
   const handleLogout = async () => {
     await logoutAction();
   };
-
-  const showAuthButtons = !user && pathname !== '/login' && pathname !== '/register';
 
   const showAuthButtons = !user && pathname !== '/login' && pathname !== '/register';
 
@@ -76,5 +77,4 @@ export default function Header({ user }: HeaderProps) {
     </header>
   );
 }
-
     
