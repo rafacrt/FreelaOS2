@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
@@ -23,33 +24,38 @@ const getStatusIcon = (status: OSStatus) => {
 
 interface DetailItemProps {
   label: string;
-  value?: string | null | boolean;
+  value?: string | null | boolean | number;
   icon?: React.ReactNode;
-  name?: keyof OS; 
-  isEditableField: boolean; 
-  children?: React.ReactNode; 
+  name?: keyof OS;
+  isEditableField: boolean;
+  children?: React.ReactNode;
   className?: string;
-  isEditingMode: boolean; 
+  isEditingMode: boolean;
 }
 
 const DetailItem = ({ label, value, icon, name, isEditableField, children, className, isEditingMode }: DetailItemProps) => {
   let displayValue: string | React.ReactNode = value;
-  if ((name === 'programadoPara' || name === 'dataAbertura' || name === 'dataFinalizacao') && typeof value === 'string' && value) {
+  if ((name === 'programadoPara' || name === 'dataAbertura' || name === 'dataFinalizacao' || name === 'dataInicioProducao') && typeof value === 'string' && value) {
     try {
-      const dateStr = value.includes('T') ? value : `${value}T00:00:00Z`;
+      const dateStr = value.includes('T') ? value : `${value}T00:00:00Z`; // Assume UTC if only date
       const date = parseISO(dateStr);
       if (isValid(date)) {
         const formatString = (name === 'programadoPara' && value.length === 10) ? "dd/MM/yyyy" : "dd/MM/yyyy 'às' HH:mm";
         displayValue = format(date, formatString, { locale: ptBR });
       } else {
-        displayValue = value;
+        displayValue = value; // Display as is if not a valid date string
       }
     } catch {
-      displayValue = value;
+      displayValue = value; // Fallback
     }
   } else if (typeof value === 'boolean') {
     displayValue = value ? 'Sim' : 'Não';
+  } else if (name === 'tempoProducaoMinutos' && typeof value === 'number' && value >= 0) {
+      const hours = Math.floor(value / 60);
+      const minutes = value % 60;
+      displayValue = `${hours}h ${minutes}m`;
   }
+
 
   return (
     <div className={`row py-2 ${className || ''}`}>
@@ -58,8 +64,8 @@ const DetailItem = ({ label, value, icon, name, isEditableField, children, class
         {isEditingMode && isEditableField ? (
           children
         ) : (
-          <span className={`text-break form-control-plaintext p-0`}>
-              {displayValue || <span className="text-muted fst-italic">N/A</span>}
+          <span className={`form-control-plaintext p-0 text-break`}>
+              {displayValue === undefined || displayValue === null || displayValue === '' ? <span className="text-muted fst-italic">N/A</span> : displayValue}
           </span>
         )}
       </dd>
@@ -80,9 +86,8 @@ export default function OSDetailsView({ os: initialOs }: OSDetailsViewProps) {
 
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  
+
   const initialProgramadoPara = initialOs.programadoPara ? initialOs.programadoPara.split('T')[0] : '';
-  // Initialize formData based on initialOs, especially for controlled inputs.
   const [formData, setFormData] = useState<OS>({ ...initialOs, programadoPara: initialProgramadoPara });
 
   const [clientInput, setClientInput] = useState(initialOs.cliente || '');
@@ -96,13 +101,13 @@ export default function OSDetailsView({ os: initialOs }: OSDetailsViewProps) {
 
   useEffect(() => {
     const currentProgramadoPara = initialOs.programadoPara ? initialOs.programadoPara.split('T')[0] : '';
-
-    if (initialOs.id !== formData.id || !isEditing) { 
+    if (initialOs.id !== formData.id || (!isEditing && initialOs.id === formData.id)) {
       setFormData({ ...initialOs, programadoPara: currentProgramadoPara });
       setClientInput(initialOs.cliente || '');
       setPartnerInput(initialOs.parceiro || '');
     }
-  }, [initialOs, isEditing, formData.id]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialOs, isEditing]); // formData.id removido para evitar loop se isEditing for a única mudança
 
 
   const filteredClients = useMemo(() => {
@@ -120,89 +125,84 @@ export default function OSDetailsView({ os: initialOs }: OSDetailsViewProps) {
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
 
-    if (name === 'cliente') {
-      setClientInput(value); 
-      setFormData(prev => ({ ...prev, cliente: value })); 
-      setShowClientSuggestions(!!value && clients.filter(c => c.name.toLowerCase().includes(value.toLowerCase())).length > 0 && document.activeElement === clientInputRef.current);
-    } else if (name === 'parceiro') {
-      setPartnerInput(value); 
-      setFormData(prev => ({ ...prev, parceiro: value || undefined })); 
-      setShowPartnerSuggestions(!!value && partners.filter(p => p.name.toLowerCase().includes(value.toLowerCase())).length > 0 && document.activeElement === partnerInputRef.current);
-    } else if (type === 'checkbox') {
-      setFormData(prev => ({
-        ...prev,
-        [name]: (e.target as HTMLInputElement).checked,
-      }));
-    } else if (name === 'programadoPara') { 
-       setFormData(prev => ({
-        ...prev,
-        [name]: value || undefined 
-      }));
-    }
-     else {
-      setFormData(prev => ({
-        ...prev,
-        [name]: value,
-      }));
-    }
+    setFormData(prev => {
+      let newValue: any = value;
+      if (type === 'checkbox') {
+        newValue = (e.target as HTMLInputElement).checked;
+      } else if (name === 'cliente') {
+        setClientInput(value);
+        setShowClientSuggestions(!!value && clients.filter(c => c.name.toLowerCase().includes(value.toLowerCase())).length > 0 && document.activeElement === clientInputRef.current);
+      } else if (name === 'parceiro') {
+        setPartnerInput(value);
+        setShowPartnerSuggestions(!!value && partners.filter(p => p.name.toLowerCase().includes(value.toLowerCase())).length > 0 && document.activeElement === partnerInputRef.current);
+        newValue = value || undefined; // Ensure empty string becomes undefined for optional partner
+      } else if (name === 'programadoPara') {
+        newValue = value || undefined;
+      }
+      return { ...prev, [name]: newValue };
+    });
   };
 
   const handleClientSelect = (clientName: string) => {
     setFormData(prev => ({ ...prev, cliente: clientName }));
-    setClientInput(clientName); 
+    setClientInput(clientName);
     setShowClientSuggestions(false);
   };
 
   const handlePartnerSelect = (partnerName: string) => {
     setFormData(prev => ({ ...prev, parceiro: partnerName }));
-    setPartnerInput(partnerName); 
+    setPartnerInput(partnerName);
     setShowPartnerSuggestions(false);
   };
 
   const handleSave = async () => {
+    console.log('[OSDetailsView handleSave] Iniciando salvamento...');
     setIsSaving(true);
     try {
+      // Certificar que cliente e parceiro nos dados do formData refletem os inputs
       const dataToSave: OS = {
         ...formData,
-        cliente: formData.cliente.trim(), 
-        parceiro: formData.parceiro?.trim() || undefined,
-        programadoPara: formData.programadoPara || undefined, 
-        tarefa: formData.tarefa || '',
-        observacoes: formData.observacoes || '',
+        cliente: clientInput.trim(),
+        parceiro: partnerInput.trim() || undefined,
+        tarefa: formData.tarefa || '', // Garante que não seja null se vazio
+        observacoes: formData.observacoes || '', // Garante que não seja null se vazio
       };
-      updateOS(dataToSave);
-      console.log(`OS Atualizada: ${dataToSave.numero}`);
-      setIsEditing(false); 
+      console.log('[OSDetailsView handleSave] Dados a serem enviados para updateOS:', JSON.stringify(dataToSave, null, 2));
+      await updateOS(dataToSave); // Chama a action do store
+      console.log(`[OSDetailsView handleSave] OS Atualizada no store: ${dataToSave.numero}`);
+      setIsEditing(false);
     } catch (error) {
-      console.error("Failed to update OS:", error);
-      alert('Falha ao atualizar OS. Tente novamente.');
+      console.error("[OSDetailsView handleSave] Falha ao atualizar OS:", error);
+      alert('Falha ao atualizar OS. Por favor, verifique o console para mais detalhes e tente novamente.');
     } finally {
       setIsSaving(false);
+      console.log('[OSDetailsView handleSave] Finalizado.');
     }
   };
 
   const handleCancel = () => {
-    // Reset formData to initialOs values when canceling edit
     const currentProgramadoPara = initialOs.programadoPara ? initialOs.programadoPara.split('T')[0] : '';
     setFormData({ ...initialOs, programadoPara: currentProgramadoPara });
     setClientInput(initialOs.cliente || '');
     setPartnerInput(initialOs.parceiro || '');
     setShowClientSuggestions(false);
     setShowPartnerSuggestions(false);
-    setIsEditing(false); 
+    setIsEditing(false);
   };
 
-  const handleFinalizeOS = () => {
+  const handleFinalizeOS = async () => {
     if (formData.status !== OSStatus.FINALIZADO) {
-        updateOSStatus(formData.id, OSStatus.FINALIZADO);
-        // Update local formData as well to reflect the change immediately
-        setFormData(prev => ({
-          ...prev,
-          status: OSStatus.FINALIZADO,
-          dataFinalizacao: prev.dataFinalizacao || new Date().toISOString(),
-          // Recalculate tempoProducaoMinutos if needed, or let store logic handle it
-        }));
-        console.log(`OS ${formData.numero} finalizada.`);
+        console.log(`[OSDetailsView handleFinalizeOS] Tentando finalizar OS: ${formData.numero}`);
+        const success = await updateOSStatus(formData.id, OSStatus.FINALIZADO);
+        if (success) {
+            console.log(`[OSDetailsView handleFinalizeOS] OS ${formData.numero} finalizada com sucesso via store.`);
+            // O store já deve atualizar formData via o seu próprio mecanismo de update
+            // Mas podemos forçar uma atualização se o useEffect não pegar
+            // setFormData(prev => ({ ...prev, status: OSStatus.FINALIZADO, dataFinalizacao: new Date().toISOString() }));
+        } else {
+            console.error(`[OSDetailsView handleFinalizeOS] Falha ao finalizar OS ${formData.numero} via store.`);
+            alert('Falha ao finalizar OS. Verifique o console.');
+        }
     }
   };
 
@@ -241,7 +241,7 @@ export default function OSDetailsView({ os: initialOs }: OSDetailsViewProps) {
               <button className="btn btn-outline-secondary btn-sm" onClick={handleCancel} disabled={isSaving}>
                 Cancelar
               </button>
-              <button className="btn btn-success btn-sm" onClick={handleSave} disabled={isSaving || !formData.cliente?.trim() || !formData.projeto?.trim()}>
+              <button className="btn btn-success btn-sm" onClick={handleSave} disabled={isSaving || !clientInput.trim() || !formData.projeto?.trim()}>
                 {isSaving ? <span className="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span> : <Save size={16} className="me-1" />}
                 Salvar Alterações
               </button>
@@ -293,11 +293,11 @@ export default function OSDetailsView({ os: initialOs }: OSDetailsViewProps) {
         </div>
         <div className="card-body p-4">
           <dl className="mb-0">
-            <DetailItem 
-              label="Cliente" 
-              icon={<UserIcon size={16} className="me-2 text-primary" />} 
-              name="cliente" 
-              isEditableField={true} 
+            <DetailItem
+              label="Cliente"
+              icon={<UserIcon size={16} className="me-2 text-primary" />}
+              name="cliente"
+              isEditableField={true}
               value={formData.cliente}
               isEditingMode={isEditing}
             >
@@ -307,10 +307,10 @@ export default function OSDetailsView({ os: initialOs }: OSDetailsViewProps) {
                   type="text"
                   className="form-control form-control-sm"
                   name="cliente"
-                  value={clientInput} 
-                  onChange={handleInputChange} 
+                  value={clientInput}
+                  onChange={handleInputChange}
                   onFocus={() => setShowClientSuggestions(!!clientInput && filteredClients.length > 0)}
-                  onBlur={() => setTimeout(() => setShowClientSuggestions(false), 200)} 
+                  onBlurCapture={() => setTimeout(() => setShowClientSuggestions(false), 200)} // Use onBlurCapture
                   autoComplete="off"
                   placeholder="Digite ou selecione um cliente"
                   disabled={!isEditing}
@@ -320,7 +320,7 @@ export default function OSDetailsView({ os: initialOs }: OSDetailsViewProps) {
                   <div className="list-group position-absolute w-100 mt-1" style={{ zIndex: 10, maxHeight: '150px', overflowY: 'auto', boxShadow: '0 .5rem 1rem rgba(0,0,0,.15)' }}>
                     {filteredClients.map(c => (
                       <button type="button" key={c.id} className="list-group-item list-group-item-action list-group-item-light py-1 px-2 small"
-                        onMouseDown={(e) => e.preventDefault()} onClick={() => handleClientSelect(c.name)}>
+                        onMouseDown={(e) => { e.preventDefault(); handleClientSelect(c.name); }}>
                         {c.name}
                       </button>
                     ))}
@@ -329,11 +329,11 @@ export default function OSDetailsView({ os: initialOs }: OSDetailsViewProps) {
               </div>
             </DetailItem>
 
-            <DetailItem 
-              label="Parceiro" 
-              icon={<Users size={16} className="me-2 text-primary" />} 
-              name="parceiro" 
-              isEditableField={true} 
+            <DetailItem
+              label="Parceiro"
+              icon={<Users size={16} className="me-2 text-primary" />}
+              name="parceiro"
+              isEditableField={true}
               value={formData.parceiro}
               isEditingMode={isEditing}
             >
@@ -343,10 +343,10 @@ export default function OSDetailsView({ os: initialOs }: OSDetailsViewProps) {
                   type="text"
                   className="form-control form-control-sm"
                   name="parceiro"
-                  value={partnerInput} 
-                  onChange={handleInputChange} 
+                  value={partnerInput}
+                  onChange={handleInputChange}
                   onFocus={() => setShowPartnerSuggestions(!!partnerInput && filteredPartners.length > 0)}
-                  onBlur={() => setTimeout(() => setShowPartnerSuggestions(false), 200)} 
+                  onBlurCapture={() => setTimeout(() => setShowPartnerSuggestions(false), 200)} // Use onBlurCapture
                   autoComplete="off"
                   placeholder="Digite ou selecione um parceiro"
                   disabled={!isEditing}
@@ -355,7 +355,7 @@ export default function OSDetailsView({ os: initialOs }: OSDetailsViewProps) {
                   <div className="list-group position-absolute w-100 mt-1" style={{ zIndex: 10, maxHeight: '150px', overflowY: 'auto', boxShadow: '0 .5rem 1rem rgba(0,0,0,.15)' }}>
                     {filteredPartners.map(p => (
                       <button type="button" key={p.id} className="list-group-item list-group-item-action list-group-item-light py-1 px-2 small"
-                        onMouseDown={(e) => e.preventDefault()} onClick={() => handlePartnerSelect(p.name)}>
+                        onMouseDown={(e) => { e.preventDefault(); handlePartnerSelect(p.name); }}>
                         {p.name}
                       </button>
                     ))}
@@ -364,11 +364,11 @@ export default function OSDetailsView({ os: initialOs }: OSDetailsViewProps) {
               </div>
             </DetailItem>
 
-            <DetailItem 
-              label="Status" 
-              value={formData.status} 
-              icon={getStatusIcon(formData.status)} 
-              name="status" 
+            <DetailItem
+              label="Status"
+              value={formData.status}
+              icon={getStatusIcon(formData.status)}
+              name="status"
               isEditableField={true}
               isEditingMode={isEditing}
             >
@@ -383,20 +383,20 @@ export default function OSDetailsView({ os: initialOs }: OSDetailsViewProps) {
               </select>
             </DetailItem>
 
-            <DetailItem 
-              label="Data de Abertura" 
-              value={initialOs.dataAbertura} 
-              icon={<CalendarClock size={16} className="me-2 text-secondary" />} 
-              name="dataAbertura" 
-              isEditableField={false} 
+            <DetailItem
+              label="Data de Abertura"
+              value={initialOs.dataAbertura}
+              icon={<CalendarClock size={16} className="me-2 text-secondary" />}
+              name="dataAbertura"
+              isEditableField={false}
               isEditingMode={isEditing}
             />
 
-            <DetailItem 
-              label="Programado Para" 
-              value={formData.programadoPara} 
-              icon={<CalendarIcon size={16} className="me-2 text-info" />} 
-              name="programadoPara" 
+            <DetailItem
+              label="Programado Para"
+              value={formData.programadoPara}
+              icon={<CalendarIcon size={16} className="me-2 text-info" />}
+              name="programadoPara"
               isEditableField={true}
               isEditingMode={isEditing}
             >
@@ -404,39 +404,49 @@ export default function OSDetailsView({ os: initialOs }: OSDetailsViewProps) {
                 type="date"
                 className="form-control form-control-sm"
                 name="programadoPara"
-                value={formData.programadoPara || ''} 
+                value={formData.programadoPara || ''}
                 onChange={handleInputChange}
                 disabled={!isEditing}
               />
             </DetailItem>
 
             {(formData.status === OSStatus.FINALIZADO || initialOs.dataFinalizacao) && (
-              <DetailItem 
-                label="Data de Finalização" 
-                value={formData.dataFinalizacao || initialOs.dataFinalizacao} 
-                icon={<CheckCircle2 size={16} className="me-2 text-success" />} 
-                name="dataFinalizacao" 
-                isEditableField={false} 
+              <DetailItem
+                label="Data de Finalização"
+                value={formData.dataFinalizacao || initialOs.dataFinalizacao}
+                icon={<CheckCircle2 size={16} className="me-2 text-success" />}
+                name="dataFinalizacao"
+                isEditableField={false}
                 isEditingMode={isEditing}
               />
             )}
-             {formData.status === OSStatus.FINALIZADO && (formData.tempoProducaoMinutos !== undefined && formData.tempoProducaoMinutos >= 0) && (
-                <DetailItem 
-                  label="Tempo de Produção" 
-                  value={`${Math.floor(formData.tempoProducaoMinutos / 60)}h ${formData.tempoProducaoMinutos % 60}m`} 
-                  icon={<Clock3 size={16} className="me-2 text-success" />} 
-                  name="tempoProducaoMinutos" 
-                  isEditableField={false} 
+            {formData.status === OSStatus.EM_PRODUCAO && formData.dataInicioProducao && (
+                <DetailItem
+                  label="Início Produção"
+                  value={formData.dataInicioProducao}
+                  icon={<Clock3 size={16} className="me-2 text-info" />}
+                  name="dataInicioProducao"
+                  isEditableField={false}
+                  isEditingMode={isEditing}
+                />
+            )}
+            {formData.status === OSStatus.FINALIZADO && (formData.tempoProducaoMinutos !== undefined && formData.tempoProducaoMinutos >= 0) && (
+                <DetailItem
+                  label="Tempo de Produção"
+                  value={formData.tempoProducaoMinutos}
+                  icon={<Clock3 size={16} className="me-2 text-success" />}
+                  name="tempoProducaoMinutos"
+                  isEditableField={false}
                   isEditingMode={isEditing}
                 />
             )}
 
-            <DetailItem 
-              label="Tarefa Principal" 
-              value={formData.tarefa} 
-              icon={<Briefcase size={16} className="me-2 text-primary" />} 
-              name="tarefa" 
-              isEditableField={true} 
+            <DetailItem
+              label="Tarefa Principal"
+              value={formData.tarefa}
+              icon={<Briefcase size={16} className="me-2 text-primary" />}
+              name="tarefa"
+              isEditableField={true}
               isEditingMode={isEditing}
               className="border-top pt-3 mt-3"
             >
@@ -444,17 +454,17 @@ export default function OSDetailsView({ os: initialOs }: OSDetailsViewProps) {
                 className="form-control form-control-sm"
                 name="tarefa"
                 rows={3}
-                value={formData.tarefa || ''} 
+                value={formData.tarefa || ''}
                 onChange={handleInputChange}
                 disabled={!isEditing}
               />
             </DetailItem>
 
-            <DetailItem 
-              label="Observações" 
-              value={formData.observacoes} 
-              icon={<MessageSquare size={16} className="me-2 text-primary" />} 
-              name="observacoes" 
+            <DetailItem
+              label="Observações"
+              value={formData.observacoes}
+              icon={<MessageSquare size={16} className="me-2 text-primary" />}
+              name="observacoes"
               isEditableField={true}
               isEditingMode={isEditing}
             >
@@ -462,17 +472,17 @@ export default function OSDetailsView({ os: initialOs }: OSDetailsViewProps) {
                 className="form-control form-control-sm"
                 name="observacoes"
                 rows={4}
-                value={formData.observacoes || ''} 
+                value={formData.observacoes || ''}
                 onChange={handleInputChange}
                 disabled={!isEditing}
               />
             </DetailItem>
 
-            <DetailItem 
-              label="Tempo Trabalhado" 
-              value={formData.tempoTrabalhado} 
-              icon={<Clock3 size={16} className="me-2 text-primary" />} 
-              name="tempoTrabalhado" 
+            <DetailItem
+              label="Tempo Trabalhado"
+              value={formData.tempoTrabalhado}
+              icon={<Clock3 size={16} className="me-2 text-primary" />}
+              name="tempoTrabalhado"
               isEditableField={true}
               isEditingMode={isEditing}
             >
@@ -480,18 +490,18 @@ export default function OSDetailsView({ os: initialOs }: OSDetailsViewProps) {
                 className="form-control form-control-sm"
                 name="tempoTrabalhado"
                 rows={3}
-                value={formData.tempoTrabalhado || ''} 
+                value={formData.tempoTrabalhado || ''}
                 onChange={handleInputChange}
                 disabled={!isEditing}
                 placeholder="Ex: 1h reunião (15/05)&#10;3h código (16/05)&#10;2h ajustes (17/05)"
               />
             </DetailItem>
 
-            <DetailItem 
-              label="Urgente" 
-              value={formData.isUrgent} 
-              icon={<Flag size={16} className={`me-2 ${formData.isUrgent ? 'text-danger' : 'text-secondary'}`} />} 
-              name="isUrgent" 
+            <DetailItem
+              label="Urgente"
+              value={formData.isUrgent}
+              icon={<Flag size={16} className={`me-2 ${formData.isUrgent ? 'text-danger' : 'text-secondary'}`} />}
+              name="isUrgent"
               isEditableField={true}
               isEditingMode={isEditing}
             >
