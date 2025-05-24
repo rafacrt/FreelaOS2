@@ -5,48 +5,42 @@ const dbConfig = {
   host: process.env.DB_HOST,
   port: parseInt(process.env.DB_PORT || '3306', 10),
   user: process.env.DB_USER || 'root',
-  password: process.env.DB_PASSWORD?.trim(),
+  password: process.env.DB_PASSWORD?.trim(), // Ensure password is trimmed
   database: process.env.DB_DATABASE || 'freelaos-db',
   waitForConnections: true,
   connectionLimit: parseInt(process.env.DB_CONNECTION_LIMIT || '10', 10),
   queueLimit: 0,
   ssl: process.env.DB_SSL_ENABLED === 'true'
-    ? { rejectUnauthorized: process.env.DB_SSL_REJECT_UNAUTHORIZED !== 'false' }
+    ? { 
+        rejectUnauthorized: process.env.DB_SSL_REJECT_UNAUTHORIZED !== 'false',
+        // ca: process.env.DB_SSL_CA ? Buffer.from(process.env.DB_SSL_CA, 'base64').toString('ascii') : undefined,
+        // key: process.env.DB_SSL_KEY ? Buffer.from(process.env.DB_SSL_KEY, 'base64').toString('ascii') : undefined,
+        // cert: process.env.DB_SSL_CERT ? Buffer.from(process.env.DB_SSL_CERT, 'base64').toString('ascii') : undefined,
+      }
     : undefined,
-  // Adicionar timezone para consistência, se necessário, ex: 'Z' para UTC ou 'America/Sao_Paulo'
-  // timezone: 'Z',
+  // timezone: 'Z', // Example: UTC
 };
 
-// Log DB config only during build or if explicitly enabled, to avoid leaking in production logs frequently
-if (process.env.NODE_ENV === 'development' || process.env.DEBUG_DB_CONFIG === 'true') {
-  console.log('[DB Config] Usando configuração do banco de dados:', {
-    host: dbConfig.host,
-    port: dbConfig.port,
-    user: dbConfig.user,
-    database: dbConfig.database,
-    ssl_enabled: !!dbConfig.ssl,
-    ssl_rejectUnauthorized: dbConfig.ssl?.rejectUnauthorized,
-    password_set: dbConfig.password ? 'Sim' : 'Não (ou vazio)',
-  });
-}
+// Log DB config details, masking password
+const loggableDbConfig = { ...dbConfig, password: dbConfig.password ? '********' : 'Not Set' };
+console.log('[DB Config] Initializing MySQL connection pool with effective configuration:', loggableDbConfig);
 
 let pool: mysql.Pool;
 try {
   pool = mysql.createPool(dbConfig);
-  console.log('[DB Pool] Pool de conexões MySQL criado com sucesso.');
+  console.log(`[DB Pool] Pool de conexões MySQL criado com sucesso para database: '${dbConfig.database}' no host: '${dbConfig.host}'.`);
 } catch (error) {
   console.error('[DB Pool] FALHA CRÍTICA ao criar pool de conexões MySQL:', error);
-  // Em um cenário real, você poderia tentar um fallback ou logar para um sistema de monitoramento
-  // Por agora, a aplicação provavelmente não funcionará se o pool falhar ao ser criado.
-  // Lançar o erro pode ser apropriado para parar o servidor se o DB for essencial.
   throw error;
 }
 
 
 pool.on('error', (err) => {
   console.error('[DB Pool Error] Erro inesperado em cliente ocioso do pool:', err);
+  // Potentially handle reconnection or logging to a monitoring service
 });
 
+// Test connection function
 export const testConnection = async () => {
   let connection;
   try {
@@ -70,6 +64,8 @@ export const testConnection = async () => {
         console.error(`   👉 ER_BAD_DB_ERROR: O banco de dados "${dbConfig.database}" não existe ou o usuário não tem permissão para acessá-lo.`);
       } else if (error.code === 'ER_SECURE_TRANSPORT_REQUIRED') {
         console.error(`   👉 ER_SECURE_TRANSPORT_REQUIRED: O MySQL exige uma conexão segura (SSL), mas a aplicação não está configurada para isso ou falhou ao tentar. Verifique as configurações de SSL no MySQL e na aplicação (DB_SSL_ENABLED, etc.).`);
+      } else {
+        console.error(`   👉 Outro erro de banco de dados: ${error.code} - ${error.sqlMessage || error.message}`);
       }
     }
     if (error.errno) console.error(`   Número do Erro (errno): ${error.errno}`);
