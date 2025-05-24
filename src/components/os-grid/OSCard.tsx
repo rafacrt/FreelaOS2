@@ -4,12 +4,14 @@
 import Link from 'next/link';
 import type { OS } from '@/lib/types';
 import { OSStatus, ALL_OS_STATUSES } from '@/lib/types';
-import { CalendarClock, Flag, Copy, AlertTriangle, CheckCircle2, Clock, Server, Users, FileText, User as UserIcon, Briefcase, Calendar as CalendarIcon, CheckSquare } from 'lucide-react';
+import { CalendarClock, Flag, Copy, AlertTriangle, CheckCircle2, ClockIcon, Server, Users, FileText, User as UserIcon, Briefcase, Calendar as CalendarIcon, CheckSquare, Play, Pause } from 'lucide-react'; // Added Play, Pause, ClockIcon
 import { format, parseISO, isValid } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useOSStore } from '@/store/os-store';
 import { useTheme } from '@/hooks/useTheme';
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
+import ChronometerDisplay from '@/components/os/ChronometerDisplay';
+
 
 interface OSCardProps {
   os: OS;
@@ -29,9 +31,10 @@ const getStatusClass = (status: OSStatus, isUrgent: boolean, theme: 'light' | 'd
   }
 };
 
+// getStatusIcon é usado pelo select, não precisa mudar
 const getStatusIcon = (status: OSStatus) => {
   switch (status) {
-    case OSStatus.NA_FILA: return <Clock size={14} className="me-1" />;
+    case OSStatus.NA_FILA: return <ClockIcon size={14} className="me-1" />;
     case OSStatus.AGUARDANDO_CLIENTE: return <UserIcon size={14} className="me-1" />;
     case OSStatus.EM_PRODUCAO: return <Server size={14} className="me-1" />;
     case OSStatus.AGUARDANDO_PARCEIRO: return <Users size={14} className="me-1" />;
@@ -41,52 +44,63 @@ const getStatusIcon = (status: OSStatus) => {
 };
 
 export default function OSCard({ os }: OSCardProps) {
-  const { updateOSStatus, toggleUrgent, duplicateOS } = useOSStore();
+  const { updateOSStatus, toggleUrgent, duplicateOS, toggleProductionTimer } = useOSStore();
   const { theme } = useTheme();
+  const [isUpdating, setIsUpdating] = useState(false); // For disabling buttons during async ops
 
   const statusThemeClasses = getStatusClass(os.status, os.isUrgent, theme);
-  
-  // Base card classes with transition for hover effect
   const cardClasses = `card h-100 shadow-sm border-start border-4 ${statusThemeClasses} transition-shadow duration-200 ease-in-out`;
   const hoverEffectClass = "hover-lift";
 
   const handleStatusChange = async (event: React.ChangeEvent<HTMLSelectElement>) => {
     const newStatus = event.target.value as OSStatus;
-    // Prevent default link navigation or other actions
     event.preventDefault(); 
     event.stopPropagation();
+    setIsUpdating(true);
     try {
       await updateOSStatus(os.id, newStatus);
       console.log(`OS "${os.projeto}" movida para ${newStatus}.`);
     } catch (error) {
       console.error(`Falha ao atualizar status da OS ${os.id}:`, error);
-      // TODO: Adicionar feedback visual para o usuário (ex: toast)
+    } finally {
+      setIsUpdating(false);
     }
   };
 
   const handleToggleUrgent = async (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
+    e.preventDefault(); e.stopPropagation();
+    setIsUpdating(true);
     await toggleUrgent(os.id);
+    setIsUpdating(false);
   };
 
   const handleDuplicateOS = async (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
+    e.preventDefault(); e.stopPropagation();
+    setIsUpdating(true);
     await duplicateOS(os.id);
+    setIsUpdating(false);
   };
 
   const handleFinalizeOS = async (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
+    e.preventDefault(); e.stopPropagation();
     if (os.status !== OSStatus.FINALIZADO) {
+      setIsUpdating(true);
       try {
         await updateOSStatus(os.id, OSStatus.FINALIZADO);
         console.log(`OS "${os.numero}" finalizada diretamente do card.`);
       } catch (error) {
         console.error(`Falha ao finalizar OS ${os.id} do card:`, error);
+      } finally {
+        setIsUpdating(false);
       }
     }
+  };
+
+  const handleToggleTimer = async (e: React.MouseEvent, action: 'play' | 'pause') => {
+    e.preventDefault(); e.stopPropagation();
+    setIsUpdating(true);
+    await toggleProductionTimer(os.id, action);
+    setIsUpdating(false);
   };
 
   const truncateText = (text: string | undefined | null, maxLength: number = 50): string => {
@@ -105,6 +119,7 @@ export default function OSCard({ os }: OSCardProps) {
       return null;
   }, [os.programadoPara]);
 
+  const isTimerRunning = !!os.dataInicioProducaoAtual;
 
   return (
     <Link href={`/os/${os.id}`} passHref legacyBehavior>
@@ -137,8 +152,8 @@ export default function OSCard({ os }: OSCardProps) {
                     <div className="mt-auto pt-1 border-top">
                         <div className="text-muted small d-flex align-items-center mb-1">
                              <CalendarClock size={14} className="me-1 flex-shrink-0" />
-                             <span className="text-truncate" title={`Aberto em: ${format(parseISO(os.dataAbertura), "dd/MM/yyyy HH:mm:ss", { locale: ptBR })}`}>
-                                Aberto em: {format(parseISO(os.dataAbertura), "dd/MM/yy HH:mm", { locale: ptBR })}
+                             <span className="text-truncate" title={`Aberto em: ${isValid(parseISO(os.dataAbertura)) ? format(parseISO(os.dataAbertura), "dd/MM/yyyy HH:mm:ss", { locale: ptBR }) : 'Data inválida'}`}>
+                                Aberto em: {isValid(parseISO(os.dataAbertura)) ? format(parseISO(os.dataAbertura), "dd/MM/yy HH:mm", { locale: ptBR }) : 'N/A'}
                              </span>
                         </div>
                         {formattedProgramadoPara && (
@@ -149,6 +164,13 @@ export default function OSCard({ os }: OSCardProps) {
                                 </span>
                             </div>
                         )}
+                         <div className="mb-2">
+                            <ChronometerDisplay
+                                startTimeISO={os.dataInicioProducaoAtual}
+                                accumulatedSeconds={os.tempoGastoProducaoSegundos}
+                                isRunningClientOverride={os.status === OSStatus.EM_PRODUCAO && !!os.dataInicioProducaoAtual}
+                            />
+                        </div>
                     </div>
 
                     <div className="mb-2">
@@ -156,9 +178,10 @@ export default function OSCard({ os }: OSCardProps) {
                             className={`form-select form-select-sm ${statusThemeClasses.replace('text-', 'border-').replace('bg-danger-subtle', '')}`}
                             value={os.status}
                             onChange={handleStatusChange}
-                            onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                            onClick={(e) => { e.preventDefault(); e.stopPropagation(); }} // Prevent link navigation
                             aria-label="Mudar status da OS"
                             style={{ fontSize: '0.75rem' }}
+                            disabled={isUpdating}
                         >
                             {ALL_OS_STATUSES.map(s => (
                             <option key={s} value={s}>
@@ -175,22 +198,46 @@ export default function OSCard({ os }: OSCardProps) {
                                 className="btn btn-success btn-sm w-100 d-flex align-items-center justify-content-center"
                                 onClick={handleFinalizeOS}
                                 style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem' }}
+                                disabled={isUpdating}
                             >
                                 <CheckSquare size={14} className="me-1" /> Finalizar OS
                             </button>
                         )}
+                         <div className="d-flex gap-1 mb-1">
+                            {isTimerRunning ? (
+                                <button
+                                    className="btn btn-warning btn-sm flex-grow-1 d-flex align-items-center justify-content-center"
+                                    onClick={(e) => handleToggleTimer(e, 'pause')}
+                                    disabled={isUpdating}
+                                    style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem' }}
+                                >
+                                    <Pause size={14} className="me-1" /> Pausar Timer
+                                </button>
+                            ) : (
+                                <button
+                                    className="btn btn-info btn-sm flex-grow-1 d-flex align-items-center justify-content-center"
+                                    onClick={(e) => handleToggleTimer(e, 'play')}
+                                    disabled={isUpdating || os.status === OSStatus.FINALIZADO}
+                                    style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem' }}
+                                >
+                                    <Play size={14} className="me-1" /> Iniciar Timer
+                                </button>
+                            )}
+                        </div>
                         <div className="d-flex gap-1">
                             <button
-                                className={`btn ${os.isUrgent ? 'btn-danger' : 'btn-outline-warning'} btn-sm flex-grow-1 d-flex align-items-center justify-content-center`}
+                                className={`btn ${os.isUrgent ? 'btn-danger' : 'btn-outline-danger'} btn-sm flex-grow-1 d-flex align-items-center justify-content-center`}
                                 onClick={handleToggleUrgent}
                                 style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem' }}
+                                disabled={isUpdating}
                             >
                                 <Flag size={14} className="me-1" /> {os.isUrgent ? "Urgente!" : "Marcar Urgente"}
                             </button>
                             <button
-                                className="btn btn-secondary btn-sm flex-grow-1 d-flex align-items-center justify-content-center"
+                                className="btn btn-outline-secondary btn-sm flex-grow-1 d-flex align-items-center justify-content-center"
                                 onClick={handleDuplicateOS}
                                 style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem' }}
+                                disabled={isUpdating}
                             >
                                 <Copy size={14} className="me-1" /> Duplicar
                             </button>

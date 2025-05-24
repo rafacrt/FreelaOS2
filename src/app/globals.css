@@ -20,7 +20,7 @@ body {
   --primary: 30 100% 55%; /* Orange */
   --primary-foreground: 0 0% 100%; /* White text on orange */
 
-  --secondary: 30 90% 50%; /* Slightly different Orange for secondary, or a neutral gray e.g. 220 10% 50% */
+  --secondary: 30 90% 50%; /* Slightly different Orange for secondary */
   --secondary-foreground: 0 0% 100%; /* White text on orange secondary */
 
   --muted: 210 40% 96.1%;
@@ -41,14 +41,12 @@ body {
   /* Bootstrap variable overrides using our HSL theme */
   --bs-primary-hsl: var(--primary);
   --bs-secondary-hsl: var(--secondary);
-  /* For text, Bootstrap uses -rgb vars for opacity control, convert HSL to RGB if needed or use direct color */
+  
   --bs-primary: hsl(var(--primary));
   --bs-secondary: hsl(var(--secondary));
-
-  /* For orange hsl(30, 100%, 55%) -> approx rgb(255, 145, 25) */
-  --bs-primary-rgb-values: 255, 145, 25;
-  /* For orange secondary hsl(30, 90%, 50%) -> approx rgb(255, 136, 0) */
-  --bs-secondary-rgb-values: 255, 136, 0;
+  
+  --bs-primary-rgb-values: 255, 145, 25; /* Corresponds to hsl(30, 100%, 55%) */
+  --bs-secondary-rgb-values: 255, 136, 0; /* Corresponds to hsl(30, 90%, 50%) */
 
 
   --bs-body-color: hsl(var(--foreground));
@@ -89,10 +87,9 @@ body {
   /* Bootstrap variable overrides for dark mode */
   --bs-primary: hsl(var(--primary));
   --bs-secondary: hsl(var(--secondary));
-  /* For orange hsl(30, 100%, 55%) -> approx rgb(255, 145, 25) */
-  --bs-primary-rgb-values: 255, 145, 25;
-  /* For orange secondary hsl(30, 90%, 60%) -> approx rgb(255, 157, 51) */
-  --bs-secondary-rgb-values: 255, 157, 51;
+  
+  --bs-primary-rgb-values: 255, 145, 25; /* Corresponds to hsl(30, 100%, 55%) */
+  --bs-secondary-rgb-values: 255, 157, 51; /* Corresponds to hsl(30, 90%, 60%) */
 
 
   --bs-body-color: hsl(var(--foreground));
@@ -208,14 +205,13 @@ body {
 }
 
 /* Urgent OS Details Styling */
-/* Remove global background from .os-details-urgent container */
 .os-details-urgent .card {
   border-color: var(--bs-danger, #dc3545) !important;
-  background-color: var(--bs-danger-bg-subtle, #f8d7da); /* Apply subtle red bg to the card itself */
+  background-color: var(--bs-danger-bg-subtle, #f8d7da); 
 }
 
 .os-details-urgent .card-header {
-  background-color: var(--bs-danger-bg-subtle, #f8d7da) !important; /* Ensure header matches or is slightly different */
+  background-color: var(--bs-danger-bg-subtle, #f8d7da) !important; 
   border-bottom-color: var(--bs-danger-border-subtle, #f5c2c7) !important;
   color: var(--bs-danger-text-emphasis, #842029) !important;
 }
@@ -224,22 +220,17 @@ body {
   color: var(--bs-danger-text-emphasis, #842029) !important;
 }
 
-.os-details-urgent .card-body {
-   /* Card body will inherit background from .card or can be styled explicitly if needed */
-   /* background-color: var(--bs-danger-bg-subtle, #f8d7da); */ /* Already on .card */
-}
-
-.os-details-urgent .text-primary { /* Override typical primary colors to danger emphasis */
+.os-details-urgent .text-primary { 
   color: var(--bs-danger-text-emphasis, #842029) !important;
 }
 .os-details-urgent .text-muted {
-  color: var(--bs-danger-text-emphasis, #721c24) !important; /* Darker red for muted text */
+  color: var(--bs-danger-text-emphasis, #721c24) !important; 
   opacity: 0.85;
 }
 .os-details-urgent .form-control,
 .os-details-urgent .form-select {
     border-color: var(--bs-danger, #dc3545);
-    background-color: var(--bs-white); /* Keep form fields somewhat standard for readability */
+    background-color: var(--bs-white); 
 }
 .os-details-urgent .form-control:focus,
 .os-details-urgent .form-select:focus {
@@ -252,84 +243,120 @@ body {
   body, .container, .container-fluid {
     margin: 0 !important;
     padding: 0 !important;
-    background-color: #fff !important; /* Ensure white background for printing */
-    color: #000 !important; /* Ensure black text */
-    -webkit-print-color-adjust: exact !important; /* Chrome, Safari */
-    color-adjust: exact !important; /* Firefox, Edge */
-
+    background-color: #fff !important; 
+    color: #000 !important; 
+    -webkit-print-color-adjust: exact !important; 
+    color-adjust: exact !important;
+    font-size: 10pt; /* Smaller font for printing */
   }
 
   .page-transition-container > footer,
   .page-transition-container > header,
-  .btn, /* Hide all buttons */
-  .os-grid-container, /* Hide dashboard grid */
-  .dashboard-controls-container, /* Hide dashboard controls */
-  .navbar, /* Hide header */
-  .footer-content-container, /* Hide footer */
-  .no-print { /* Utility class to hide specific elements */
+  .btn, 
+  .os-grid-container, 
+  .dashboard-controls-container, 
+  .navbar, 
+  .footer-content-container, 
+  .no-print { 
     display: none !important;
   }
 
   .os-details-print-container {
       padding: 0 !important;
       margin: 0 !important;
+      width: 100% !important; /* Use full width for content */
+      max-width: 100% !important;
+      page-break-inside: avoid;
   }
 
   .os-details-print-container .card {
     box-shadow: none !important;
-    border: 1px solid #ccc !important;
+    border: 1px solid #666 !important;
     width: 100% !important;
     max-width: 100% !important;
-    margin: 0 auto !important;
-    page-break-inside: avoid; /* Try to keep card content on one page */
-    background-color: #fff !important; /* Ensure card background is white for print */
+    margin: 0 !important; /* Remove auto margins */
+    page-break-inside: avoid;
+    background-color: #fff !important; 
+    display: block !important; /* Ensure card is block */
   }
   .os-details-print-container .card-body,
   .os-details-print-container .card-header {
-    padding: 0.75rem !important;
-    background-color: #fff !important; /* White background for card sections */
+    padding: 0.5rem !important; /* Reduced padding for print */
+    background-color: #fff !important; 
   }
 
-  .os-details-print-container h1,
-  .os-details-print-container h4,
-  .os-details-print-container p,
-  .os-details-print-container dt,
-  .os-details-print-container dd,
-  .os-details-print-container span,
-  .os-details-print-container div {
-    color: #000 !important; /* Black text on white paper */
-    background-color: transparent !important;
+ .os-details-print-container h1.card-title {
+    font-size: 14pt !important;
+    margin-bottom: 0.25rem !important;
   }
-
-  .os-details-print-container .text-muted,
   .os-details-print-container .card-subtitle {
-      color: #333 !important;
+    font-size: 10pt !important;
+    margin-bottom: 0.5rem !important;
   }
-   .os-details-print-container .form-control-plaintext {
-      border: none !important;
-      padding-left: 0 !important;
-      padding-right: 0 !important;
+
+  .os-details-print-container dl.mb-0 .row {
+    padding-top: 0.1rem !important;
+    padding-bottom: 0.1rem !important;
+    border-bottom: 1px dotted #eee; /* Lighter separator */
+  }
+   .os-details-print-container dl.mb-0 .row:last-child {
+      border-bottom: none;
    }
+
+
+  .os-details-print-container dt, .os-details-print-container dd {
+    font-size: 9pt !important;
+    line-height: 1.3 !important;
+  }
+  .os-details-print-container dt {
+    font-weight: 600; /* Bolder labels */
+  }
+   .os-details-print-container dd .form-control-plaintext {
+      padding: 0 !important;
+      border: none !important;
+      white-space: pre-wrap; /* Allow text wrapping */
+      word-break: break-word;
+   }
+
+  .os-details-print-container .badge {
+    font-size: 8pt !important;
+    padding: 0.2em 0.4em !important;
+    border: 1px solid #ccc;
+    background-color: #eee !important;
+    color: #000 !important;
+  }
 
 
   /* Urgent styling for print - make it less intrusive */
   .os-details-urgent.os-details-print-container .card {
-     border-color: #666 !important; /* Darker border for urgent on print */
-     background-color: #fff !important; /* Keep urgent card background white for print */
+     border-color: #333 !important; /* Darker border for urgent on print */
+     background-color: #fff !important; 
   }
   .os-details-urgent.os-details-print-container .card-header {
-    background-color: #eee !important; /* Light grey header for urgent print */
+    background-color: #f0f0f0 !important; /* Light grey header for urgent print */
     border-bottom: 1px solid #ccc !important;
   }
   .os-details-urgent.os-details-print-container .badge.bg-danger {
-      background-color: #ddd !important; /* Grey badge for urgent print */
+      background-color: #ddd !important; 
       color: #000 !important;
       border: 1px solid #999 !important;
   }
    .os-details-urgent.os-details-print-container .text-primary,
    .os-details-urgent.os-details-print-container .text-danger-emphasis {
-       color: #000 !important; /* Black for emphasis text in urgent print */
+       color: #000 !important; 
    }
+
+  /* Attempt to fit to half page - this is tricky with pure CSS */
+  @page {
+    size: A4; /* or letter */
+    margin: 0.5in; /* Adjust margins */
+  }
+  .os-details-print-container {
+    /* For a single OS print, this might be enough if content is short */
+    /* If multiple OS are printed or content is long, page-break-inside: avoid on .card is key */
+    /* To force two on a page is very difficult without JS to measure and split. */
+    /* The approach below aims for one OS per half-page IF it fits, but will flow naturally. */
+  }
 }
 
 
@@ -370,16 +397,16 @@ body {
          color: hsl(var(--secondary) / 0.9) !important;
      }
     .text-success-emphasis {
-         color: hsl(145 63% 49% / 0.9) !important; /* Example success color */
+         color: hsl(145 63% 49% / 0.9) !important; 
      }
      .text-info-emphasis {
-         color: hsl(188 78% 41% / 0.9) !important; /* Example info color */
+         color: hsl(188 78% 41% / 0.9) !important; 
      }
      .text-warning-emphasis {
-         color: hsl(45 100% 51% / 0.9) !important; /* Example warning color */
+         color: hsl(45 100% 51% / 0.9) !important; 
      }
      .text-danger-emphasis {
-         color: hsl(0 72% 51% / 0.9) !important; /* Example danger color */
+         color: hsl(0 72% 51% / 0.9) !important; 
      }
 
 
@@ -547,5 +574,3 @@ body {
   /* Convert HSL(30, 90%, 60%) to RGB: approx 255, 157, 51 */
   --bs-secondary-rgb: 255,157,51;
 }
-
-    

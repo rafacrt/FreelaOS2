@@ -31,8 +31,12 @@ export interface OS {
   dataFinalizacao?: string; // ISO string
   programadoPara?: string; // YYYY-MM-DD string
   isUrgent: boolean;
-  dataInicioProducao?: string; // ISO string
-  tempoProducaoMinutos?: number;
+  dataInicioProducao?: string; // ISO string, quando a OS entrou em produção pela primeira vez (histórico)
+  tempoProducaoMinutos?: number; // Tempo total em produção, calculado na finalização
+
+  // Novos campos para o cronômetro
+  tempoGastoProducaoSegundos: number; // Total de segundos acumulados em produção
+  dataInicioProducaoAtual?: string | null; // ISO string, timestamp do início da sessão de produção ATUAL, null se pausado/não em produção
 }
 
 export interface User {
