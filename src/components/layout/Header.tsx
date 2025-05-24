@@ -7,14 +7,14 @@ import { Moon, Sun, UserCircle, LogOut, LogIn, UserPlus } from 'lucide-react';
 import { useTheme } from '@/hooks/useTheme';
 import { logoutAction } from '@/lib/actions/auth-actions';
 import { usePathname } from 'next/navigation';
+import { useActionState } from 'react'; // For logout form
 
 // Updated Abstract Logo SVG (Orange Theme)
 const FreelaOSLogo = () => (
   <svg width="28" height="28" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <rect width="100" height="100" rx="15" fill="hsl(var(--primary))"/> {/* Main Orange background */}
-    <path d="M25 75V25L50 50L25 75Z" fill="hsl(var(--primary-foreground))"/> {/* White/Light foreground element */}
+    <rect width="100" height="100" rx="15" fill="hsl(var(--primary))"/>
+    <path d="M25 75V25L50 50L25 75Z" fill="hsl(var(--primary-foreground))"/>
     <path d="M75 25V75L50 50L75 25Z" fill="hsl(var(--primary-foreground))"/>
-    {/* Changed blue accent to a slightly different orange or primary-foreground for simplicity */}
     <rect x="45" y="15" width="10" height="70" fill="hsl(var(--primary))"/>
   </svg>
 );
@@ -26,10 +26,8 @@ interface HeaderProps {
 export default function Header({ user }: HeaderProps) {
   const { theme, toggleTheme } = useTheme();
   const pathname = usePathname();
+  const [logoutState, logoutFormAction] = useActionState(logoutAction, { message: null });
 
-  const handleLogout = async () => {
-    await logoutAction();
-  };
 
   const showAuthButtons = !user && pathname !== '/login' && pathname !== '/register';
 
@@ -53,8 +51,11 @@ export default function Header({ user }: HeaderProps) {
           {user ? (
             <div className="d-flex align-items-center">
               <UserCircle className="text-secondary me-2" size={24} aria-label={`Usuário: ${user.username}`} />
-              <span className="navbar-text me-3 d-none d-sm-inline">{user.username} {user.isAdmin && <span className="badge bg-primary ms-1 small">Admin</span>}</span>
-              <form action={handleLogout}>
+              <span className="navbar-text me-3 d-none d-sm-inline">
+                Olá, {user.username}
+                {user.isAdmin && <span className="badge bg-primary ms-1 small">Admin</span>}
+              </span>
+              <form action={logoutFormAction}>
                 <button type="submit" className="btn btn-sm btn-outline-danger d-flex align-items-center">
                   <LogOut size={16} className="me-1" /> Sair
                 </button>
@@ -77,4 +78,3 @@ export default function Header({ user }: HeaderProps) {
     </header>
   );
 }
-    
