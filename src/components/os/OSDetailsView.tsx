@@ -37,9 +37,11 @@ const DetailItem = ({ label, value, icon, name, isEditableField, children, class
   let displayValue: string | React.ReactNode = value;
   if ((name === 'programadoPara' || name === 'dataAbertura' || name === 'dataFinalizacao' || name === 'dataInicioProducao') && typeof value === 'string' && value) {
     try {
-      const dateStr = value.includes('T') ? value : `${value}T00:00:00Z`; // Assume UTC if only date
+      // Ensure the date string is treated as UTC if no timezone info is present, especially for YYYY-MM-DD
+      const dateStr = value.includes('T') ? value : (value.length === 10 ? `${value}T00:00:00Z` : value);
       const date = parseISO(dateStr);
       if (isValid(date)) {
+        // For programadoPara (YYYY-MM-DD), only show date. Otherwise, show date and time.
         const formatString = (name === 'programadoPara' && value.length === 10) ? "dd/MM/yyyy" : "dd/MM/yyyy 'às' HH:mm";
         displayValue = format(date, formatString, { locale: ptBR });
       } else {
@@ -87,8 +89,17 @@ export default function OSDetailsView({ os: initialOs }: OSDetailsViewProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
-  const initialProgramadoPara = initialOs.programadoPara ? initialOs.programadoPara.split('T')[0] : '';
-  const [formData, setFormData] = useState<OS>({ ...initialOs, programadoPara: initialProgramadoPara });
+  // Ensure programadoPara is always YYYY-MM-DD for the date input
+  const formatProgramadoParaForInput = (isoDate?: string) => {
+    if (!isoDate) return '';
+    try {
+      return format(parseISO(isoDate), 'yyyy-MM-dd');
+    } catch {
+      return ''; // Or handle error, return original if not parsable
+    }
+  };
+
+  const [formData, setFormData] = useState<OS>({ ...initialOs, programadoPara: formatProgramadoParaForInput(initialOs.programadoPara) });
 
   const [clientInput, setClientInput] = useState(initialOs.cliente || '');
   const [showClientSuggestions, setShowClientSuggestions] = useState(false);
@@ -100,14 +111,15 @@ export default function OSDetailsView({ os: initialOs }: OSDetailsViewProps) {
 
 
   useEffect(() => {
-    const currentProgramadoPara = initialOs.programadoPara ? initialOs.programadoPara.split('T')[0] : '';
-    if (initialOs.id !== formData.id || (!isEditing && initialOs.id === formData.id)) {
-      setFormData({ ...initialOs, programadoPara: currentProgramadoPara });
-      setClientInput(initialOs.cliente || '');
-      setPartnerInput(initialOs.parceiro || '');
-    }
+    // This effect updates the form when initialOs changes (e.g., after a save or if navigating between OS pages)
+    // or when toggling edit mode to reset to initialOs values.
+    console.log('[OSDetailsView useEffect] Updating formData. isEditing:', isEditing, 'initialOs.id:', initialOs.id);
+    setFormData({ ...initialOs, programadoPara: formatProgramadoParaForInput(initialOs.programadoPara) });
+    setClientInput(initialOs.cliente || '');
+    setPartnerInput(initialOs.parceiro || '');
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialOs, isEditing]); // formData.id removido para evitar loop se isEditing for a única mudança
+  }, [initialOs]); // Removed isEditing from deps to prevent reset just on mode toggle if initialOs hasn't changed.
+                  // Re-added initialOs to re-populate form if the underlying OS data changes from store.
 
 
   const filteredClients = useMemo(() => {
@@ -124,65 +136,76 @@ export default function OSDetailsView({ os: initialOs }: OSDetailsViewProps) {
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
+    console.log(`[OSDetailsView handleInputChange] Name: ${name}, Value: ${value}, Type: ${type}`);
 
     setFormData(prev => {
       let newValue: any = value;
       if (type === 'checkbox') {
         newValue = (e.target as HTMLInputElement).checked;
       } else if (name === 'cliente') {
-        setClientInput(value);
-        setShowClientSuggestions(!!value && clients.filter(c => c.name.toLowerCase().includes(value.toLowerCase())).length > 0 && document.activeElement === clientInputRef.current);
+        setClientInput(value); // Update clientInput for suggestions
+        // Do not set formData.cliente here directly, it will be set by handleClientSelect or on save
+         setShowClientSuggestions(!!value && clients.filter(c => c.name.toLowerCase().includes(value.toLowerCase())).length > 0 && document.activeElement === clientInputRef.current);
       } else if (name === 'parceiro') {
-        setPartnerInput(value);
+        setPartnerInput(value); // Update partnerInput for suggestions
+        // Do not set formData.parceiro here directly
         setShowPartnerSuggestions(!!value && partners.filter(p => p.name.toLowerCase().includes(value.toLowerCase())).length > 0 && document.activeElement === partnerInputRef.current);
-        newValue = value || undefined; // Ensure empty string becomes undefined for optional partner
+        newValue = value || undefined; // Keep this for formData if needed, but prefer partnerInput for save
       } else if (name === 'programadoPara') {
-        newValue = value || undefined;
+        newValue = value || undefined; // Store YYYY-MM-DD
       }
       return { ...prev, [name]: newValue };
     });
   };
 
   const handleClientSelect = (clientName: string) => {
-    setFormData(prev => ({ ...prev, cliente: clientName }));
-    setClientInput(clientName);
+    console.log(`[OSDetailsView handleClientSelect] Selected: ${clientName}`);
+    setClientInput(clientName); // This will be used on save
+    setFormData(prev => ({ ...prev, cliente: clientName })); // Also update formData for visual consistency if needed
     setShowClientSuggestions(false);
   };
 
   const handlePartnerSelect = (partnerName: string) => {
-    setFormData(prev => ({ ...prev, parceiro: partnerName }));
-    setPartnerInput(partnerName);
+    console.log(`[OSDetailsView handlePartnerSelect] Selected: ${partnerName}`);
+    setPartnerInput(partnerName); // This will be used on save
+    setFormData(prev => ({ ...prev, parceiro: partnerName })); // Also update formData for visual consistency
     setShowPartnerSuggestions(false);
   };
 
   const handleSave = async () => {
-    console.log('[OSDetailsView handleSave] Iniciando salvamento...');
+    console.log('[OSDetailsView handleSave] Attempting to save OS...');
     setIsSaving(true);
+    
+    const dataToSave: OS = {
+      ...formData,
+      cliente: clientInput.trim(), // Use the latest from clientInput
+      parceiro: partnerInput.trim() || undefined, // Use the latest from partnerInput
+      // programadoPara should already be in YYYY-MM-DD from formData state
+    };
+    console.log('[OSDetailsView handleSave] Data being sent to store updateOS:', JSON.stringify(dataToSave, null, 2));
+
     try {
-      // Certificar que cliente e parceiro nos dados do formData refletem os inputs
-      const dataToSave: OS = {
-        ...formData,
-        cliente: clientInput.trim(),
-        parceiro: partnerInput.trim() || undefined,
-        tarefa: formData.tarefa || '', // Garante que não seja null se vazio
-        observacoes: formData.observacoes || '', // Garante que não seja null se vazio
-      };
-      console.log('[OSDetailsView handleSave] Dados a serem enviados para updateOS:', JSON.stringify(dataToSave, null, 2));
-      await updateOS(dataToSave); // Chama a action do store
-      console.log(`[OSDetailsView handleSave] OS Atualizada no store: ${dataToSave.numero}`);
-      setIsEditing(false);
+      const result = await updateOS(dataToSave); 
+      if (result) {
+        console.log(`[OSDetailsView handleSave] OS successfully updated via store. Result:`, JSON.stringify(result,null,2));
+        setIsEditing(false);
+      } else {
+        console.error("[OSDetailsView handleSave] Store updateOS returned null or error.");
+        alert('Falha ao atualizar OS. Verifique os logs do console e do servidor.');
+      }
     } catch (error) {
-      console.error("[OSDetailsView handleSave] Falha ao atualizar OS:", error);
-      alert('Falha ao atualizar OS. Por favor, verifique o console para mais detalhes e tente novamente.');
+      console.error("[OSDetailsView handleSave] Exception during store updateOS call:", error);
+      alert('Erro ao tentar salvar OS. Verifique os logs.');
     } finally {
       setIsSaving(false);
-      console.log('[OSDetailsView handleSave] Finalizado.');
+      console.log('[OSDetailsView handleSave] Save operation finished.');
     }
   };
 
   const handleCancel = () => {
-    const currentProgramadoPara = initialOs.programadoPara ? initialOs.programadoPara.split('T')[0] : '';
-    setFormData({ ...initialOs, programadoPara: currentProgramadoPara });
+    console.log('[OSDetailsView handleCancel] Cancelling edit.');
+    // Reset form to initialOs values
+    setFormData({ ...initialOs, programadoPara: formatProgramadoParaForInput(initialOs.programadoPara) });
     setClientInput(initialOs.cliente || '');
     setPartnerInput(initialOs.parceiro || '');
     setShowClientSuggestions(false);
@@ -191,28 +214,40 @@ export default function OSDetailsView({ os: initialOs }: OSDetailsViewProps) {
   };
 
   const handleFinalizeOS = async () => {
+    console.log(`[OSDetailsView handleFinalizeOS] Attempting to finalize OS ID: ${formData.id}`);
     if (formData.status !== OSStatus.FINALIZADO) {
-        console.log(`[OSDetailsView handleFinalizeOS] Tentando finalizar OS: ${formData.numero}`);
+        setIsSaving(true); // Indicate an operation is in progress
         const success = await updateOSStatus(formData.id, OSStatus.FINALIZADO);
         if (success) {
-            console.log(`[OSDetailsView handleFinalizeOS] OS ${formData.numero} finalizada com sucesso via store.`);
-            // O store já deve atualizar formData via o seu próprio mecanismo de update
-            // Mas podemos forçar uma atualização se o useEffect não pegar
-            // setFormData(prev => ({ ...prev, status: OSStatus.FINALIZADO, dataFinalizacao: new Date().toISOString() }));
+            console.log(`[OSDetailsView handleFinalizeOS] OS ${formData.numero} finalized successfully via store.`);
+            // State should update via store subscription after successful DB update
+            // setIsEditing(false); // Optionally exit edit mode if finalizing
         } else {
-            console.error(`[OSDetailsView handleFinalizeOS] Falha ao finalizar OS ${formData.numero} via store.`);
-            alert('Falha ao finalizar OS. Verifique o console.');
+            console.error(`[OSDetailsView handleFinalizeOS] Failed to finalize OS ${formData.numero} via store.`);
+            alert('Falha ao finalizar OS. Verifique o console e os logs do servidor.');
         }
+        setIsSaving(false);
+    } else {
+        console.log(`[OSDetailsView handleFinalizeOS] OS ${formData.numero} is already finalized.`);
     }
   };
 
   const handlePrint = () => {
+    console.log('[OSDetailsView handlePrint] Triggering window.print()');
     window.print();
   };
 
-  const setupClickListener = (ref: React.RefObject<HTMLInputElement>, setShowSuggestions: React.Dispatch<React.SetStateAction<boolean>>) => {
+  // Click outside listener for suggestion boxes
+  const setupClickListener = (
+    inputRef: React.RefObject<HTMLInputElement>,
+    suggestionBoxRef: React.RefObject<HTMLDivElement>, // Ref for the suggestion box itself
+    setShowSuggestions: React.Dispatch<React.SetStateAction<boolean>>
+  ) => {
       const handleClickOutside = (event: MouseEvent) => {
-        if (ref.current && !ref.current.parentElement?.contains(event.target as Node)) {
+        if (
+            inputRef.current && !inputRef.current.contains(event.target as Node) &&
+            suggestionBoxRef.current && !suggestionBoxRef.current.contains(event.target as Node)
+        ) {
           setShowSuggestions(false);
         }
       };
@@ -225,8 +260,12 @@ export default function OSDetailsView({ os: initialOs }: OSDetailsViewProps) {
         }
       };
   };
-  useEffect(() => setupClickListener(clientInputRef, setShowClientSuggestions), [clientInputRef]);
-  useEffect(() => setupClickListener(partnerInputRef, setShowPartnerSuggestions), [partnerInputRef]);
+
+  const clientSuggestionsRef = useRef<HTMLDivElement>(null);
+  const partnerSuggestionsRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => setupClickListener(clientInputRef, clientSuggestionsRef, setShowClientSuggestions), [clientInputRef, clientSuggestionsRef]);
+  useEffect(() => setupClickListener(partnerInputRef, partnerSuggestionsRef, setShowPartnerSuggestions), [partnerInputRef, partnerSuggestionsRef]);
 
 
   return (
@@ -271,7 +310,7 @@ export default function OSDetailsView({ os: initialOs }: OSDetailsViewProps) {
                 type="text"
                 className="form-control form-control-lg mb-1 fw-bold"
                 name="projeto"
-                value={formData.projeto}
+                value={formData.projeto || ''}
                 onChange={handleInputChange}
                 placeholder="Nome do Projeto"
                 style={{ fontSize: '1.25rem' }}
@@ -298,7 +337,7 @@ export default function OSDetailsView({ os: initialOs }: OSDetailsViewProps) {
               icon={<UserIcon size={16} className="me-2 text-primary" />}
               name="cliente"
               isEditableField={true}
-              value={formData.cliente}
+              value={isEditing ? clientInput : formData.cliente} // Show clientInput while editing for suggestions
               isEditingMode={isEditing}
             >
               <div className="position-relative">
@@ -307,17 +346,17 @@ export default function OSDetailsView({ os: initialOs }: OSDetailsViewProps) {
                   type="text"
                   className="form-control form-control-sm"
                   name="cliente"
-                  value={clientInput}
-                  onChange={handleInputChange}
+                  value={clientInput} // Controlled by clientInput state
+                  onChange={handleInputChange} // Will update clientInput
                   onFocus={() => setShowClientSuggestions(!!clientInput && filteredClients.length > 0)}
-                  onBlurCapture={() => setTimeout(() => setShowClientSuggestions(false), 200)} // Use onBlurCapture
+                  // onBlurCapture handled by document mousedown listener
                   autoComplete="off"
                   placeholder="Digite ou selecione um cliente"
                   disabled={!isEditing}
                   required
                 />
                 {isEditing && showClientSuggestions && filteredClients.length > 0 && (
-                  <div className="list-group position-absolute w-100 mt-1" style={{ zIndex: 10, maxHeight: '150px', overflowY: 'auto', boxShadow: '0 .5rem 1rem rgba(0,0,0,.15)' }}>
+                  <div ref={clientSuggestionsRef} className="list-group position-absolute w-100 mt-1" style={{ zIndex: 10, maxHeight: '150px', overflowY: 'auto', boxShadow: '0 .5rem 1rem rgba(0,0,0,.15)' }}>
                     {filteredClients.map(c => (
                       <button type="button" key={c.id} className="list-group-item list-group-item-action list-group-item-light py-1 px-2 small"
                         onMouseDown={(e) => { e.preventDefault(); handleClientSelect(c.name); }}>
@@ -334,7 +373,7 @@ export default function OSDetailsView({ os: initialOs }: OSDetailsViewProps) {
               icon={<Users size={16} className="me-2 text-primary" />}
               name="parceiro"
               isEditableField={true}
-              value={formData.parceiro}
+              value={isEditing ? partnerInput : formData.parceiro} // Show partnerInput while editing
               isEditingMode={isEditing}
             >
               <div className="position-relative">
@@ -343,16 +382,16 @@ export default function OSDetailsView({ os: initialOs }: OSDetailsViewProps) {
                   type="text"
                   className="form-control form-control-sm"
                   name="parceiro"
-                  value={partnerInput}
-                  onChange={handleInputChange}
+                  value={partnerInput} // Controlled by partnerInput state
+                  onChange={handleInputChange} // Will update partnerInput
                   onFocus={() => setShowPartnerSuggestions(!!partnerInput && filteredPartners.length > 0)}
-                  onBlurCapture={() => setTimeout(() => setShowPartnerSuggestions(false), 200)} // Use onBlurCapture
+                  // onBlurCapture handled by document mousedown listener
                   autoComplete="off"
                   placeholder="Digite ou selecione um parceiro"
                   disabled={!isEditing}
                 />
                 {isEditing && showPartnerSuggestions && filteredPartners.length > 0 && (
-                  <div className="list-group position-absolute w-100 mt-1" style={{ zIndex: 10, maxHeight: '150px', overflowY: 'auto', boxShadow: '0 .5rem 1rem rgba(0,0,0,.15)' }}>
+                  <div ref={partnerSuggestionsRef} className="list-group position-absolute w-100 mt-1" style={{ zIndex: 10, maxHeight: '150px', overflowY: 'auto', boxShadow: '0 .5rem 1rem rgba(0,0,0,.15)' }}>
                     {filteredPartners.map(p => (
                       <button type="button" key={p.id} className="list-group-item list-group-item-action list-group-item-light py-1 px-2 small"
                         onMouseDown={(e) => { e.preventDefault(); handlePartnerSelect(p.name); }}>
@@ -394,7 +433,7 @@ export default function OSDetailsView({ os: initialOs }: OSDetailsViewProps) {
 
             <DetailItem
               label="Programado Para"
-              value={formData.programadoPara}
+              value={formData.programadoPara} // This is already YYYY-MM-DD for input, or formatted ISO for display
               icon={<CalendarIcon size={16} className="me-2 text-info" />}
               name="programadoPara"
               isEditableField={true}
@@ -404,7 +443,7 @@ export default function OSDetailsView({ os: initialOs }: OSDetailsViewProps) {
                 type="date"
                 className="form-control form-control-sm"
                 name="programadoPara"
-                value={formData.programadoPara || ''}
+                value={formData.programadoPara || ''} // Should be YYYY-MM-DD
                 onChange={handleInputChange}
                 disabled={!isEditing}
               />
@@ -420,10 +459,10 @@ export default function OSDetailsView({ os: initialOs }: OSDetailsViewProps) {
                 isEditingMode={isEditing}
               />
             )}
-            {formData.status === OSStatus.EM_PRODUCAO && formData.dataInicioProducao && (
+            {((formData.status === OSStatus.EM_PRODUCAO || formData.status === OSStatus.FINALIZADO) && (formData.dataInicioProducao || initialOs.dataInicioProducao)) && (
                 <DetailItem
                   label="Início Produção"
-                  value={formData.dataInicioProducao}
+                  value={formData.dataInicioProducao || initialOs.dataInicioProducao}
                   icon={<Clock3 size={16} className="me-2 text-info" />}
                   name="dataInicioProducao"
                   isEditableField={false}
@@ -457,6 +496,7 @@ export default function OSDetailsView({ os: initialOs }: OSDetailsViewProps) {
                 value={formData.tarefa || ''}
                 onChange={handleInputChange}
                 disabled={!isEditing}
+                required={isEditing} // Only required if editing
               />
             </DetailItem>
 
