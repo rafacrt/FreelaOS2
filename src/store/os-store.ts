@@ -2,7 +2,7 @@
 import { create } from 'zustand';
 import type { OS, CreateOSData, Client } from '@/lib/types';
 import { OSStatus } from '@/lib/types';
-import { parseISO, differenceInSeconds, isValid } from 'date-fns';
+// import { parseISO, differenceInSeconds, isValid } from 'date-fns'; // Not used directly here anymore for time calc
 import { 
     createOSInDB, 
     getAllOSFromDB, 
@@ -36,14 +36,14 @@ interface OSState {
   toggleProductionTimer: (osId: string, action: 'play' | 'pause') => Promise<OS | null>;
 
   addPartner: (partnerData: { name: string }) => Promise<Partner | null>;
-  updatePartner: (updatedPartner: Partner) => Promise<void>;
-  deletePartner: (partnerId: string) => Promise<void>;
+  updatePartner: (updatedPartner: Partner) => Promise<void>; // DB update still TODO
+  deletePartner: (partnerId: string) => Promise<void>; // DB update still TODO
   getPartnerById: (partnerId: string) => Partner | undefined;
   getPartnerByName: (partnerName: string) => Partner | undefined;
 
   addClient: (clientData: { name: string }) => Promise<Client | null>;
-  updateClient: (updatedClient: Client) => Promise<void>;
-  deleteClient: (clientId: string) => Promise<void>;
+  updateClient: (updatedClient: Client) => Promise<void>; // DB update still TODO
+  deleteClient: (clientId: string) => Promise<void>; // DB update still TODO
   getClientById: (clientId: string) => Client | undefined;
   getClientByName: (clientName: string) => Client | undefined;
 }
@@ -69,7 +69,7 @@ export const useOSStore = create<OSState>()(
                 getAllPartnersFromDB()
             ]);
             set({
-              osList: osList || [], // Garante que seja um array mesmo se a action retornar null/undefined
+              osList: osList || [], 
               clients: clients || [],
               partners: partners || [],
               isStoreInitialized: true,
@@ -81,7 +81,7 @@ export const useOSStore = create<OSState>()(
             });
         } catch (error) {
             console.error('[Store initializeStore] Falha ao inicializar store do DB:', error);
-            set({ osList: [], clients: [], partners: [], isStoreInitialized: true }); // Marca como inicializado para evitar retentativas
+            set({ osList: [], clients: [], partners: [], isStoreInitialized: true }); 
         }
       },
 
@@ -123,11 +123,11 @@ export const useOSStore = create<OSState>()(
       },
 
       updateOS: async (updatedOSData) => {
-        console.log('[Store updateOS] Iniciando updateOS para OS ID:', updatedOSData.id, 'Dados:', JSON.stringify(updatedOSData, null, 2));
+        console.log('[Store updateOS] Chamado com dados:', JSON.stringify(updatedOSData, null, 2));
         try {
             const savedOS = await updateOSActionDB(updatedOSData); 
             if (savedOS) {
-                console.log('[Store updateOS] OS atualizada no DB e retornada pela Action:', JSON.stringify(savedOS, null, 2));
+                console.log('[Store updateOS] OS atualizada no DB retornada pela Action:', JSON.stringify(savedOS, null, 2));
                 set((state) => ({
                     osList: state.osList.map((os) =>
                         os.id === savedOS.id ? savedOS : os
@@ -158,16 +158,10 @@ export const useOSStore = create<OSState>()(
 
       updateOSStatus: async (osId, newStatus) => {
         console.log(`[Store updateOSStatus] Iniciando para OS ID: ${osId}, Novo Status: ${newStatus}`);
-        const osToUpdate = get().osList.find(o => o.id === osId);
-        if (!osToUpdate) {
-          console.error(`[Store updateOSStatus] OS com ID ${osId} não encontrada no store.`);
-          return null;
-        }
-        
         try {
           const updatedOS = await updateOSStatusInDB(osId, newStatus);
           if (updatedOS) {
-            console.log(`[Store updateOSStatus] Status da OS ${osId} atualizado com sucesso no DB. OS retornada:`, updatedOS);
+            console.log(`[Store updateOSStatus] Status da OS ${osId} atualizado com sucesso no DB. OS retornada:`, JSON.stringify(updatedOS, null, 2));
             set((state) => ({
               osList: state.osList.map((currentOs) =>
                 currentOs.id === osId ? updatedOS : currentOs
@@ -193,16 +187,17 @@ export const useOSStore = create<OSState>()(
         try {
             const updatedOS = await toggleOSProductionTimerInDB(osId, action);
             if (updatedOS) {
-                console.log(`[Store toggleProductionTimer] Timer da OS ${osId} atualizado no DB. OS retornada:`, updatedOS);
+                console.log(`[Store toggleProductionTimer] Timer da OS ${osId} atualizado no DB. OS retornada:`, JSON.stringify(updatedOS, null, 2));
                 set((state) => ({
                     osList: state.osList.map((os) =>
                         os.id === osId ? updatedOS : os
-                    ).sort((a, b) => { // Re-sort if urgency or status changed by play action
+                    ).sort((a, b) => { 
                         if (a.isUrgent && !b.isUrgent) return -1;
                         if (!a.isUrgent && b.isUrgent) return 1;
                         return new Date(b.dataAbertura).getTime() - new Date(a.dataAbertura).getTime();
                     }),
                 }));
+                console.log(`[Store toggleProductionTimer] Estado do store atualizado para OS ID: ${osId}.`);
                 return updatedOS;
             }
             console.error(`[Store toggleProductionTimer] Falha ao alternar timer para OS ${osId} no DB.`);
@@ -246,17 +241,16 @@ export const useOSStore = create<OSState>()(
         const os = get().osList.find(o => o.id === osId);
         if (os) {
             const newUrgency = !os.isUrgent;
-            // Criamos um objeto OS completo para enviar para updateOSActionDB
             const updatedOSWithUrgency: OS = { ...os, isUrgent: newUrgency };
             
-            // Chamamos a action de update geral
+            console.log(`[Store toggleUrgent] Tentando chamar updateOSActionDB para OS ID: ${osId} com urgência ${newUrgency}.`);
             const savedOS = await updateOSActionDB(updatedOSWithUrgency);
             
             if (savedOS) {
-                console.log(`[Store toggleUrgent] Urgência da OS ID: ${osId} atualizada no DB para ${newUrgency}.`);
+                console.log(`[Store toggleUrgent] Urgência da OS ID: ${osId} atualizada no DB para ${newUrgency}. OS retornada:`, JSON.stringify(savedOS, null, 2));
                 set((state) => ({
                   osList: state.osList.map((currentOs) =>
-                    currentOs.id === osId ? savedOS : currentOs // Usa o objeto retornado pelo DB
+                    currentOs.id === osId ? savedOS : currentOs 
                   ).sort((a, b) => {
                     if (a.isUrgent && !b.isUrgent) return -1;
                     if (!a.isUrgent && b.isUrgent) return 1;
@@ -265,7 +259,7 @@ export const useOSStore = create<OSState>()(
                 }));
                 console.log(`[Store toggleUrgent] Urgência alternada e estado local atualizado para OS ID: ${osId}.`);
             } else {
-                 console.error(`[Store toggleUrgent] Falha ao atualizar urgência da OS ID ${osId} no DB.`);
+                 console.error(`[Store toggleUrgent] Falha ao atualizar urgência da OS ID ${osId} no DB (updateOSActionDB retornou null).`);
             }
         } else {
             console.error(`[Store toggleUrgent] OS ID ${osId} não encontrada.`);

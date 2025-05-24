@@ -32,11 +32,11 @@ export interface OS {
   programadoPara?: string; // YYYY-MM-DD string
   isUrgent: boolean;
   dataInicioProducao?: string; // ISO string, quando a OS entrou em produção pela primeira vez (histórico)
-  tempoProducaoMinutos?: number; // Tempo total em produção, calculado na finalização
+  tempoProducaoMinutos?: number; // Tempo total em produção, calculado na finalização. Pode ser depreciado em favor de tempoGastoProducaoSegundos.
 
   // Novos campos para o cronômetro
   tempoGastoProducaoSegundos: number; // Total de segundos acumulados em produção
-  dataInicioProducaoAtual?: string | null; // ISO string, timestamp do início da sessão de produção ATUAL, null se pausado/não em produção
+  dataInicioProducaoAtual: string | null; // ISO string, timestamp do início da sessão de produção ATUAL, null se pausado/não em produção
 }
 
 export interface User {
@@ -64,10 +64,10 @@ export interface Client {
     name: string;
 }
 
-export interface Partner {
-    id: string;
-    name: string;
-}
+// export interface Partner { // This is defined in os-store.ts, ensure consistency or a single source of truth
+//     id: string;
+//     name: string;
+// }
 
 // State type for authentication server actions
 export type AuthActionState = {
@@ -75,3 +75,8 @@ export type AuthActionState = {
   type?: 'success' | 'error';
   redirect?: string;
 };
+
+// Helper function to validate if a date object is valid
+export function isValidDate(d: any): d is Date {
+  return d instanceof Date && !isNaN(d.getTime());
+}

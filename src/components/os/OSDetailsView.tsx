@@ -3,6 +3,7 @@
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import type { OS } from '@/lib/types';
+import { isValidDate } from '@/lib/types'; // Import helper
 import Link from 'next/link';
 import { ArrowLeft, CalendarClock, CheckCircle2, ClockIcon as Clock, FileText, Flag, Server, User as UserIcon, Users, Briefcase, MessageSquare, Clock3, Save, Edit, Calendar as CalendarIcon, Printer, CheckSquare, Play, Pause } from 'lucide-react';
 import { format, parseISO, isValid } from 'date-fns';
@@ -38,9 +39,10 @@ const DetailItem = ({ label, value, icon, name, isEditableField, children, class
   let displayValue: string | React.ReactNode = value;
   if ((name === 'programadoPara' || name === 'dataAbertura' || name === 'dataFinalizacao' || name === 'dataInicioProducao' || name === 'dataInicioProducaoAtual') && typeof value === 'string' && value) {
     try {
-      const dateStr = value.includes('T') ? value : (value.length === 10 ? `${value}T00:00:00Z` : value);
+      // If it's just YYYY-MM-DD, treat as UTC date to avoid timezone shift display issues
+      const dateStr = /^\d{4}-\d{2}-\d{2}$/.test(value) ? `${value}T00:00:00Z` : value;
       const date = parseISO(dateStr);
-      if (isValidDate(date)) {
+      if (isValidDate(date)) { // Use your custom isValidDate
         const formatString = (name === 'programadoPara' && value.length === 10) ? "dd/MM/yyyy" : "dd/MM/yyyy 'às' HH:mm";
         displayValue = format(date, formatString, { locale: ptBR });
       } else {
@@ -88,9 +90,9 @@ export default function OSDetailsView({ os: initialOs }: OSDetailsViewProps) {
   const formatProgramadoParaForInput = useCallback((isoDate?: string) => {
     if (!isoDate) return '';
     try {
-      // Se for YYYY-MM-DD, não precisa de parse complexo
       if (/^\d{4}-\d{2}-\d{2}$/.test(isoDate)) return isoDate;
-      return format(parseISO(isoDate), 'yyyy-MM-dd');
+      const date = parseISO(isoDate);
+      return isValidDate(date) ? format(date, 'yyyy-MM-dd') : '';
     } catch {
       return ''; 
     }
@@ -116,7 +118,7 @@ export default function OSDetailsView({ os: initialOs }: OSDetailsViewProps) {
     });
     setClientInput(initialOs.cliente || '');
     setPartnerInput(initialOs.parceiro || '');
-  }, [initialOs, formatProgramadoParaForInput]);
+  }, [initialOs, formatProgramadoParaForInput]); // isEditing removed from dependencies to prevent reset on edit toggle
 
 
   const filteredClients = useMemo(() => {
@@ -138,11 +140,11 @@ export default function OSDetailsView({ os: initialOs }: OSDetailsViewProps) {
     if (name === 'cliente') {
       setClientInput(value);
       setShowClientSuggestions(!!value && clients.filter(c => c.name.toLowerCase().includes(value.toLowerCase())).length > 0 && document.activeElement === clientInputRef.current);
-      setFormData(prev => ({ ...prev, cliente: value })); // Temporário, será validado no save
+      // formData for cliente will be updated by clientInput in handleSave
     } else if (name === 'parceiro') {
       setPartnerInput(value);
       setShowPartnerSuggestions(!!value && partners.filter(p => p.name.toLowerCase().includes(value.toLowerCase())).length > 0 && document.activeElement === partnerInputRef.current);
-      setFormData(prev => ({ ...prev, parceiro: value || undefined })); // Temporário
+      // formData for parceiro will be updated by partnerInput in handleSave
     } else {
       setFormData(prev => ({
         ...prev,
@@ -154,49 +156,48 @@ export default function OSDetailsView({ os: initialOs }: OSDetailsViewProps) {
   const handleClientSelect = (clientName: string) => {
     console.log(`[OSDetailsView handleClientSelect] Selected: ${clientName}`);
     setClientInput(clientName); 
-    setFormData(prev => ({ ...prev, cliente: clientName }));
+    // setFormData(prev => ({ ...prev, cliente: clientName })); // No longer directly setting formData here for cliente
     setShowClientSuggestions(false);
   };
 
   const handlePartnerSelect = (partnerName: string) => {
     console.log(`[OSDetailsView handlePartnerSelect] Selected: ${partnerName}`);
     setPartnerInput(partnerName); 
-    setFormData(prev => ({ ...prev, parceiro: partnerName }));
+    // setFormData(prev => ({ ...prev, parceiro: partnerName })); // No longer directly setting formData here for parceiro
     setShowPartnerSuggestions(false);
   };
 
   const handleSave = async () => {
-    console.log('[OSDetailsView handleSave] Tentando salvar OS...');
+    console.log('[OSDetailsView handleSave] Attempting to save OS...');
     setIsSaving(true);
     
     const dataToSave: OS = {
       ...formData,
       cliente: clientInput.trim(), 
       parceiro: partnerInput.trim() || undefined, 
-      // programadoPara já deve estar no formato YYYY-MM-DD ou undefined
     };
-    console.log('[OSDetailsView handleSave] Dados para updateOS:', JSON.stringify(dataToSave, null, 2));
+    console.log('[OSDetailsView handleSave] Data prepared for updateOS:', JSON.stringify(dataToSave, null, 2));
 
     try {
       const result = await updateOS(dataToSave); 
       if (result) {
-        console.log(`[OSDetailsView handleSave] OS atualizada com sucesso:`, result);
-        setIsEditing(false); // Sai do modo de edição após salvar
+        console.log(`[OSDetailsView handleSave] OS updated successfully:`, result);
+        setIsEditing(false); 
       } else {
-        console.error("[OSDetailsView handleSave] updateOS retornou null ou erro.");
+        console.error("[OSDetailsView handleSave] updateOS returned null or error from store.");
         alert('Falha ao atualizar OS. Verifique os logs.');
       }
     } catch (error) {
-      console.error("[OSDetailsView handleSave] Exceção durante updateOS:", error);
+      console.error("[OSDetailsView handleSave] Exception during updateOS call:", error);
       alert('Erro ao tentar salvar OS. Verifique os logs.');
     } finally {
       setIsSaving(false);
-      console.log('[OSDetailsView handleSave] Operação de salvamento finalizada.');
+      console.log('[OSDetailsView handleSave] Save operation finished.');
     }
   };
 
   const handleCancel = () => {
-    console.log('[OSDetailsView handleCancel] Cancelando edição.');
+    console.log('[OSDetailsView handleCancel] Cancelling edit.');
     setFormData({ ...initialOs, programadoPara: formatProgramadoParaForInput(initialOs.programadoPara) });
     setClientInput(initialOs.cliente || '');
     setPartnerInput(initialOs.parceiro || '');
@@ -206,30 +207,32 @@ export default function OSDetailsView({ os: initialOs }: OSDetailsViewProps) {
   };
 
   const handleFinalizeOS = async () => {
-    console.log(`[OSDetailsView handleFinalizeOS] Tentando finalizar OS ID: ${formData.id}`);
+    console.log(`[OSDetailsView handleFinalizeOS] Attempting to finalize OS ID: ${formData.id}`);
     if (formData.status !== OSStatus.FINALIZADO) {
         setIsSaving(true); 
         const success = await updateOSStatus(formData.id, OSStatus.FINALIZADO);
         if (success) {
-            console.log(`[OSDetailsView handleFinalizeOS] OS ${formData.numero} finalizada com sucesso.`);
+            console.log(`[OSDetailsView handleFinalizeOS] OS ${formData.numero} finalized successfully.`);
+            // No need to setIsEditing(false) here as this button is only visible in view mode
         } else {
-            console.error(`[OSDetailsView handleFinalizeOS] Falha ao finalizar OS ${formData.numero}.`);
+            console.error(`[OSDetailsView handleFinalizeOS] Failed to finalize OS ${formData.numero}.`);
             alert('Falha ao finalizar OS. Verifique logs.');
         }
         setIsSaving(false);
     } else {
-        console.log(`[OSDetailsView handleFinalizeOS] OS ${formData.numero} já está finalizada.`);
+        console.log(`[OSDetailsView handleFinalizeOS] OS ${formData.numero} is already finalized.`);
     }
   };
 
   const handleToggleTimer = async (action: 'play' | 'pause') => {
     setIsSaving(true);
+    console.log(`[OSDetailsView handleToggleTimer] Action: ${action} for OS ID: ${formData.id}`);
     await toggleProductionTimer(formData.id, action);
     setIsSaving(false);
   };
 
   const handlePrint = () => {
-    console.log('[OSDetailsView handlePrint] Acionando window.print()');
+    console.log('[OSDetailsView handlePrint] Triggering window.print()');
     window.print();
   };
 
@@ -285,11 +288,11 @@ export default function OSDetailsView({ os: initialOs }: OSDetailsViewProps) {
             </button>
           )}
            {!isEditing && formData.status !== OSStatus.FINALIZADO && (
-             <button className="btn btn-info btn-sm" onClick={handleFinalizeOS} disabled={isSaving}>
+             <button className="btn btn-info btn-sm" onClick={handleFinalizeOS} disabled={isSaving} title="Finalizar Ordem de Serviço">
                <CheckSquare size={16} className="me-1" /> Finalizar OS
              </button>
            )}
-          <button className="btn btn-outline-dark btn-sm" onClick={handlePrint}>
+          <button className="btn btn-outline-dark btn-sm" onClick={handlePrint} title="Imprimir Ordem de Serviço">
             <Printer size={16} className="me-1" /> Imprimir OS
           </button>
         </div>
@@ -325,7 +328,6 @@ export default function OSDetailsView({ os: initialOs }: OSDetailsViewProps) {
         </div>
         <div className="card-body p-4">
           <dl className="mb-0">
-            {/* Timer Controls */}
             {!isEditing && formData.status !== OSStatus.FINALIZADO && (
                 <div className="d-flex gap-2 mb-3 no-print">
                     {isTimerRunning ? (
@@ -361,7 +363,6 @@ export default function OSDetailsView({ os: initialOs }: OSDetailsViewProps) {
                     isRunningClientOverride={formData.status === OSStatus.EM_PRODUCAO && !!formData.dataInicioProducaoAtual}
                  />
             </DetailItem>
-
 
             <DetailItem
               label="Cliente"
@@ -483,12 +484,11 @@ export default function OSDetailsView({ os: initialOs }: OSDetailsViewProps) {
                   label="Primeiro Início Produção"
                   value={formData.dataInicioProducao || initialOs.dataInicioProducao}
                   icon={<Clock3 size={16} className="me-2 text-info" />}
-                  name="dataInicioProducao" // Corresponde ao campo histórico
+                  name="dataInicioProducao" 
                   isEditableField={false}
                   isEditingMode={isEditing}
                 />
             }
-
 
             {(formData.status === OSStatus.FINALIZADO || initialOs.dataFinalizacao) && (
               <DetailItem

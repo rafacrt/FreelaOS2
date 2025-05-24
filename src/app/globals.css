@@ -392,7 +392,7 @@ body {
     }
     .text-primary-emphasis {
          color: hsl(var(--primary) / 0.9) !important; /* Adjust for emphasis */
-    }
+     }
      .text-secondary-emphasis {
          color: hsl(var(--secondary) / 0.9) !important;
      }

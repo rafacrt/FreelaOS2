@@ -4,7 +4,7 @@
 import Link from 'next/link';
 import type { OS } from '@/lib/types';
 import { OSStatus, ALL_OS_STATUSES } from '@/lib/types';
-import { CalendarClock, Flag, Copy, AlertTriangle, CheckCircle2, ClockIcon, Server, Users, FileText, User as UserIcon, Briefcase, Calendar as CalendarIcon, CheckSquare, Play, Pause } from 'lucide-react'; // Added Play, Pause, ClockIcon
+import { CalendarClock, Flag, Copy, AlertTriangle, CheckCircle2, Server, Users, FileText, User as UserIcon, Briefcase, Calendar as CalendarIcon, CheckSquare, Play, Pause, ClockIcon as Clock } from 'lucide-react';
 import { format, parseISO, isValid } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useOSStore } from '@/store/os-store';
@@ -34,7 +34,7 @@ const getStatusClass = (status: OSStatus, isUrgent: boolean, theme: 'light' | 'd
 // getStatusIcon é usado pelo select, não precisa mudar
 const getStatusIcon = (status: OSStatus) => {
   switch (status) {
-    case OSStatus.NA_FILA: return <ClockIcon size={14} className="me-1" />;
+    case OSStatus.NA_FILA: return <Clock size={14} className="me-1" />;
     case OSStatus.AGUARDANDO_CLIENTE: return <UserIcon size={14} className="me-1" />;
     case OSStatus.EM_PRODUCAO: return <Server size={14} className="me-1" />;
     case OSStatus.AGUARDANDO_PARCEIRO: return <Users size={14} className="me-1" />;
@@ -58,10 +58,12 @@ export default function OSCard({ os }: OSCardProps) {
     event.stopPropagation();
     setIsUpdating(true);
     try {
+      console.log(`[OSCard] Status change initiated for OS ${os.id} to ${newStatus}`);
       await updateOSStatus(os.id, newStatus);
-      console.log(`OS "${os.projeto}" movida para ${newStatus}.`);
+      console.log(`[OSCard] OS "${os.projeto}" status update call finished for ${newStatus}.`);
     } catch (error) {
-      console.error(`Falha ao atualizar status da OS ${os.id}:`, error);
+      console.error(`[OSCard] Falha ao atualizar status da OS ${os.id}:`, error);
+      // Add user feedback here if needed
     } finally {
       setIsUpdating(false);
     }
@@ -70,6 +72,7 @@ export default function OSCard({ os }: OSCardProps) {
   const handleToggleUrgent = async (e: React.MouseEvent) => {
     e.preventDefault(); e.stopPropagation();
     setIsUpdating(true);
+    console.log(`[OSCard] Toggling urgent for OS ${os.id}`);
     await toggleUrgent(os.id);
     setIsUpdating(false);
   };
@@ -77,6 +80,7 @@ export default function OSCard({ os }: OSCardProps) {
   const handleDuplicateOS = async (e: React.MouseEvent) => {
     e.preventDefault(); e.stopPropagation();
     setIsUpdating(true);
+    console.log(`[OSCard] Duplicating OS ${os.id}`);
     await duplicateOS(os.id);
     setIsUpdating(false);
   };
@@ -86,10 +90,10 @@ export default function OSCard({ os }: OSCardProps) {
     if (os.status !== OSStatus.FINALIZADO) {
       setIsUpdating(true);
       try {
+        console.log(`[OSCard] Finalizing OS ${os.id} directly from card.`);
         await updateOSStatus(os.id, OSStatus.FINALIZADO);
-        console.log(`OS "${os.numero}" finalizada diretamente do card.`);
       } catch (error) {
-        console.error(`Falha ao finalizar OS ${os.id} do card:`, error);
+        console.error(`[OSCard] Falha ao finalizar OS ${os.id} do card:`, error);
       } finally {
         setIsUpdating(false);
       }
@@ -99,6 +103,7 @@ export default function OSCard({ os }: OSCardProps) {
   const handleToggleTimer = async (e: React.MouseEvent, action: 'play' | 'pause') => {
     e.preventDefault(); e.stopPropagation();
     setIsUpdating(true);
+    console.log(`[OSCard] Toggling timer for OS ${os.id}, action: ${action}`);
     await toggleProductionTimer(os.id, action);
     setIsUpdating(false);
   };
@@ -111,12 +116,18 @@ export default function OSCard({ os }: OSCardProps) {
   const formattedProgramadoPara = useMemo(() => {
       if (!os.programadoPara) return null;
       try {
-          const date = os.programadoPara.length === 10 ? parseISO(os.programadoPara + 'T00:00:00Z') : parseISO(os.programadoPara);
+          // Check if it's YYYY-MM-DD, then parse as UTC to avoid timezone shifts for date-only strings
+          const date = /^\d{4}-\d{2}-\d{2}$/.test(os.programadoPara) 
+            ? parseISO(os.programadoPara + 'T00:00:00Z') 
+            : parseISO(os.programadoPara);
+
           if (isValid(date)) {
               return format(date, "dd/MM/yy", { locale: ptBR });
           }
-      } catch {}
-      return null;
+      } catch (e) {
+        console.warn(`[OSCard] Error parsing programadoPara date "${os.programadoPara}":`, e);
+      }
+      return os.programadoPara; // Fallback to original string if parsing fails
   }, [os.programadoPara]);
 
   const isTimerRunning = !!os.dataInicioProducaoAtual;
@@ -178,7 +189,7 @@ export default function OSCard({ os }: OSCardProps) {
                             className={`form-select form-select-sm ${statusThemeClasses.replace('text-', 'border-').replace('bg-danger-subtle', '')}`}
                             value={os.status}
                             onChange={handleStatusChange}
-                            onClick={(e) => { e.preventDefault(); e.stopPropagation(); }} // Prevent link navigation
+                            onClick={(e) => { e.preventDefault(); e.stopPropagation(); }} 
                             aria-label="Mudar status da OS"
                             style={{ fontSize: '0.75rem' }}
                             disabled={isUpdating}
@@ -199,6 +210,7 @@ export default function OSCard({ os }: OSCardProps) {
                                 onClick={handleFinalizeOS}
                                 style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem' }}
                                 disabled={isUpdating}
+                                title="Finalizar Ordem de Serviço"
                             >
                                 <CheckSquare size={14} className="me-1" /> Finalizar OS
                             </button>
@@ -210,6 +222,7 @@ export default function OSCard({ os }: OSCardProps) {
                                     onClick={(e) => handleToggleTimer(e, 'pause')}
                                     disabled={isUpdating}
                                     style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem' }}
+                                    title="Pausar cronômetro de produção"
                                 >
                                     <Pause size={14} className="me-1" /> Pausar Timer
                                 </button>
@@ -219,6 +232,7 @@ export default function OSCard({ os }: OSCardProps) {
                                     onClick={(e) => handleToggleTimer(e, 'play')}
                                     disabled={isUpdating || os.status === OSStatus.FINALIZADO}
                                     style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem' }}
+                                    title="Iniciar cronômetro de produção (define status para Em Produção)"
                                 >
                                     <Play size={14} className="me-1" /> Iniciar Timer
                                 </button>
@@ -230,14 +244,16 @@ export default function OSCard({ os }: OSCardProps) {
                                 onClick={handleToggleUrgent}
                                 style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem' }}
                                 disabled={isUpdating}
+                                title={os.isUrgent ? "Desmarcar como Urgente" : "Marcar como Urgente"}
                             >
-                                <Flag size={14} className="me-1" /> {os.isUrgent ? "Urgente!" : "Marcar Urgente"}
+                                <Flag size={14} className="me-1" /> {os.isUrgent ? "Desm. Urgente" : "Marcar Urgente"}
                             </button>
                             <button
                                 className="btn btn-outline-secondary btn-sm flex-grow-1 d-flex align-items-center justify-content-center"
                                 onClick={handleDuplicateOS}
                                 style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem' }}
                                 disabled={isUpdating}
+                                title="Duplicar Ordem de Serviço"
                             >
                                 <Copy size={14} className="me-1" /> Duplicar
                             </button>
