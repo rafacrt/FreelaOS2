@@ -1,7 +1,7 @@
 
 import AuthForm from '@/components/auth/AuthForm';
 import Link from 'next/link';
-import DevLoginButton from '@/components/auth/DevLoginButton';
+// import DevLoginButton from '@/components/auth/DevLoginButton'; // Removido
 
 // Logo SVG (Orange Theme)
 const FreelaOSLoginLogo = () => (
@@ -34,10 +34,10 @@ export default function LoginPage({
   }
 
   // Log para verificar a variável de ambiente
-  const showDevButtonEnvVar = process.env.NEXT_PUBLIC_DEV_MODE;
-  const showDevButton = showDevButtonEnvVar === 'true';
-  console.log(`[LoginPage] Raw NEXT_PUBLIC_DEV_MODE: "${showDevButtonEnvVar}" (Type: ${typeof showDevButtonEnvVar})`);
-  console.log(`[LoginPage] Condition to show DevLoginButton (showDevButtonEnvVar === 'true'): ${showDevButton}`);
+  // const showDevButtonEnvVar = process.env.NEXT_PUBLIC_DEV_MODE; // Removido porque o botão foi removido
+  // const showDevButton = showDevButtonEnvVar === 'true'; // Removido
+  // console.log(`[LoginPage] Raw NEXT_PUBLIC_DEV_MODE: "${showDevButtonEnvVar}" (Type: ${typeof showDevButtonEnvVar})`);
+  // console.log(`[LoginPage] Condition to show DevLoginButton (showDevButtonEnvVar === 'true'): ${showDevButton}`);
 
 
   return (
@@ -50,11 +50,11 @@ export default function LoginPage({
             <p className="text-muted">Acesse sua conta</p>
           </div>
           <AuthForm initialMessage={initialMessage} initialMessageType={messageType} />
-          {showDevButton && (
+          {/* {showDevButton && ( // Removido
             <div className="mt-3">
               <DevLoginButton />
             </div>
-          )}
+          )} */}
           <div className="text-center mt-4">
             <p className="mb-0">Não tem uma conta?</p>
             <Link href="/register" className="fw-medium text-primary text-decoration-none">
