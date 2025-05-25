@@ -5,7 +5,7 @@ import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import type { OS } from '@/lib/types';
 import { isValidDate } from '@/lib/types'; // Import helper
 import Link from 'next/link';
-import { ArrowLeft, CalendarClock, CheckCircle2, ClockIcon as Clock, FileText, Flag, Server, User as UserIcon, Users, Briefcase, MessageSquare, Clock3, Save, Edit, Calendar as CalendarIcon, Printer, CheckSquare, Play, Pause } from 'lucide-react';
+import { ArrowLeft, CalendarClock, CheckCircle2, FileText, Flag, Server, User as UserIcon, Users, Briefcase, MessageSquare, Clock3, Save, Edit, Calendar as CalendarIcon, Printer, CheckSquare, Play, Pause, Clock } from 'lucide-react';
 import { format, parseISO, isValid } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useOSStore } from '@/store/os-store';
@@ -39,10 +39,9 @@ const DetailItem = ({ label, value, icon, name, isEditableField, children, class
   let displayValue: string | React.ReactNode = value;
   if ((name === 'programadoPara' || name === 'dataAbertura' || name === 'dataFinalizacao' || name === 'dataInicioProducao' || name === 'dataInicioProducaoAtual') && typeof value === 'string' && value) {
     try {
-      // If it's just YYYY-MM-DD, treat as UTC date to avoid timezone shift display issues
       const dateStr = /^\d{4}-\d{2}-\d{2}$/.test(value) ? `${value}T00:00:00Z` : value;
       const date = parseISO(dateStr);
-      if (isValidDate(date)) { // Use your custom isValidDate
+      if (isValidDate(date)) { 
         const formatString = (name === 'programadoPara' && value.length === 10) ? "dd/MM/yyyy" : "dd/MM/yyyy 'às' HH:mm";
         displayValue = format(date, formatString, { locale: ptBR });
       } else {
@@ -111,14 +110,14 @@ export default function OSDetailsView({ os: initialOs }: OSDetailsViewProps) {
   const partnerSuggestionsRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    console.log('[OSDetailsView useEffect] Updating formData from initialOs. ID:', initialOs.id);
+    console.log('[OSDetailsView useEffect] Updating formData from initialOs. ID:', initialOs.id, 'InitialOs Status:', initialOs.status, 'InitialOs dataInicioProducaoAtual:', initialOs.dataInicioProducaoAtual);
     setFormData({ 
       ...initialOs, 
       programadoPara: formatProgramadoParaForInput(initialOs.programadoPara) 
     });
     setClientInput(initialOs.cliente || '');
     setPartnerInput(initialOs.parceiro || '');
-  }, [initialOs, formatProgramadoParaForInput]); // isEditing removed from dependencies to prevent reset on edit toggle
+  }, [initialOs, formatProgramadoParaForInput]);
 
 
   const filteredClients = useMemo(() => {
@@ -135,16 +134,14 @@ export default function OSDetailsView({ os: initialOs }: OSDetailsViewProps) {
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
-    console.log(`[OSDetailsView handleInputChange] Name: ${name}, Value: ${value}, Type: ${type}`);
+    // console.log(`[OSDetailsView handleInputChange] Name: ${name}, Value: ${value}, Type: ${type}`);
 
     if (name === 'cliente') {
       setClientInput(value);
       setShowClientSuggestions(!!value && clients.filter(c => c.name.toLowerCase().includes(value.toLowerCase())).length > 0 && document.activeElement === clientInputRef.current);
-      // formData for cliente will be updated by clientInput in handleSave
     } else if (name === 'parceiro') {
       setPartnerInput(value);
       setShowPartnerSuggestions(!!value && partners.filter(p => p.name.toLowerCase().includes(value.toLowerCase())).length > 0 && document.activeElement === partnerInputRef.current);
-      // formData for parceiro will be updated by partnerInput in handleSave
     } else {
       setFormData(prev => ({
         ...prev,
@@ -154,16 +151,12 @@ export default function OSDetailsView({ os: initialOs }: OSDetailsViewProps) {
   };
   
   const handleClientSelect = (clientName: string) => {
-    console.log(`[OSDetailsView handleClientSelect] Selected: ${clientName}`);
     setClientInput(clientName); 
-    // setFormData(prev => ({ ...prev, cliente: clientName })); // No longer directly setting formData here for cliente
     setShowClientSuggestions(false);
   };
 
   const handlePartnerSelect = (partnerName: string) => {
-    console.log(`[OSDetailsView handlePartnerSelect] Selected: ${partnerName}`);
     setPartnerInput(partnerName); 
-    // setFormData(prev => ({ ...prev, parceiro: partnerName })); // No longer directly setting formData here for parceiro
     setShowPartnerSuggestions(false);
   };
 
@@ -197,13 +190,13 @@ export default function OSDetailsView({ os: initialOs }: OSDetailsViewProps) {
   };
 
   const handleCancel = () => {
-    console.log('[OSDetailsView handleCancel] Cancelling edit.');
+    setIsEditing(false);
+    // Reset form data to initialOs values
     setFormData({ ...initialOs, programadoPara: formatProgramadoParaForInput(initialOs.programadoPara) });
     setClientInput(initialOs.cliente || '');
     setPartnerInput(initialOs.parceiro || '');
     setShowClientSuggestions(false);
     setShowPartnerSuggestions(false);
-    setIsEditing(false);
   };
 
   const handleFinalizeOS = async () => {
@@ -213,7 +206,6 @@ export default function OSDetailsView({ os: initialOs }: OSDetailsViewProps) {
         const success = await updateOSStatus(formData.id, OSStatus.FINALIZADO);
         if (success) {
             console.log(`[OSDetailsView handleFinalizeOS] OS ${formData.numero} finalized successfully.`);
-            // No need to setIsEditing(false) here as this button is only visible in view mode
         } else {
             console.error(`[OSDetailsView handleFinalizeOS] Failed to finalize OS ${formData.numero}.`);
             alert('Falha ao finalizar OS. Verifique logs.');
@@ -228,6 +220,7 @@ export default function OSDetailsView({ os: initialOs }: OSDetailsViewProps) {
     setIsSaving(true);
     console.log(`[OSDetailsView handleToggleTimer] Action: ${action} for OS ID: ${formData.id}`);
     await toggleProductionTimer(formData.id, action);
+    // formData will be updated via useEffect when initialOs (from store) changes
     setIsSaving(false);
   };
 
@@ -263,6 +256,7 @@ export default function OSDetailsView({ os: initialOs }: OSDetailsViewProps) {
   useEffect(() => setupClickListener(partnerInputRef, partnerSuggestionsRef, setShowPartnerSuggestions), [partnerInputRef, partnerSuggestionsRef, setupClickListener]);
 
   const isTimerRunning = !!formData.dataInicioProducaoAtual;
+  const isFinalized = formData.status === OSStatus.FINALIZADO;
 
   return (
     <div className={`container-fluid os-details-print-container ${formData.isUrgent && !isEditing ? 'os-details-urgent' : ''}`}>
@@ -282,12 +276,12 @@ export default function OSDetailsView({ os: initialOs }: OSDetailsViewProps) {
               </button>
             </>
           ) : (
-            <button className="btn btn-primary btn-sm" onClick={() => setIsEditing(true)}>
+            <button className="btn btn-primary btn-sm" onClick={() => setIsEditing(true)} disabled={isFinalized}>
               <Edit size={16} className="me-1" />
               Editar OS
             </button>
           )}
-           {!isEditing && formData.status !== OSStatus.FINALIZADO && (
+           {!isEditing && !isFinalized && (
              <button className="btn btn-info btn-sm" onClick={handleFinalizeOS} disabled={isSaving} title="Finalizar Ordem de Serviço">
                <CheckSquare size={16} className="me-1" /> Finalizar OS
              </button>
@@ -328,7 +322,8 @@ export default function OSDetailsView({ os: initialOs }: OSDetailsViewProps) {
         </div>
         <div className="card-body p-4">
           <dl className="mb-0">
-            {!isEditing && formData.status !== OSStatus.FINALIZADO && (
+            {/* Timer Controls and Display - always visible unless OS is finalized (or if editing, don't show controls) */}
+            {!isFinalized && !isEditing && (
                 <div className="d-flex gap-2 mb-3 no-print">
                     {isTimerRunning ? (
                         <button 
@@ -354,8 +349,8 @@ export default function OSDetailsView({ os: initialOs }: OSDetailsViewProps) {
              <DetailItem
               label="Tempo em Produção"
               icon={<Clock3 size={16} className="me-2 text-primary" />}
-              isEditableField={false}
-              isEditingMode={isEditing}
+              isEditableField={false} // Display only
+              isEditingMode={isEditing} // This controls if children are shown, but we're not using children here for display
             >
                  <ChronometerDisplay 
                     startTimeISO={formData.dataInicioProducaoAtual} 
@@ -446,9 +441,13 @@ export default function OSDetailsView({ os: initialOs }: OSDetailsViewProps) {
                 name="status"
                 value={formData.status}
                 onChange={handleInputChange}
-                disabled={!isEditing}
+                disabled={!isEditing || isFinalized} // Disable if OS is finalized, even in edit mode
               >
-                {ALL_OS_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+                {ALL_OS_STATUSES.map(s => (
+                    <option key={s} value={s} disabled={isFinalized && s !== OSStatus.FINALIZADO}>
+                        {s}
+                    </option>
+                ))}
               </select>
             </DetailItem>
 
@@ -588,3 +587,5 @@ export default function OSDetailsView({ os: initialOs }: OSDetailsViewProps) {
     </div>
   );
 }
+
+    
