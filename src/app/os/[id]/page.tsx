@@ -2,40 +2,50 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation'; // Import useRouter
 import AuthenticatedLayout from '@/components/layout/AuthenticatedLayout';
 import OSDetailsView from '@/components/os/OSDetailsView';
 import { useOSStore } from '@/store/os-store';
 import type { OS } from '@/lib/types';
-// Removed Loader2, using Bootstrap spinner
 import Link from 'next/link';
 
 export default function OSDetailsPage() {
   const params = useParams();
-  const getOSById = useOSStore((state) => state.getOSById);
+  const router = useRouter(); // Initialize router
+  const id = typeof params.id === 'string' ? params.id : undefined;
+
+  // Select the specific OS from the store's osList
+  // This ensures that when the OS object in the store updates, this component re-renders with the new OS data.
+  const osFromStore = useOSStore(state => state.osList.find(o => o.id === id));
 
   const [os, setOs] = useState<OS | undefined | null>(undefined); // undefined: loading, null: not found
 
-  const id = typeof params.id === 'string' ? params.id : undefined;
-
   useEffect(() => {
-    setOs(undefined); // Reset to loading state when ID changes
-    const timer = setTimeout(() => {
-        if (id) {
-            const foundOS = getOSById(id);
-            setOs(foundOS || null);
-        } else {
-            setOs(null);
-        }
-    }, 300); // Simulate short loading delay
-
-    return () => clearTimeout(timer);
-  }, [id, getOSById]); // Dependency array includes getOSById now
+    if (id) {
+      if (osFromStore) {
+        setOs(osFromStore);
+      } else {
+        // If not found in store after a delay (e.g., direct navigation),
+        // it might indicate an issue or a very fresh OS not yet in client store.
+        // For now, we'll assume store is the source of truth after initial load.
+        // Consider fetching from DB if not in store as a fallback for direct navigation.
+        const timer = setTimeout(() => {
+            const stillNotFound = !useOSStore.getState().osList.find(o => o.id === id);
+            if (stillNotFound) {
+                console.warn(`[OSDetailsPage] OS with ID ${id} not found in store after delay.`);
+                setOs(null); // Mark as not found
+            }
+        }, 1000); // Wait a bit for store to potentially populate
+        return () => clearTimeout(timer);
+      }
+    } else {
+      setOs(null); // No ID, so not found
+    }
+  }, [id, osFromStore]); // Re-run when id or the specific osFromStore object changes
 
   if (os === undefined) {
     return (
       <AuthenticatedLayout>
-        {/* Improved Loading Spinner */}
         <div className="d-flex flex-column align-items-center justify-content-center text-center" style={{ minHeight: 'calc(100vh - 200px)' }}>
            <div className="spinner-border text-primary me-3 mb-3" role="status" style={{ width: '3rem', height: '3rem' }}>
              <span className="visually-hidden">Carregando...</span>
@@ -60,11 +70,11 @@ export default function OSDetailsPage() {
     );
   }
 
+  // Pass the potentially updated 'os' (from osFromStore) to OSDetailsView
   return (
     <AuthenticatedLayout>
-      {/* Add transition wrapper */}
       <div className="transition-opacity">
-         <OSDetailsView os={os} />
+         <OSDetailsView initialOs={os} />
       </div>
     </AuthenticatedLayout>
   );
