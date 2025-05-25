@@ -32,7 +32,7 @@ function SubmitButton() {
 }
 
 export default function AuthForm({ initialMessage, initialMessageType }: AuthFormProps) {
-  const router = useRouter();
+  const router = useRouter(); // Keep router for potential future use or other navigations
 
   const initialState: AuthActionState = {
     message: initialMessage || null,
@@ -40,25 +40,20 @@ export default function AuthForm({ initialMessage, initialMessageType }: AuthFor
     redirect: undefined,
   };
 
-  // useActionState hook para gerenciar o estado da action de login
   const [state, formAction] = useActionState<AuthActionState, FormData>(loginAction, initialState);
 
-  // Estado local para gerenciar a exibição da mensagem, inicializado com props ou estado da action
   const [displayMessage, setDisplayMessage] = useState(initialState.message);
   const [displayMessageType, setDisplayMessageType] = useState(initialState.type);
 
   useEffect(() => {
-    // Este efeito atualiza a mensagem exibida com base no resultado da action ou props iniciais.
     console.log("[AuthForm] Message useEffect. state.message:", state?.message, "state.type:", state?.type);
     if (state?.message) {
       setDisplayMessage(state.message);
       setDisplayMessageType(state.type);
     } else if (initialState.message && !state?.message) {
-      // Persiste a mensagem inicial se a action não retornou uma nova e não há nova mensagem do estado
       setDisplayMessage(initialState.message);
       setDisplayMessageType(initialState.type);
     } else if (!state?.message && !initialState.message) {
-      // Limpa a mensagem se não houver mensagem do estado ou das props iniciais
       setDisplayMessage(null);
       setDisplayMessageType(undefined);
     }
@@ -66,23 +61,14 @@ export default function AuthForm({ initialMessage, initialMessageType }: AuthFor
 
 
   useEffect(() => {
-    // Este efeito lida com o redirecionamento após uma action bem-sucedida.
     console.log("[AuthForm] Redirection useEffect. state.type:", state?.type, "state.redirect:", state?.redirect);
     if (state?.type === 'success' && state?.redirect) {
-      console.log(`[AuthForm] Success state detected. Scheduling redirect to: ${state.redirect}`);
-      // Usar setTimeout para adiar a navegação para o próximo tick do loop de eventos.
-      // Isso pode ajudar em ambientes onde a navegação imediata dentro de um useEffect
-      // após uma atualização de estado tem problemas.
-      const timerId = setTimeout(() => {
-        console.log(`[AuthForm] Executing redirect to: ${state.redirect} via router.push()`);
-        if (state.redirect) { // Verificação extra de nulidade para TypeScript
-             router.push(state.redirect);
-        }
-      }, 0); 
-
-      return () => clearTimeout(timerId); // Limpa o timeout se o componente for desmontado ou as dependências mudarem
+      console.log(`[AuthForm] Success state detected. Attempting redirect with window.location.assign to: ${state.redirect}`);
+      if (state.redirect) {
+        window.location.assign(state.redirect);
+      }
     }
-  }, [state?.type, state?.redirect, router]); // Dependências específicas
+  }, [state?.type, state?.redirect]); // Removed router from dependencies as it's not used here for push
 
   return (
     <form action={formAction} className="space-y-4">
