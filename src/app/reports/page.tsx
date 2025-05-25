@@ -112,12 +112,16 @@ export default function ReportsPage() {
       <div className="transition-opacity">
           <div className="d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom">
             <h1 className="h3 mb-0 d-flex align-items-center">
-                <ReportIcon className="me-2 text-warning" /> Relatório de Tempo de Produção
+                <ReportIcon className="me-2 text-warning" /> Relatório de Tempo de Produção (OS Finalizadas)
             </h1>
             <Link href="/dashboard" className="btn btn-outline-secondary btn-sm">
               <ArrowLeft className="me-2" size={16} /> Voltar ao Painel
             </Link>
           </div>
+          <p className="text-muted small mb-3">
+            Este é o relatório de tempo gasto em Ordens de Serviço que foram finalizadas. 
+            Futuramente, outros relatórios (por cliente, parceiro, etc.) estarão disponíveis.
+          </p>
 
           <div className="card shadow-sm transition-all">
             <div className="card-header bg-light">
