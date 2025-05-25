@@ -39,21 +39,24 @@ export default function ReportsPage() {
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
 
   useEffect(() => {
+    // Simulate loading delay for demonstration
     const timer = setTimeout(() => {
         setIsHydrated(true);
-    }, 300); 
+    }, 300); // 0.3 second delay
     return () => clearTimeout(timer);
   }, []);
 
   const completedOS = useMemo(() => {
     let filtered = osList.filter(os => os.status === OSStatus.FINALIZADO);
 
+    // Sort logic
     filtered.sort((a, b) => {
         let compareResult = 0;
         const valA = getSortValue(a, sortBy); 
         const valB = getSortValue(b, sortBy);
 
         if (sortBy === 'dataFinalizacao') {
+            // Handle potentially undefined dates by defaulting to 0 (or a very early/late date)
             const timeA = valA ? parseISO(valA as string).getTime() : 0;
             const timeB = valB ? parseISO(valB as string).getTime() : 0;
             compareResult = timeA - timeB;
@@ -78,7 +81,7 @@ export default function ReportsPage() {
       setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
     } else {
       setSortBy(key);
-      setSortDirection('asc'); 
+      setSortDirection('asc'); // Default to ascending when changing column
     }
   };
 
@@ -87,21 +90,25 @@ export default function ReportsPage() {
     return sortDirection === 'asc' ? <ArrowUp size={14} className="ms-1" /> : <ArrowDown size={14} className="ms-1" />;
   };
 
+  // Loading state
   if (!isHydrated) {
-    return (
-      <AuthenticatedLayout>
-        <div className="d-flex flex-column justify-content-center align-items-center text-center" style={{ minHeight: '400px' }}>
-          <div className="spinner-border text-primary mb-3" role="status" style={{ width: '3rem', height: '3rem' }}>
-            <span className="visually-hidden">Carregando relatórios...</span>
-          </div>
+     return (
+       <AuthenticatedLayout>
+         {/* Improved Loading Spinner */}
+         <div className="d-flex flex-column justify-content-center align-items-center text-center" style={{ minHeight: '400px' }}>
+           <div className="spinner-border text-primary mb-3" role="status" style={{ width: '3rem', height: '3rem' }}>
+             <span className="visually-hidden">Carregando relatórios...</span>
+           </div>
            <p className="text-muted">Carregando relatórios...</p>
-        </div>
-      </AuthenticatedLayout>
-    );
-  }
+         </div>
+       </AuthenticatedLayout>
+     );
+   }
+
 
   return (
     <AuthenticatedLayout>
+      {/* Add transition wrapper */}
       <div className="transition-opacity">
           <div className="d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom">
             <h1 className="h3 mb-0 d-flex align-items-center">
@@ -169,6 +176,7 @@ export default function ReportsPage() {
   );
 }
 
+// Helper function to safely get a value for sorting, returning null if obj is undefined
 function getSortValue<T, K extends keyof T>(obj: T | null | undefined, key: K): T[K] | null {
     return obj ? obj[key] : null;
 }

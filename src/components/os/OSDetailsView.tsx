@@ -52,7 +52,7 @@ const DetailItem = ({ label, value, icon, name, isEditableField, children, class
     }
   } else if (typeof value === 'boolean') {
     displayValue = value ? 'Sim' : 'Não';
-  } else if (name === 'tempoProducaoMinutos' && typeof value === 'number' && value >= 0) {
+  } else if (name === 'tempoProducaoMinutos' && typeof value === 'number' && value >= 0) { // Deprecated, but keep for safety if data exists
       const hours = Math.floor(value / 60);
       const minutes = value % 60;
       displayValue = `${hours}h ${minutes}m`;
@@ -89,7 +89,7 @@ export default function OSDetailsView({ os: initialOs }: OSDetailsViewProps) {
   const formatProgramadoParaForInput = useCallback((isoDate?: string) => {
     if (!isoDate) return '';
     try {
-      if (/^\d{4}-\d{2}-\d{2}$/.test(isoDate)) return isoDate;
+      if (/^\d{4}-\d{2}-\d{2}$/.test(isoDate)) return isoDate; // Already YYYY-MM-DD
       const date = parseISO(isoDate);
       return isValidDate(date) ? format(date, 'yyyy-MM-dd') : '';
     } catch {
@@ -97,8 +97,13 @@ export default function OSDetailsView({ os: initialOs }: OSDetailsViewProps) {
     }
   }, []);
 
-  const [formData, setFormData] = useState<OS>({ ...initialOs, programadoPara: formatProgramadoParaForInput(initialOs.programadoPara) });
+  // Initialize formData based on initialOs
+  const [formData, setFormData] = useState<OS>({ 
+    ...initialOs, 
+    programadoPara: formatProgramadoParaForInput(initialOs.programadoPara) 
+  });
 
+  // State for controlled inputs for client and partner
   const [clientInput, setClientInput] = useState(initialOs.cliente || '');
   const [showClientSuggestions, setShowClientSuggestions] = useState(false);
   const clientInputRef = useRef<HTMLInputElement>(null);
@@ -109,8 +114,12 @@ export default function OSDetailsView({ os: initialOs }: OSDetailsViewProps) {
   const partnerInputRef = useRef<HTMLInputElement>(null);
   const partnerSuggestionsRef = useRef<HTMLDivElement>(null);
 
+  // Effect to update formData and inputs when initialOs prop changes (e.g., after save/timer toggle)
   useEffect(() => {
-    console.log('[OSDetailsView useEffect] Updating formData from initialOs. ID:', initialOs.id, 'InitialOs Status:', initialOs.status, 'InitialOs dataInicioProducaoAtual:', initialOs.dataInicioProducaoAtual);
+    console.log('[OSDetailsView useEffect] Updating formData from initialOs. ID:', initialOs.id);
+    console.log('[OSDetailsView useEffect] initialOs.dataInicioProducaoAtual:', initialOs.dataInicioProducaoAtual);
+    console.log('[OSDetailsView useEffect] initialOs.tempoGastoProducaoSegundos:', initialOs.tempoGastoProducaoSegundos);
+
     setFormData({ 
       ...initialOs, 
       programadoPara: formatProgramadoParaForInput(initialOs.programadoPara) 
@@ -132,17 +141,21 @@ export default function OSDetailsView({ os: initialOs }: OSDetailsViewProps) {
     return partners.filter(p => p.name.toLowerCase().includes(lowerInput));
   }, [partnerInput, partners]);
 
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
-    // console.log(`[OSDetailsView handleInputChange] Name: ${name}, Value: ${value}, Type: ${type}`);
-
+    
     if (name === 'cliente') {
       setClientInput(value);
-      setShowClientSuggestions(!!value && clients.filter(c => c.name.toLowerCase().includes(value.toLowerCase())).length > 0 && document.activeElement === clientInputRef.current);
+      // Update suggestions visibility immediately
+      const newFilteredClients = clients.filter(c => c.name.toLowerCase().includes(value.toLowerCase()));
+      setShowClientSuggestions(!!value && newFilteredClients.length > 0 && document.activeElement === clientInputRef.current);
     } else if (name === 'parceiro') {
       setPartnerInput(value);
-      setShowPartnerSuggestions(!!value && partners.filter(p => p.name.toLowerCase().includes(value.toLowerCase())).length > 0 && document.activeElement === partnerInputRef.current);
+      const newFilteredPartners = partners.filter(p => p.name.toLowerCase().includes(value.toLowerCase()));
+      setShowPartnerSuggestions(!!value && newFilteredPartners.length > 0 && document.activeElement === partnerInputRef.current);
     } else {
+      // For other fields, update formData directly
       setFormData(prev => ({
         ...prev,
         [name]: type === 'checkbox' ? (e.target as HTMLInputElement).checked : (name === 'programadoPara' ? (value || undefined) : value)
@@ -153,21 +166,32 @@ export default function OSDetailsView({ os: initialOs }: OSDetailsViewProps) {
   const handleClientSelect = (clientName: string) => {
     setClientInput(clientName); 
     setShowClientSuggestions(false);
+    // Optionally, could also update formData.cliente here if needed for validation or other logic
+    // setFormData(prev => ({ ...prev, cliente: clientName })); 
   };
 
   const handlePartnerSelect = (partnerName: string) => {
     setPartnerInput(partnerName); 
     setShowPartnerSuggestions(false);
+    // setFormData(prev => ({ ...prev, parceiro: partnerName }));
   };
 
   const handleSave = async () => {
     console.log('[OSDetailsView handleSave] Attempting to save OS...');
     setIsSaving(true);
     
+    // Construct the OS object to save using the latest state values
     const dataToSave: OS = {
-      ...formData,
-      cliente: clientInput.trim(), 
-      parceiro: partnerInput.trim() || undefined, 
+      ...formData, // Start with existing formData (includes status, programadoPara, etc.)
+      cliente: clientInput.trim(), // Use trimmed value from clientInput state
+      parceiro: partnerInput.trim() || undefined, // Use trimmed value from partnerInput state
+      // Ensure other fields like tarefa, observacoes, etc., are taken from formData
+      tarefa: formData.tarefa || '', 
+      observacoes: formData.observacoes || '',
+      tempoTrabalhado: formData.tempoTrabalhado || '',
+      isUrgent: formData.isUrgent || false,
+      // Timer related fields are part of formData and should be passed as is
+      // They are updated by the server and then reflected back in initialOs -> formData
     };
     console.log('[OSDetailsView handleSave] Data prepared for updateOS:', JSON.stringify(dataToSave, null, 2));
 
@@ -191,7 +215,7 @@ export default function OSDetailsView({ os: initialOs }: OSDetailsViewProps) {
 
   const handleCancel = () => {
     setIsEditing(false);
-    // Reset form data to initialOs values
+    // Reset form data to initialOs values (useEffect will also handle this, but explicit reset is good)
     setFormData({ ...initialOs, programadoPara: formatProgramadoParaForInput(initialOs.programadoPara) });
     setClientInput(initialOs.cliente || '');
     setPartnerInput(initialOs.parceiro || '');
@@ -206,6 +230,7 @@ export default function OSDetailsView({ os: initialOs }: OSDetailsViewProps) {
         const success = await updateOSStatus(formData.id, OSStatus.FINALIZADO);
         if (success) {
             console.log(`[OSDetailsView handleFinalizeOS] OS ${formData.numero} finalized successfully.`);
+            // formData will be updated via useEffect when initialOs (from store) changes
         } else {
             console.error(`[OSDetailsView handleFinalizeOS] Failed to finalize OS ${formData.numero}.`);
             alert('Falha ao finalizar OS. Verifique logs.');
@@ -229,6 +254,7 @@ export default function OSDetailsView({ os: initialOs }: OSDetailsViewProps) {
     window.print();
   };
 
+  // Click outside listener for suggestion boxes
   const setupClickListener = useCallback((
     inputRef: React.RefObject<HTMLInputElement>,
     suggestionBoxRef: React.RefObject<HTMLDivElement>, 
@@ -255,7 +281,8 @@ export default function OSDetailsView({ os: initialOs }: OSDetailsViewProps) {
   useEffect(() => setupClickListener(clientInputRef, clientSuggestionsRef, setShowClientSuggestions), [clientInputRef, clientSuggestionsRef, setupClickListener]);
   useEffect(() => setupClickListener(partnerInputRef, partnerSuggestionsRef, setShowPartnerSuggestions), [partnerInputRef, partnerSuggestionsRef, setupClickListener]);
 
-  const isTimerRunning = !!formData.dataInicioProducaoAtual;
+  // Determine if the timer is considered "running" for UI purposes
+  const isTimerEffectivelyRunning = !!formData.dataInicioProducaoAtual;
   const isFinalized = formData.status === OSStatus.FINALIZADO;
 
   return (
@@ -322,42 +349,43 @@ export default function OSDetailsView({ os: initialOs }: OSDetailsViewProps) {
         </div>
         <div className="card-body p-4">
           <dl className="mb-0">
-            {/* Timer Controls and Display - always visible unless OS is finalized (or if editing, don't show controls) */}
-            {!isFinalized && !isEditing && (
-                <div className="d-flex gap-2 mb-3 no-print">
-                    {isTimerRunning ? (
-                        <button 
-                            className="btn btn-sm btn-warning" 
-                            onClick={() => handleToggleTimer('pause')} 
-                            disabled={isSaving}
-                            title="Pausar cronômetro"
-                        >
-                            <Pause size={16} className="me-1" /> Pausar
-                        </button>
-                    ) : (
-                        <button 
-                            className="btn btn-sm btn-success" 
-                            onClick={() => handleToggleTimer('play')} 
-                            disabled={isSaving}
-                            title="Iniciar cronômetro (define status para Em Produção)"
-                        >
-                           <Play size={16} className="me-1" /> Iniciar
-                        </button>
+            {/* Timer Controls and Display */}
+            <div className="row py-2 border-bottom mb-3">
+                <dt className="col-sm-3 text-muted d-flex align-items-center small fw-medium">
+                    <Clock3 size={16} className="me-2 text-primary" />
+                    Tempo em Produção
+                </dt>
+                <dd className="col-sm-9 mb-0 d-flex align-items-center">
+                    <ChronometerDisplay 
+                        startTimeISO={formData.dataInicioProducaoAtual} 
+                        accumulatedSeconds={formData.tempoGastoProducaoSegundos}
+                        isRunningClientOverride={isTimerEffectivelyRunning} // Use effective running state
+                    />
+                    {!isEditing && !isFinalized && (
+                        <div className="ms-auto d-flex gap-2 no-print">
+                            {isTimerEffectivelyRunning ? (
+                                <button 
+                                    className="btn btn-sm btn-warning" 
+                                    onClick={() => handleToggleTimer('pause')} 
+                                    disabled={isSaving}
+                                    title="Pausar cronômetro"
+                                >
+                                    <Pause size={16} className="me-1" /> Pausar
+                                </button>
+                            ) : (
+                                <button 
+                                    className="btn btn-sm btn-success" 
+                                    onClick={() => handleToggleTimer('play')} 
+                                    disabled={isSaving}
+                                    title="Iniciar cronômetro (define status para Em Produção)"
+                                >
+                                   <Play size={16} className="me-1" /> Iniciar
+                                </button>
+                            )}
+                        </div>
                     )}
-                </div>
-            )}
-             <DetailItem
-              label="Tempo em Produção"
-              icon={<Clock3 size={16} className="me-2 text-primary" />}
-              isEditableField={false} // Display only
-              isEditingMode={isEditing} // This controls if children are shown, but we're not using children here for display
-            >
-                 <ChronometerDisplay 
-                    startTimeISO={formData.dataInicioProducaoAtual} 
-                    accumulatedSeconds={formData.tempoGastoProducaoSegundos}
-                    isRunningClientOverride={formData.status === OSStatus.EM_PRODUCAO && !!formData.dataInicioProducaoAtual}
-                 />
-            </DetailItem>
+                </dd>
+            </div>
 
             <DetailItem
               label="Cliente"
@@ -372,10 +400,11 @@ export default function OSDetailsView({ os: initialOs }: OSDetailsViewProps) {
                   ref={clientInputRef}
                   type="text"
                   className="form-control form-control-sm"
-                  name="cliente"
+                  name="cliente" // Not strictly needed as clientInput is separate, but good for consistency
                   value={clientInput} 
                   onChange={handleInputChange} 
                   onFocus={() => setShowClientSuggestions(!!clientInput && filteredClients.length > 0)}
+                  // onBlur handled by clickOutside listener
                   autoComplete="off"
                   placeholder="Digite ou selecione um cliente"
                   disabled={!isEditing}
@@ -407,10 +436,11 @@ export default function OSDetailsView({ os: initialOs }: OSDetailsViewProps) {
                   ref={partnerInputRef}
                   type="text"
                   className="form-control form-control-sm"
-                  name="parceiro"
+                  name="parceiro" // Not strictly needed
                   value={partnerInput} 
                   onChange={handleInputChange} 
                   onFocus={() => setShowPartnerSuggestions(!!partnerInput && filteredPartners.length > 0)}
+                  // onBlur handled by clickOutside listener
                   autoComplete="off"
                   placeholder="Digite ou selecione um parceiro (opcional)"
                   disabled={!isEditing}
@@ -453,7 +483,7 @@ export default function OSDetailsView({ os: initialOs }: OSDetailsViewProps) {
 
             <DetailItem
               label="Data de Abertura"
-              value={initialOs.dataAbertura}
+              value={initialOs.dataAbertura} // Always show original opening date
               icon={<CalendarClock size={16} className="me-2 text-secondary" />}
               name="dataAbertura"
               isEditableField={false}
@@ -587,5 +617,3 @@ export default function OSDetailsView({ os: initialOs }: OSDetailsViewProps) {
     </div>
   );
 }
-
-    
