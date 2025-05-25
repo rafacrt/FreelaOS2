@@ -5,7 +5,7 @@ import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import type { OS } from '@/lib/types';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, CalendarClock, CheckCircle2, FileText, Flag, Server, User as UserIcon, Users, Briefcase, MessageSquare, Clock3, Save, Edit, Calendar as CalendarIcon, Printer, CheckSquare, Play, Pause, RotateCcw, UploadCloud, Paperclip } from 'lucide-react';
+import { ArrowLeft, CalendarClock, CheckCircle2, FileText, Flag, Server, User as UserIcon, Users, Briefcase, MessageSquare, Clock3, Save, Edit, Calendar as CalendarIcon, Printer, CheckSquare, Play, Pause, RotateCcw, UploadCloud, Paperclip, Clock } from 'lucide-react'; // Adicionado Clock
 import { format, parseISO, isValid } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useOSStore } from '@/store/os-store';
@@ -14,7 +14,7 @@ import ChronometerDisplay from './ChronometerDisplay';
 
 const getStatusIcon = (status: OSStatus) => {
   switch (status) {
-    case OSStatus.NA_FILA: return <Clock size={16} className="me-2" />;
+    case OSStatus.NA_FILA: return <Clock size={16} className="me-2" />; // Usa Clock
     case OSStatus.AGUARDANDO_CLIENTE: return <UserIcon size={16} className="me-2" />;
     case OSStatus.EM_PRODUCAO: return <Server size={16} className="me-2" />;
     case OSStatus.AGUARDANDO_PARCEIRO: return <Users size={16} className="me-2" />;
@@ -122,24 +122,36 @@ export default function OSDetailsView({ initialOs }: OSDetailsViewProps) {
   const partnerInputRef = useRef<HTMLInputElement>(null);
   const partnerSuggestionsRef = useRef<HTMLDivElement>(null);
 
-  // Estado para arquivos e imagens coladas (UI-only por enquanto)
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [pastedImages, setPastedImages] = useState<{ name: string, url: string }[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  console.log("[OSDetailsView Render] InitialOS:", initialOs);
+  console.log("[OSDetailsView Render] FormData:", formData);
+
 
   useEffect(() => {
-    console.log("[OSDetailsView useEffect] Syncing formData. InitialOs ID:", initialOs.id, "isEditing:", isEditing);
-    if (!isEditing || (initialOs.id !== formData.id)) {
-      setFormData({
-        ...initialOs,
-        programadoPara: formatProgramadoParaForInput(initialOs.programadoPara)
-      });
-      setClientInput(initialOs.cliente || '');
-      setPartnerInput(initialOs.parceiro || '');
-      // Limpar anexos temporários se initialOs mudar ou sair do modo de edição
-      setSelectedFiles([]);
-      setPastedImages([]);
+    console.log("[OSDetailsView useEffect initialOs/isEditing] Syncing formData. InitialOs ID:", initialOs.id, "isEditing:", isEditing);
+    // Atualiza formData se initialOs mudar (nova OS carregada) ou se sair do modo de edição
+    if (!isEditing || initialOs.id !== formData.id) {
+        setFormData({
+            ...initialOs,
+            programadoPara: formatProgramadoParaForInput(initialOs.programadoPara),
+        });
+        setClientInput(initialOs.cliente || '');
+        setPartnerInput(initialOs.parceiro || '');
+        setSelectedFiles([]);
+        setPastedImages([]);
+    }
+    // Se estiver em modo de edição, mas a OS no store mudou (ex: timer atualizado por outra action),
+    // atualiza campos relevantes do timer no formData para manter a consistência.
+    else if (isEditing && initialOs.id === formData.id) {
+        setFormData(prev => ({
+            ...prev,
+            status: initialOs.status, // Status pode mudar por actions de timer
+            dataInicioProducaoAtual: initialOs.dataInicioProducaoAtual,
+            tempoGastoProducaoSegundos: initialOs.tempoGastoProducaoSegundos,
+        }));
     }
   }, [initialOs, isEditing, formatProgramadoParaForInput]);
 
@@ -161,11 +173,11 @@ export default function OSDetailsView({ initialOs }: OSDetailsViewProps) {
     if (name === 'cliente') {
       setClientInput(value);
       setShowClientSuggestions(!!value && clients.filter(c => c.name.toLowerCase().includes(value.toLowerCase())).length > 0 && document.activeElement === clientInputRef.current);
-      setFormData(prev => ({ ...prev, cliente: value }));
+      // O formData.cliente será atualizado no handleSave a partir do clientInput
     } else if (name === 'parceiro') {
       setPartnerInput(value);
       setShowPartnerSuggestions(!!value && partners.filter(p => p.name.toLowerCase().includes(value.toLowerCase())).length > 0 && document.activeElement === partnerInputRef.current);
-      setFormData(prev => ({ ...prev, parceiro: value }));
+      // O formData.parceiro será atualizado no handleSave a partir do partnerInput
     } else {
       setFormData(prev => ({
         ...prev,
@@ -176,13 +188,15 @@ export default function OSDetailsView({ initialOs }: OSDetailsViewProps) {
 
   const handleClientSelect = (clientName: string) => {
     setClientInput(clientName);
-    setFormData(prev => ({ ...prev, cliente: clientName, clientId: clients.find(c=>c.name === clientName)?.id || prev.clientId }));
+    // Não precisa mais definir formData.cliente aqui, pois será pego de clientInput no handleSave
+    // Se precisar do ID do cliente imediatamente, você pode atualizar formData.clientId aqui.
+    // setFormData(prev => ({ ...prev, clientId: clients.find(c=>c.name === clientName)?.id || prev.clientId }));
     setShowClientSuggestions(false);
   };
 
   const handlePartnerSelect = (partnerName: string) => {
     setPartnerInput(partnerName);
-    setFormData(prev => ({ ...prev, parceiro: partnerName, partnerId: partners.find(p=>p.name === partnerName)?.id || prev.partnerId }));
+    // setFormData(prev => ({ ...prev, partnerId: partners.find(p=>p.name === partnerName)?.id || prev.partnerId }));
     setShowPartnerSuggestions(false);
   };
 
@@ -195,7 +209,7 @@ export default function OSDetailsView({ initialOs }: OSDetailsViewProps) {
       observacoes: (prev.observacoes || '') + filePlaceholders
     }));
     if (fileInputRef.current) {
-      fileInputRef.current.value = ''; // Resetar input para permitir selecionar o mesmo arquivo novamente
+      fileInputRef.current.value = '';
     }
   };
 
@@ -217,8 +231,8 @@ export default function OSDetailsView({ initialOs }: OSDetailsViewProps) {
             }));
           };
           reader.readAsDataURL(blob);
-          event.preventDefault(); // Impedir que a imagem seja colada como base64 no textarea
-          break; 
+          event.preventDefault();
+          break;
         }
       }
     }
@@ -226,25 +240,37 @@ export default function OSDetailsView({ initialOs }: OSDetailsViewProps) {
 
 
   const handleSave = async () => {
-    console.log('[OSDetailsView handleSave] Iniciando save. clientInput:', clientInput, 'partnerInput:', partnerInput, 'formData:', formData);
     setIsSaving(true);
     const dataToSave: OS = {
-      ...initialOs, // Começa com os dados imutáveis da OS original (ID, numero, datas de timer)
-      ...formData,  // Sobrescreve com os dados editáveis do formulário
+      ...initialOs, // Começa com os dados imutáveis (ID, numero, datas de timer NÃO editáveis diretamente)
+      // Campos editáveis do formulário (formData)
+      projeto: formData.projeto,
+      tarefa: formData.tarefa,
+      observacoes: formData.observacoes,
+      tempoTrabalhado: formData.tempoTrabalhado,
+      status: formData.status,
+      programadoPara: formData.programadoPara,
+      isUrgent: formData.isUrgent,
+      // Campos cliente/parceiro vêm dos inputs controlados separadamente
       cliente: clientInput.trim(),
       parceiro: partnerInput.trim() || undefined,
       // Garantir que IDs sejam atualizados se cliente/parceiro mudou
       clientId: clients.find(c => c.name === clientInput.trim())?.id || initialOs.clientId,
       partnerId: partners.find(p => p.name === partnerInput.trim())?.id || initialOs.partnerId,
+
+      // Campos de timer são controlados pelo store/backend, mas incluímos os do formData
+      // caso o status seja alterado no mesmo save, para a action do backend ter o contexto.
+      dataInicioProducaoAtual: formData.dataInicioProducaoAtual,
+      tempoGastoProducaoSegundos: formData.tempoGastoProducaoSegundos,
+      dataInicioProducao: formData.dataInicioProducao, // Histórico
     };
-    // programadoPara já está no formato YYYY-MM-DD em formData
     console.log('[OSDetailsView handleSave] Data para updateOS:', JSON.stringify(dataToSave, null, 2));
 
     try {
-      const result = await updateOS(dataToSave);
+      const result = await updateOS(dataToSave); // updateOS é do store
       if (result) {
         setIsEditing(false);
-        setSelectedFiles([]); // Limpar anexos temporários
+        setSelectedFiles([]);
         setPastedImages([]);
       } else {
         alert('Falha ao atualizar OS. Verifique os logs.');
@@ -259,6 +285,7 @@ export default function OSDetailsView({ initialOs }: OSDetailsViewProps) {
 
   const handleCancel = () => {
     setIsEditing(false);
+    // Reseta o formData para o initialOs ao cancelar
     setFormData({ ...initialOs, programadoPara: formatProgramadoParaForInput(initialOs.programadoPara) });
     setClientInput(initialOs.cliente || '');
     setPartnerInput(initialOs.parceiro || '');
@@ -297,6 +324,8 @@ export default function OSDetailsView({ initialOs }: OSDetailsViewProps) {
   const handleToggleTimer = async (action: 'play' | 'pause') => {
     setIsSaving(true);
     await toggleProductionTimer(initialOs.id, action);
+    // Não precisa atualizar formData aqui, pois initialOs será atualizado pelo store,
+    // e o useEffect cuidará de sincronizar formData se não estiver editando.
     setIsSaving(false);
   };
 
@@ -330,11 +359,13 @@ export default function OSDetailsView({ initialOs }: OSDetailsViewProps) {
   useEffect(() => setupClickListener(clientInputRef, clientSuggestionsRef, setShowClientSuggestions), [clientInputRef, clientSuggestionsRef, setupClickListener]);
   useEffect(() => setupClickListener(partnerInputRef, partnerSuggestionsRef, setShowPartnerSuggestions), [partnerInputRef, partnerSuggestionsRef, setupClickListener]);
 
+  // Usar initialOs para o estado do timer na UI, pois é o mais atualizado pelo store.
   const isTimerEffectivelyRunning = initialOs.status === OSStatus.EM_PRODUCAO && !!initialOs.dataInicioProducaoAtual;
   const isFinalized = initialOs.status === OSStatus.FINALIZADO;
 
   const displayStatus = isEditing ? formData.status : initialOs.status;
   const displayProject = isEditing ? formData.projeto : initialOs.projeto;
+
 
   return (
     <div className={`container-fluid os-details-print-container ${initialOs.isUrgent && !isEditing ? 'os-details-urgent' : ''}`}>
@@ -403,17 +434,33 @@ export default function OSDetailsView({ initialOs }: OSDetailsViewProps) {
               <Flag size={16} className="me-1" /> URGENTE
             </span>
           )}
+           {isEditing && (
+               <div className="form-check form-switch ms-auto">
+                    <input
+                      className="form-check-input"
+                      type="checkbox"
+                      role="switch"
+                      id="isUrgentSwitchHeader"
+                      name="isUrgent"
+                      checked={formData.isUrgent}
+                      onChange={handleInputChange}
+                    />
+                    <label className="form-check-label small" htmlFor="isUrgentSwitchHeader">
+                      Urgente
+                    </label>
+                </div>
+           )}
         </div>
         <div className="card-body p-4">
-          <div className="row">
-            <div className="col-md-6">
+          <div className="row"> {/* Início do layout de duas colunas */}
+            <div className="col-md-6"> {/* Primeira coluna */}
               <dl className="mb-0">
                 <DetailItem
                   label="Cliente"
                   icon={<UserIcon size={16} className="me-2 text-primary" />}
                   name="cliente"
                   isEditableField={true}
-                  value={clientInput}
+                  value={isEditing ? clientInput : initialOs.cliente}
                   isEditingMode={isEditing}
                   os={initialOs}
                 >
@@ -449,7 +496,7 @@ export default function OSDetailsView({ initialOs }: OSDetailsViewProps) {
                   icon={<Users size={16} className="me-2 text-primary" />}
                   name="parceiro"
                   isEditableField={true}
-                  value={partnerInput}
+                  value={isEditing ? partnerInput : initialOs.parceiro}
                   isEditingMode={isEditing}
                   os={initialOs}
                 >
@@ -491,7 +538,7 @@ export default function OSDetailsView({ initialOs }: OSDetailsViewProps) {
                   <select
                     className="form-select form-select-sm"
                     name="status"
-                    value={formData.status}
+                    value={formData.status} // Usar formData.status aqui para edição
                     onChange={handleInputChange}
                     disabled={!isEditing || isFinalized}
                   >
@@ -526,7 +573,7 @@ export default function OSDetailsView({ initialOs }: OSDetailsViewProps) {
                     type="date"
                     className="form-control form-control-sm"
                     name="programadoPara"
-                    value={formData.programadoPara || ''}
+                    value={formData.programadoPara || ''} // Usar formData.programadoPara para edição
                     onChange={handleInputChange}
                     disabled={!isEditing}
                   />
@@ -571,7 +618,7 @@ export default function OSDetailsView({ initialOs }: OSDetailsViewProps) {
                       role="switch"
                       id="isUrgentSwitch"
                       name="isUrgent"
-                      checked={formData.isUrgent}
+                      checked={formData.isUrgent} // Usar formData.isUrgent para edição
                       onChange={handleInputChange}
                       disabled={!isEditing}
                     />
@@ -582,7 +629,7 @@ export default function OSDetailsView({ initialOs }: OSDetailsViewProps) {
                 </DetailItem>
               </dl>
             </div>
-            <div className="col-md-6">
+            <div className="col-md-6"> {/* Segunda coluna */}
               <dl className="mb-0">
                 <div className="row py-2 border-bottom mb-3">
                   <dt className="col-sm-4 col-lg-3 text-muted d-flex align-items-center small fw-medium">
@@ -634,7 +681,7 @@ export default function OSDetailsView({ initialOs }: OSDetailsViewProps) {
                     className="form-control form-control-sm"
                     name="tarefa"
                     rows={3}
-                    value={formData.tarefa || ''}
+                    value={formData.tarefa || ''} // Usar formData.tarefa para edição
                     onChange={handleInputChange}
                     disabled={!isEditing}
                     required={isEditing}
@@ -654,7 +701,7 @@ export default function OSDetailsView({ initialOs }: OSDetailsViewProps) {
                     className="form-control form-control-sm"
                     name="observacoes"
                     rows={4}
-                    value={formData.observacoes || ''}
+                    value={formData.observacoes || ''} // Usar formData.observacoes para edição
                     onChange={handleInputChange}
                     onPaste={isEditing ? handlePasteInObservacoes : undefined}
                     disabled={!isEditing}
@@ -713,7 +760,7 @@ export default function OSDetailsView({ initialOs }: OSDetailsViewProps) {
                 </DetailItem>
 
                 <DetailItem
-                  label="Tempo Trabalhado"
+                  label="Tempo Trabalhado" /* Label atualizada */
                   value={isEditing ? formData.tempoTrabalhado : initialOs.tempoTrabalhado}
                   icon={<Clock3 size={16} className="me-2 text-secondary" />}
                   name="tempoTrabalhado"
@@ -725,7 +772,7 @@ export default function OSDetailsView({ initialOs }: OSDetailsViewProps) {
                     className="form-control form-control-sm"
                     name="tempoTrabalhado"
                     rows={3}
-                    value={formData.tempoTrabalhado || ''}
+                    value={formData.tempoTrabalhado || ''} // Usar formData.tempoTrabalhado para edição
                     onChange={handleInputChange}
                     disabled={!isEditing}
                     placeholder="Ex: 1h reunião (15/05)&#10;3h código (16/05)&#10;2h ajustes (17/05)"
@@ -733,7 +780,7 @@ export default function OSDetailsView({ initialOs }: OSDetailsViewProps) {
                 </DetailItem>
               </dl>
             </div>
-          </div>
+          </div> {/* Fim do layout de duas colunas */}
         </div>
       </div>
     </div>
