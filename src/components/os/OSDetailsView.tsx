@@ -5,7 +5,7 @@ import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import type { OS } from '@/lib/types';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, CalendarClock, CheckCircle2, FileText, Flag, Server, User as UserIcon, Users, Briefcase, MessageSquare, Clock3, Save, Edit, Calendar as CalendarIcon, Printer, CheckSquare, Play, Pause, RotateCcw, UploadCloud, Paperclip, Clock, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, CalendarClock, CheckCircle2, FileText, Flag, Server, User as UserIcon, Users, Briefcase, MessageSquare, Clock3, Save, Edit, Calendar as CalendarIcon, Printer, CheckSquare, Play, Pause, RotateCcw, UploadCloud, Paperclip, AlertTriangle, Clock as ClockIconLucide } from 'lucide-react';
 import { format, parseISO, isValid, differenceInSeconds, formatDistanceStrict } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useOSStore } from '@/store/os-store';
@@ -14,7 +14,7 @@ import ChronometerDisplay from './ChronometerDisplay';
 
 const getStatusIcon = (status: OSStatus) => {
   switch (status) {
-    case OSStatus.NA_FILA: return <Clock size={16} className="me-2" />;
+    case OSStatus.NA_FILA: return <ClockIconLucide size={16} className="me-2" />; // Explicitly use ClockIconLucide
     case OSStatus.AGUARDANDO_CLIENTE: return <UserIcon size={16} className="me-2" />;
     case OSStatus.EM_PRODUCAO: return <Server size={16} className="me-2" />;
     case OSStatus.AGUARDANDO_PARCEIRO: return <Users size={16} className="me-2" />;
@@ -76,8 +76,7 @@ const DetailItem = ({ label, value, icon, name, isEditableField, children, class
   );
 };
 
-// Helper para formatar datas na seção de detalhes do cronômetro
-const formatDetailedDate = (dateString?: string | null): string | React.ReactNode => {
+const formatDateForDetails = (dateString?: string | null): string | React.ReactNode => {
     if (!dateString) return <span className="text-muted fst-italic">N/A</span>;
     try {
         const date = parseISO(dateString);
@@ -88,8 +87,7 @@ const formatDetailedDate = (dateString?: string | null): string | React.ReactNod
     return <span className="text-muted fst-italic">Data inválida</span>;
 };
 
-// Componente para exibir a duração da sessão atual do cronômetro
-const CurrentSessionDuration: React.FC<{ startTimeISO: string | null }> = ({ startTimeISO }) => {
+const CurrentSessionDuration: React.FC<{ startTimeISO: string | null | undefined }> = ({ startTimeISO }) => {
     const [duration, setDuration] = useState<string>('0s');
 
     useEffect(() => {
@@ -102,13 +100,13 @@ const CurrentSessionDuration: React.FC<{ startTimeISO: string | null }> = ({ sta
                     const seconds = differenceInSeconds(now, startDate);
                     setDuration(formatDistanceStrict(now, startDate, { locale: ptBR, unit: seconds < 60 ? 's' : (seconds < 3600 ? 'm' : 'h'), addSuffix: false }) || '0s');
                 };
-                updateDuration(); // Initial call
+                updateDuration();
                 intervalId = setInterval(updateDuration, 1000);
             } else {
                 setDuration('Início inválido');
             }
         } else {
-            setDuration('0s'); // Reset if no start time
+            setDuration('0s');
         }
         return () => {
             if (intervalId) clearInterval(intervalId);
@@ -117,7 +115,6 @@ const CurrentSessionDuration: React.FC<{ startTimeISO: string | null }> = ({ sta
 
     return <span>{duration}</span>;
 };
-
 
 interface OSDetailsViewProps {
   initialOs: OS;
@@ -160,6 +157,8 @@ export default function OSDetailsView({ initialOs }: OSDetailsViewProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
+    console.log("[OSDetailsView] useEffect for initialOs or isEditing change triggered.");
+    console.log("[OSDetailsView] initialOs received:", JSON.stringify(initialOs, null, 2));
     if (!isEditing) {
         setFormData({
             ...initialOs,
@@ -167,18 +166,30 @@ export default function OSDetailsView({ initialOs }: OSDetailsViewProps) {
         });
         setClientInput(initialOs.cliente || '');
         setPartnerInput(initialOs.parceiro || '');
-        setSelectedFiles([]);
-        setPastedImages([]);
+        // Clear temporary attachments only when exiting edit mode or OS changes
+        if (initialOs.id !== formData.id) { // If OS ID changes, definitely clear
+            setSelectedFiles([]);
+            setPastedImages([]);
+        }
+        console.log("[OSDetailsView] Not editing. formData set from initialOs.");
     } else {
-        // Quando entra em modo de edição, inicializa o formData com os dados atuais da OS
-        // Isso é importante se initialOs foi atualizado pelo store enquanto não estava editando
-        setFormData({
-            ...initialOs,
-            programadoPara: formatProgramadoParaForInput(initialOs.programadoPara),
-        });
-        setClientInput(initialOs.cliente || '');
-        setPartnerInput(initialOs.parceiro || '');
-        // Não limpa selectedFiles e pastedImages aqui, para que o usuário não perca o que já adicionou na sessão de edição atual
+        // When entering edit mode, ensure formData is based on the latest initialOs
+        // but preserve any unsaved changes if it's the same OS.
+        // If initialOs.id is different from formData.id, it means a new OS was loaded
+        // so we should reset formData based on the new initialOs.
+        if (initialOs.id !== formData.id) {
+            setFormData({
+                ...initialOs,
+                programadoPara: formatProgramadoParaForInput(initialOs.programadoPara),
+            });
+            setClientInput(initialOs.cliente || '');
+            setPartnerInput(initialOs.parceiro || '');
+            setSelectedFiles([]);
+            setPastedImages([]);
+            console.log("[OSDetailsView] Editing mode, but OS ID changed. formData reset from new initialOs.");
+        } else {
+            console.log("[OSDetailsView] Editing mode, OS ID is the same. formData preserved (or based on initialOs if no prior edits).");
+        }
     }
   }, [initialOs, isEditing, formatProgramadoParaForInput]);
 
@@ -263,18 +274,21 @@ export default function OSDetailsView({ initialOs }: OSDetailsViewProps) {
   const handleSave = async () => {
     setIsSaving(true);
     const dataToSave: OS = {
-      ...initialOs, 
+      ...initialOs, // Start with the current truth from the store
+      // Overwrite with values from formData and specific inputs
       projeto: formData.projeto,
-      tarefa: formData.tarefa,
+      tarefa: formData.tarefa, // Keep this required
       observacoes: formData.observacoes,
-      tempoTrabalhado: formData.tempoTrabalhado,
+      tempoTrabalhado: formData.tempoTrabalhado, // This is now "Notas de Tempo Trabalhado"
       status: formData.status,
       programadoPara: formData.programadoPara,
       isUrgent: formData.isUrgent,
-      cliente: clientInput.trim(),
-      parceiro: partnerInput.trim() || undefined,
+      cliente: clientInput.trim(), // Use the potentially updated clientInput
+      parceiro: partnerInput.trim() || undefined, // Use the potentially updated partnerInput
+      // IDs will be resolved by the store/action based on names
       clientId: clients.find(c => c.name === clientInput.trim())?.id || initialOs.clientId,
       partnerId: partners.find(p => p.name === partnerInput.trim())?.id || initialOs.partnerId,
+      // Timer related fields should come from initialOs as they are managed by separate actions
       dataInicioProducaoAtual: initialOs.dataInicioProducaoAtual, 
       tempoGastoProducaoSegundos: initialOs.tempoGastoProducaoSegundos,
       dataInicioProducao: initialOs.dataInicioProducao,
@@ -300,7 +314,9 @@ export default function OSDetailsView({ initialOs }: OSDetailsViewProps) {
 
   const handleCancel = () => {
     setIsEditing(false);
-    // O useEffect já lida com o reset do formData para initialOs
+    setSelectedFiles([]);
+    setPastedImages([]);
+    // The useEffect will reset formData to initialOs
   };
 
   const handleFinalizeOS = async () => {
@@ -332,6 +348,7 @@ export default function OSDetailsView({ initialOs }: OSDetailsViewProps) {
   const handleToggleTimer = async (action: 'play' | 'pause') => {
     setIsSaving(true);
     await toggleProductionTimer(initialOs.id, action);
+    // No need to setIsEditing(false) or clear files here
     setIsSaving(false);
   };
 
@@ -457,42 +474,45 @@ export default function OSDetailsView({ initialOs }: OSDetailsViewProps) {
            )}
         </div>
         <div className="card-body p-4">
-          {/* Seção de Detalhes do Cronômetro */}
-          <div className="card bg-light-subtle p-3 mb-4 shadow-sm small" style={{ fontSize: '0.85rem' }}>
-            <h6 className="card-title text-primary mb-2 d-flex align-items-center">
-                <Clock3 size={18} className="me-2" /> Detalhes do Cronômetro
-            </h6>
-            <dl className="row mb-0">
-                {initialOs.dataInicioProducao && (
-                    <>
-                        <dt className="col-sm-5 text-muted fw-medium">Primeiro Início Produção:</dt>
-                        <dd className="col-sm-7 mb-1">{formatDetailedDate(initialOs.dataInicioProducao)}</dd>
-                    </>
-                )}
-                {isTimerEffectivelyRunning && initialOs.dataInicioProducaoAtual && (
-                    <>
-                        <dt className="col-sm-5 text-muted fw-medium">Início Sessão Atual:</dt>
-                        <dd className="col-sm-7 mb-1">{formatDetailedDate(initialOs.dataInicioProducaoAtual)}</dd>
-                        <dt className="col-sm-5 text-muted fw-medium">Duração Sessão Atual:</dt>
-                        <dd className="col-sm-7 mb-1"><CurrentSessionDuration startTimeISO={initialOs.dataInicioProducaoAtual} /></dd>
-                    </>
-                )}
-                 <dt className="col-sm-5 text-muted fw-medium">Tempo Total em Produção:</dt>
-                 <dd className="col-sm-7 mb-0">
-                    <ChronometerDisplay
-                        startTimeISO={initialOs.dataInicioProducaoAtual}
-                        accumulatedSeconds={initialOs.tempoGastoProducaoSegundos}
-                        isRunningClientOverride={isTimerEffectivelyRunning}
-                    />
-                 </dd>
-            </dl>
-            {!initialOs.dataInicioProducao && !isTimerEffectivelyRunning && initialOs.tempoGastoProducaoSegundos === 0 && (
-                 <p className="text-muted fst-italic mt-2 mb-0">O cronômetro ainda não foi iniciado para esta OS.</p>
-            )}
-             <p className="text-muted fst-italic mt-2 mb-0" style={{ fontSize: '0.75rem' }}>
-                Nota: O sistema registra o tempo total acumulado em produção. O histórico detalhado de cada período individual de play/pause não é armazenado.
-             </p>
-          </div>
+          
+          {initialOs.status !== OSStatus.FINALIZADO && (
+            <div className="card bg-light-subtle p-3 mb-4 shadow-sm small" style={{ fontSize: '0.85rem' }}>
+              <h6 className="card-title text-primary mb-2 d-flex align-items-center">
+                  <Clock3 size={18} className="me-2" /> Detalhes do Cronômetro
+              </h6>
+              <dl className="row mb-0">
+                  {initialOs.dataInicioProducao && (
+                      <>
+                          <dt className="col-sm-5 text-muted fw-medium">Primeiro Início Produção:</dt>
+                          <dd className="col-sm-7 mb-1">{formatDateForDetails(initialOs.dataInicioProducao)}</dd>
+                      </>
+                  )}
+                  {isTimerEffectivelyRunning && initialOs.dataInicioProducaoAtual && (
+                      <>
+                          <dt className="col-sm-5 text-muted fw-medium">Início Sessão Atual:</dt>
+                          <dd className="col-sm-7 mb-1">{formatDateForDetails(initialOs.dataInicioProducaoAtual)}</dd>
+                          <dt className="col-sm-5 text-muted fw-medium">Duração Sessão Atual:</dt>
+                          <dd className="col-sm-7 mb-1"><CurrentSessionDuration startTimeISO={initialOs.dataInicioProducaoAtual} /></dd>
+                      </>
+                  )}
+                   <dt className="col-sm-5 text-muted fw-medium">Tempo Total em Produção:</dt>
+                   <dd className="col-sm-7 mb-0">
+                      <ChronometerDisplay
+                          startTimeISO={initialOs.dataInicioProducaoAtual}
+                          accumulatedSeconds={initialOs.tempoGastoProducaoSegundos}
+                          isRunningClientOverride={isTimerEffectivelyRunning}
+                          osStatus={initialOs.status}
+                      />
+                   </dd>
+              </dl>
+              {!initialOs.dataInicioProducao && !isTimerEffectivelyRunning && initialOs.tempoGastoProducaoSegundos === 0 && (
+                   <p className="text-muted fst-italic mt-2 mb-0">O cronômetro ainda não foi iniciado para esta OS.</p>
+              )}
+               <p className="text-muted fst-italic mt-2 mb-0" style={{ fontSize: '0.75rem' }}>
+                  Nota: O sistema registra o tempo total acumulado em produção. O histórico detalhado de cada período individual de play/pause não é armazenado.
+               </p>
+            </div>
+          )}
 
           <div className="row">
             <div className="col-md-6">
@@ -570,8 +590,8 @@ export default function OSDetailsView({ initialOs }: OSDetailsViewProps) {
 
                 <DetailItem
                   label="Status"
-                  value={displayStatus}
-                  icon={getStatusIcon(displayStatus)}
+                  value={isEditing ? formData.status : initialOs.status}
+                  icon={getStatusIcon(isEditing ? formData.status : initialOs.status)}
                   name="status"
                   isEditableField={true}
                   isEditingMode={isEditing}
@@ -788,22 +808,28 @@ export default function OSDetailsView({ initialOs }: OSDetailsViewProps) {
 
                 <DetailItem
                   label="Tempo Trabalhado"
-                  value={isEditing ? formData.tempoTrabalhado : initialOs.tempoTrabalhado}
                   icon={<Clock3 size={16} className="me-2 text-secondary" />}
-                  name="tempoTrabalhado"
-                  isEditableField={true}
+                  isEditableField={true} // This allows conditional rendering based on isEditing
                   isEditingMode={isEditing}
                   os={initialOs}
                 >
-                  <textarea
-                    className="form-control form-control-sm"
-                    name="tempoTrabalhado"
-                    rows={3}
-                    value={formData.tempoTrabalhado || ''}
-                    onChange={handleInputChange}
-                    disabled={!isEditing}
-                    placeholder="Ex: 1h reunião (15/05)&#10;3h código (16/05)&#10;2h ajustes (17/05)"
-                  />
+                  {isEditing ? (
+                    <textarea
+                      className="form-control form-control-sm"
+                      name="tempoTrabalhado" // This name is used for formData
+                      rows={3}
+                      value={formData.tempoTrabalhado || ''} // Bind to formData.tempoTrabalhado
+                      onChange={handleInputChange}
+                      placeholder="Ex: 1h reunião (15/05)&#10;3h código (16/05)&#10;2h ajustes (17/05)"
+                    />
+                  ) : (
+                    <ChronometerDisplay
+                      startTimeISO={initialOs.dataInicioProducaoAtual}
+                      accumulatedSeconds={initialOs.tempoGastoProducaoSegundos}
+                      isRunningClientOverride={isTimerEffectivelyRunning}
+                      osStatus={initialOs.status}
+                    />
+                  )}
                 </DetailItem>
               </dl>
             </div>
@@ -813,4 +839,3 @@ export default function OSDetailsView({ initialOs }: OSDetailsViewProps) {
     </div>
   );
 }
-
