@@ -20,7 +20,7 @@ body {
   --primary: 30 100% 55%; /* Orange */
   --primary-foreground: 0 0% 100%; /* White text on orange */
 
-  --secondary: 30 90% 50%; /* Slightly different Orange for secondary */
+  --secondary: 30 90% 50%; /* Slightly different Orange for secondary (Not heavily used if orange is primary) */
   --secondary-foreground: 0 0% 100%; /* White text on orange secondary */
 
   --muted: 210 40% 96.1%;
@@ -29,7 +29,7 @@ body {
   --accent: 30 100% 55%; /* Orange for accent */
   --accent-foreground: 0 0% 100%; /* White text on orange accent */
 
-  --destructive: 0 84.2% 60.2%;
+  --destructive: 0 84.2% 60.2%; /* Red for destructive actions/urgent */
   --destructive-foreground: 0 0% 98%;
 
   --border: 214.3 31.8% 91.4%;
@@ -53,6 +53,26 @@ body {
   --bs-body-bg: hsl(var(--background));
   --bs-link-color: hsl(var(--primary));
   --bs-link-hover-color: hsl(var(--primary) / 0.8); /* Slightly darker orange on hover */
+
+  /* Bootstrap subtle backgrounds for light mode (using HSL for easier derivation if needed) */
+  --bs-primary-bg-subtle: hsl(var(--primary) / 0.1);
+  --bs-secondary-bg-subtle: hsl(var(--secondary) / 0.1);
+  --bs-success-bg-subtle: hsl(120 60% 95%); /* Light green */
+  --bs-info-bg-subtle: hsl(190 70% 95%);    /* Light blue */
+  --bs-warning-bg-subtle: hsl(45 100% 95%); /* Light yellow */
+  --bs-danger-bg-subtle: hsl(var(--destructive) / 0.1); /* Light red */
+  --bs-light-bg-subtle: hsl(210 20% 98%);   /* Very light gray */
+  --bs-dark-bg-subtle: hsl(210 10% 90%);    /* Light gray for dark elements on light bg */
+
+  /* Bootstrap text emphasis for light mode */
+  --bs-primary-text-emphasis: hsl(var(--primary) / 0.7);
+  --bs-secondary-text-emphasis: hsl(var(--secondary) / 0.7);
+  --bs-success-text-emphasis: hsl(120 60% 30%); /* Dark green */
+  --bs-info-text-emphasis: hsl(190 70% 35%);    /* Dark blue */
+  --bs-warning-text-emphasis: hsl(45 100% 30%); /* Dark yellow/orange */
+  --bs-danger-text-emphasis: hsl(var(--destructive) / 0.7); /* Dark red */
+  --bs-light-text-emphasis: hsl(210 15% 55%);
+  --bs-dark-text-emphasis: hsl(210 10% 25%);
 }
 
 [data-bs-theme="dark"] {
@@ -77,7 +97,7 @@ body {
   --accent: 30 100% 60%; /* Orange accent */
   --accent-foreground: 20 100% 10%;
 
-  --destructive: 0 70% 55%;
+  --destructive: 0 70% 55%; /* Brighter red for dark mode */
   --destructive-foreground: 0 0% 98%;
 
   --border: 210 15% 30%; /* Darker, less saturated borders */
@@ -117,6 +137,53 @@ body {
   --bs-form-select-border-color: var(--bs-form-control-border-color);
 
   --bs-body-emphasis: hsl(var(--foreground)); /* For general text emphasis */
+
+  /* Dark mode subtle backgrounds for status */
+  /* Na Fila (Secondary) */
+  --bs-secondary-bg-subtle: hsl(210 15% 18%); /* Darker, slightly blue-gray */
+  /* Aguardando Cliente (Warning) */
+  --bs-warning-bg-subtle: hsl(45 70% 20%);   /* Dark, muted yellow/brown */
+  /* Em Produção (Info) */
+  --bs-info-bg-subtle: hsl(190 60% 20%);     /* Dark, muted cyan/blue */
+  /* Aguardando Parceiro (Primary - Orange) */
+  --bs-primary-bg-subtle: hsl(var(--primary) / 0.25); /* Dark, muted orange */
+  /* Finalizado (Success) */
+  --bs-success-bg-subtle: hsl(120 50% 18%);  /* Dark, muted green */
+
+  /* Dark mode text emphasis for status (ensure good contrast with subtle backgrounds) */
+  /* Na Fila (Secondary) */
+  --bs-secondary-text-emphasis: hsl(210 30% 75%);
+  /* Aguardando Cliente (Warning) */
+  --bs-warning-text-emphasis: hsl(45 100% 75%);
+  /* Em Produção (Info) */
+  --bs-info-text-emphasis: hsl(190 80% 75%);
+  /* Aguardando Parceiro (Primary - Orange) */
+  --bs-primary-text-emphasis: hsl(var(--primary)); /* Brighter orange text */
+  /* Finalizado (Success) */
+  --bs-success-text-emphasis: hsl(120 70% 70%);
+  
+  /* General dark mode text emphasis */
+  --bs-light-text-emphasis: hsl(var(--foreground) / 0.8) !important; 
+  --bs-dark-text-emphasis: hsl(var(--foreground)) !important; 
+
+  /* Urgent OS Card in Dark Mode */
+  .card.border-danger { /* For OSCard */
+    background-color: hsl(var(--destructive) / 0.3) !important; /* Dark red background */
+    border-color: hsl(var(--destructive) / 0.7) !important;
+  }
+  .card.border-danger,
+  .card.border-danger .text-muted,
+  .card.border-danger .small,
+  .card.border-danger .fw-medium {
+    color: hsl(var(--destructive-foreground)) !important; /* Light text on dark red */
+  }
+  .card.border-danger .text-primary { /* Ensure OS number has contrast if it uses text-primary */
+     color: hsl(var(--destructive-foreground)) !important;
+  }
+   .card.border-danger .badge.bg-danger { /* Badge URGENTE dentro do card */
+      background-color: hsl(var(--destructive)) !important;
+      color: hsl(var(--destructive-foreground)) !important;
+   }
 }
 
 
@@ -245,7 +312,9 @@ body {
   color: var(--bs-danger-text-emphasis, #842029) !important;
 }
 
-.os-details-urgent .text-primary { 
+/* Target text-primary *specifically within* an .os-details-urgent context */
+.os-details-urgent .text-primary, 
+.os-details-urgent [class*="text-primary"] { /* Catch variants like text-primary-emphasis if not overridden */
   color: var(--bs-danger-text-emphasis, #842029) !important;
 }
 .os-details-urgent .text-muted {
@@ -393,20 +462,42 @@ body {
     }
 
     .card {
-        background-color: hsl(var(--card)) !important; /* Ensure important for override */
+        background-color: hsl(var(--card)) !important; /* Default card background */
         border-color: hsl(var(--border)) !important;
         color: hsl(var(--card-foreground)) !important;
     }
+    
+    /* Specific OSCard background based on status in dark mode */
+    .card.bg-secondary-subtle { background-color: var(--bs-secondary-bg-subtle) !important; }
+    .card.bg-warning-subtle { background-color: var(--bs-warning-bg-subtle) !important; }
+    .card.bg-info-subtle { background-color: var(--bs-info-bg-subtle) !important; }
+    .card.bg-primary-subtle { background-color: var(--bs-primary-bg-subtle) !important; }
+    .card.bg-success-subtle { background-color: var(--bs-success-bg-subtle) !important; }
+    /* OSCard urgent in dark mode - already handled by .card.border-danger specific rule */
+
 
      .card-header, .card-footer {
-        background-color: hsl(var(--card) / 0.85) !important; /* Slightly different shade for header/footer */
+        background-color: hsl(var(--card) / 0.85) !important; /* Slightly different shade for header/footer by default */
         border-color: hsl(var(--border)) !important;
         color: hsl(var(--card-foreground)) !important;
     }
+    /* Override card header for status-specific cards in dark mode if needed, or let it inherit from subtle bg */
+    .card.bg-secondary-subtle .card-header { background-color: hsl(var(--bs-secondary-bg-subtle) / 0.8) !important; }
+    .card.bg-warning-subtle .card-header { background-color: hsl(var(--bs-warning-bg-subtle) / 0.8) !important; }
+    .card.bg-info-subtle .card-header { background-color: hsl(var(--bs-info-bg-subtle) / 0.8) !important; }
+    .card.bg-primary-subtle .card-header { background-color: hsl(var(--bs-primary-bg-subtle) / 0.8) !important; }
+    .card.bg-success-subtle .card-header { background-color: hsl(var(--bs-success-bg-subtle) / 0.8) !important; }
+
 
     .card-body, .card-title, .card-subtitle, .card-text {
-       color: hsl(var(--card-foreground)) !important;
+       color: hsl(var(--card-foreground)) !important; /* Default text within card */
     }
+    /* Text color for status-specific cards if needed (usually handled by text-emphasis classes) */
+    .card.bg-secondary-subtle .card-body, .card.bg-secondary-subtle .card-title { color: var(--bs-secondary-text-emphasis) !important; }
+    .card.bg-warning-subtle .card-body, .card.bg-warning-subtle .card-title { color: var(--bs-warning-text-emphasis) !important; }
+    /* ... and so on for other statuses if default card-foreground isn't enough */
+
+
     .text-muted {
         color: hsl(var(--muted-foreground)) !important;
     }
@@ -416,17 +507,6 @@ body {
      .text-dark { /* Bootstrap's .text-dark should become light in dark mode */
         color: hsl(var(--foreground)) !important;
      }
-
-    /* Emphasis colors for dark mode - ensure they are derived from dark theme foreground/primary */
-    .text-primary-emphasis { color: hsl(var(--primary)) !important; }
-    .text-secondary-emphasis { color: hsl(var(--secondary)) !important; }
-    .text-success-emphasis { color: hsl(145 80% 70%) !important; } /* Lighter green */
-    .text-info-emphasis { color: hsl(188 80% 70%) !important; } /* Lighter info blue */
-    .text-warning-emphasis { color: hsl(45 100% 70%) !important; } /* Lighter warning yellow */
-    .text-danger-emphasis { color: hsl(0 80% 70%) !important; } /* Lighter red */
-    .text-light-emphasis { color: hsl(var(--foreground) / 0.8) !important; }
-    .text-dark-emphasis { color: hsl(var(--foreground)) !important; }
-
 
     .form-control, .form-select {
         background-color: hsl(var(--input)) !important;
@@ -560,38 +640,41 @@ body {
      .rdp-day .text-dark { /* text-dark in DayContent */
         color: hsl(var(--foreground)) !important;
      }
-     .rdp-day .border-secondary { border-color: hsl(var(--secondary) / 0.5) !important; }
-     .rdp-day .border-warning { border-color: hsl(var(--warning) / 0.5) !important; }
-     /* ... and so on for other border colors used in DayContent */
+     .rdp-day .border-secondary { border-color: var(--bs-secondary-bg-subtle) !important; }
+     .rdp-day .border-warning { border-color: var(--bs-warning-bg-subtle) !important; }
+     .rdp-day .border-info { border-color: var(--bs-info-bg-subtle) !important; }
+     .rdp-day .border-primary { border-color: var(--bs-primary-bg-subtle) !important; }
+     .rdp-day .border-success { border-color: var(--bs-success-bg-subtle) !important; }
 
 
-    [data-bs-theme="dark"] .os-details-urgent .card {
+    /* Urgent OS Details in Dark Mode */
+    .os-details-urgent .card {
         border-color: hsl(var(--destructive)) !important;
-        background-color: hsla(var(--destructive) / 0.15) !important; /* Slightly more prominent for urgent */
+        background-color: hsl(var(--destructive) / 0.3) !important; /* Darker red for card background */
+    }
+    .os-details-urgent .card-header {
+        background-color: hsl(var(--destructive) / 0.4) !important; /* Slightly more intense red for header */
+        border-bottom-color: hsl(var(--destructive) / 0.6) !important;
         color: hsl(var(--destructive-foreground)) !important;
     }
-    [data-bs-theme="dark"] .os-details-urgent .card-header {
-        background-color: hsla(var(--destructive) / 0.2) !important;
-        border-bottom-color: hsla(var(--destructive) / 0.4) !important;
+    .os-details-urgent .card-header .card-title,
+    .os-details-urgent .card-header .card-subtitle,
+    .os-details-urgent .card-body, /* Ensure body text is also light */
+    .os-details-urgent .text-primary, /* Re-target .text-primary within .os-details-urgent */
+    .os-details-urgent [class*="text-primary"] {
         color: hsl(var(--destructive-foreground)) !important;
     }
-    [data-bs-theme="dark"] .os-details-urgent .card-header .card-title,
-    [data-bs-theme="dark"] .os-details-urgent .card-header .card-subtitle,
-    [data-bs-theme="dark"] .os-details-urgent .text-primary { /* Re-target .text-primary within .os-details-urgent */
-        color: hsl(var(--destructive-foreground)) !important;
+    .os-details-urgent .text-muted {
+        color: hsl(var(--destructive-foreground) / 0.85) !important; /* Lighter muted text for urgent */
     }
-    [data-bs-theme="dark"] .os-details-urgent .text-muted {
-        color: hsl(var(--destructive-foreground) / 0.8) !important;
-        opacity: 0.85;
-    }
-     [data-bs-theme="dark"] .os-details-urgent .form-control,
-     [data-bs-theme="dark"] .os-details-urgent .form-select {
-        border-color: hsl(var(--destructive));
+     .os-details-urgent .form-control,
+     .os-details-urgent .form-select {
+        border-color: hsl(var(--destructive) / 0.8); /* Slightly less intense border for inputs */
         background-color: hsl(var(--input)); /* Keep consistent input bg */
         color: hsl(var(--foreground)); /* Consistent input text color */
     }
-    [data-bs-theme="dark"] .os-details-urgent .form-control:focus,
-    [data-bs-theme="dark"] .os-details-urgent .form-select:focus {
+    .os-details-urgent .form-control:focus,
+    .os-details-urgent .form-select:focus {
         border-color: hsl(var(--destructive));
         box-shadow: 0 0 0 0.25rem hsla(var(--destructive) / 0.35);
     }
