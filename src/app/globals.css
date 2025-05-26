@@ -56,46 +56,67 @@ body {
 }
 
 [data-bs-theme="dark"] {
-  --background: 222.2 84% 4.9%; /* Dark background */
-  --foreground: 0 0% 98%; /* Light text */
+  --background: 220 13% 10%; /* Darker background, less blue */
+  --foreground: 210 20% 95%; /* Light text, slightly off-white */
 
-  --card: 222.2 84% 4.9%;
-  --card-foreground: 0 0% 98%;
+  --card: 220 13% 15%; /* Slightly lighter than body bg for cards */
+  --card-foreground: 210 20% 90%;
 
-  --popover: 222.2 84% 4.9%;
-  --popover-foreground: 0 0% 98%;
+  --popover: 220 13% 12%;
+  --popover-foreground: 210 20% 90%;
 
-  --primary: 30 100% 55%; /* Orange - can adjust for dark mode if needed, e.g., slightly less saturated */
-  --primary-foreground: 0 0% 100%; /* White text on orange */
+  --primary: 30 100% 60%; /* Orange, slightly brighter for dark mode */
+  --primary-foreground: 20 100% 10%; /* Darker text on primary for contrast if primary is light enough */
 
-  --secondary: 30 90% 60%; /* Lighter Orange for dark mode secondary */
-  --secondary-foreground: 0 0% 100%;
+  --secondary: 30 90% 55%; /* Orange secondary, adjusted */
+  --secondary-foreground: 20 100% 10%;
 
-  --muted: 217.2 32.6% 17.5%;
-  --muted-foreground: 215 20.2% 65.1%;
+  --muted: 210 15% 25%;
+  --muted-foreground: 210 15% 65%;
 
-  --accent: 30 100% 55%; /* Orange for accent */
-  --accent-foreground: 0 0% 100%;
+  --accent: 30 100% 60%; /* Orange accent */
+  --accent-foreground: 20 100% 10%;
 
-  --destructive: 0 62.8% 30.6%;
+  --destructive: 0 70% 55%;
   --destructive-foreground: 0 0% 98%;
 
-  --border: 217.2 32.6% 17.5%;
-  --input: 217.2 32.6% 17.5%;
-  --ring: 30 100% 55%; /* Orange for focus rings */
+  --border: 210 15% 30%; /* Darker, less saturated borders */
+  --input: 210 15% 20%; /* Dark input background */
+  --ring: 30 100% 65%; /* Brighter orange for focus rings */
 
   /* Bootstrap variable overrides for dark mode */
   --bs-primary: hsl(var(--primary));
   --bs-secondary: hsl(var(--secondary));
   
-  --bs-primary-rgb-values: 255, 145, 25; /* Corresponds to hsl(30, 100%, 55%) */
-  --bs-secondary-rgb-values: 255, 157, 51; /* Corresponds to hsl(30, 90%, 60%) */
-
+  /* RGB values corresponding to the HSL for dark mode */
+  --bs-primary-rgb-values: 255, 153, 51;  /* hsl(30, 100%, 60%) */
+  --bs-secondary-rgb-values: 255, 140, 26; /* hsl(30, 90%, 55%) */
 
   --bs-body-color: hsl(var(--foreground));
   --bs-body-bg: hsl(var(--background));
   --bs-link-color: hsl(var(--primary));
   --bs-link-hover-color: hsl(var(--primary) / 0.8);
+
+  --bs-emphasis-color: hsl(var(--foreground));
+  --bs-secondary-color: hsl(var(--muted-foreground));
+  --bs-secondary-bg: hsl(var(--muted));
+  --bs-tertiary-color: hsl(var(--muted-foreground) / 0.75);
+  --bs-tertiary-bg: hsl(var(--muted) / 0.5);
+
+  --bs-heading-color: hsl(var(--foreground));
+  --bs-border-color: hsl(var(--border));
+  --bs-card-bg: hsl(var(--card));
+  --bs-card-border-color: var(--bs-border-color);
+  --bs-card-cap-bg: hsl(var(--card) / 0.7); /* Slightly more transparent card header/footer */
+  
+  --bs-form-control-bg: hsl(var(--input));
+  --bs-form-control-color: hsl(var(--foreground));
+  --bs-form-control-border-color: hsl(var(--border));
+  --bs-form-select-bg: var(--bs-form-control-bg);
+  --bs-form-select-color: var(--bs-form-control-color);
+  --bs-form-select-border-color: var(--bs-form-control-border-color);
+
+  --bs-body-emphasis: hsl(var(--foreground)); /* For general text emphasis */
 }
 
 
@@ -107,6 +128,10 @@ body {
   transform: translateY(-4px);
   box-shadow: 0 0.4rem 0.8rem rgba(0, 0, 0, 0.12) !important;
 }
+[data-bs-theme="dark"] .hover-lift:hover .card {
+  box-shadow: 0 0.4rem 1rem rgba(0, 0, 0, 0.4) !important; /* Darker, more pronounced shadow */
+}
+
 
 /* General Smooth Transitions */
 .transition-all {
@@ -362,185 +387,197 @@ body {
 
 /* Dark Mode Adjustments */
 [data-bs-theme="dark"] {
-    /* Ensure background is dark */
     body {
       background-color: hsl(var(--background)) !important;
       color: hsl(var(--foreground)) !important;
     }
 
-    /* Adjust card background and border in dark mode */
     .card {
-        background-color: hsl(var(--card));
+        background-color: hsl(var(--card)) !important; /* Ensure important for override */
         border-color: hsl(var(--border)) !important;
+        color: hsl(var(--card-foreground)) !important;
     }
 
-    /* Adjust card header/footer background */
      .card-header, .card-footer {
-        background-color: hsl(var(--card) / 0.8); /* Slightly different shade for header/footer */
+        background-color: hsl(var(--card) / 0.85) !important; /* Slightly different shade for header/footer */
         border-color: hsl(var(--border)) !important;
+        color: hsl(var(--card-foreground)) !important;
     }
 
-    /* Ensure text within cards is readable */
     .card-body, .card-title, .card-subtitle, .card-text {
-       color: hsl(var(--card-foreground));
+       color: hsl(var(--card-foreground)) !important;
     }
     .text-muted {
         color: hsl(var(--muted-foreground)) !important;
     }
-    .text-primary {
-        color: hsl(var(--primary)) !important;
+    .text-primary { /* Primary text on dark, might need to be lighter */
+        color: hsl(var(--primary)) !important; /* Using the brighter primary for dark mode */
     }
-    .text-primary-emphasis {
-         color: hsl(var(--primary) / 0.9) !important; /* Adjust for emphasis */
-     }
-     .text-secondary-emphasis {
-         color: hsl(var(--secondary) / 0.9) !important;
-     }
-    .text-success-emphasis {
-         color: hsl(145 63% 49% / 0.9) !important; 
-     }
-     .text-info-emphasis {
-         color: hsl(188 78% 41% / 0.9) !important; 
-     }
-     .text-warning-emphasis {
-         color: hsl(45 100% 51% / 0.9) !important; 
-     }
-     .text-danger-emphasis {
-         color: hsl(0 72% 51% / 0.9) !important; 
+     .text-dark { /* Bootstrap's .text-dark should become light in dark mode */
+        color: hsl(var(--foreground)) !important;
      }
 
+    /* Emphasis colors for dark mode - ensure they are derived from dark theme foreground/primary */
+    .text-primary-emphasis { color: hsl(var(--primary)) !important; }
+    .text-secondary-emphasis { color: hsl(var(--secondary)) !important; }
+    .text-success-emphasis { color: hsl(145 80% 70%) !important; } /* Lighter green */
+    .text-info-emphasis { color: hsl(188 80% 70%) !important; } /* Lighter info blue */
+    .text-warning-emphasis { color: hsl(45 100% 70%) !important; } /* Lighter warning yellow */
+    .text-danger-emphasis { color: hsl(0 80% 70%) !important; } /* Lighter red */
+    .text-light-emphasis { color: hsl(var(--foreground) / 0.8) !important; }
+    .text-dark-emphasis { color: hsl(var(--foreground)) !important; }
 
-    /* Adjust form controls for dark mode */
+
     .form-control, .form-select {
-        background-color: hsl(var(--input));
-        color: hsl(var(--foreground));
-        border-color: hsl(var(--border));
+        background-color: hsl(var(--input)) !important;
+        color: hsl(var(--foreground)) !important;
+        border-color: hsl(var(--border)) !important;
     }
     .form-control::placeholder {
-        color: hsl(var(--muted-foreground));
+        color: hsl(var(--muted-foreground)) !important;
     }
      .form-control:focus, .form-select:focus {
-        background-color: hsl(var(--input));
-        color: hsl(var(--foreground));
-        border-color: hsl(var(--ring)); /* Use ring color for focus border */
-        box-shadow: 0 0 0 0.25rem hsla(var(--ring) / 0.25);
+        background-color: hsl(var(--input)) !important;
+        color: hsl(var(--foreground)) !important;
+        border-color: hsl(var(--ring)) !important;
+        box-shadow: 0 0 0 0.25rem hsla(var(--ring) / 0.35) !important;
      }
      .form-control-plaintext {
-        color: hsl(var(--foreground));
+        color: hsl(var(--foreground)) !important;
      }
 
 
-    /* Adjust buttons for dark mode */
     .btn-outline-secondary {
-        color: hsl(var(--secondary-foreground)); /* Will use orange foreground */
-        border-color: hsl(var(--secondary)); /* Orange border */
+        color: hsl(var(--foreground)); /* Light text for outline button */
+        border-color: hsl(var(--border));
     }
     .btn-outline-secondary:hover {
-        color: hsl(var(--secondary-foreground));
-        background-color: hsl(var(--secondary));
-        border-color: hsl(var(--secondary));
+        color: hsl(var(--background)); /* Dark text on hover */
+        background-color: hsl(var(--foreground));
+        border-color: hsl(var(--foreground));
     }
-    .btn-light { /* Adjust light buttons */
-        background-color: hsl(var(--muted));
-        border-color: hsl(var(--muted));
-        color: hsl(var(--muted-foreground));
-    }
-     .btn-light:hover {
-        background-color: hsl(var(--muted) / 0.9);
-        border-color: hsl(var(--muted) / 0.9);
-        color: hsl(var(--muted-foreground));
+     .btn-primary {
+        background-color: hsl(var(--primary)) !important;
+        border-color: hsl(var(--primary)) !important;
+        color: hsl(var(--primary-foreground)) !important;
+     }
+     .btn-primary:hover {
+        background-color: hsl(var(--primary) / 0.9) !important;
+        border-color: hsl(var(--primary) / 0.9) !important;
+     }
+     .btn-outline-primary {
+        color: hsl(var(--primary)) !important;
+        border-color: hsl(var(--primary)) !important;
+     }
+     .btn-outline-primary:hover {
+        color: hsl(var(--primary-foreground)) !important;
+        background-color: hsl(var(--primary)) !important;
      }
 
 
-    /* Improve hover effect shadow in dark mode */
-    .hover-lift:hover .card {
-        box-shadow: 0 0.4rem 0.8rem rgba(0, 0, 0, 0.3) !important; /* Darker shadow */
-    }
-
-    /* Adjust background for subtle variations */
     .bg-light {
-      background-color: hsl(var(--muted) / 0.5) !important; /* Override Bootstrap light */
+      background-color: hsl(var(--muted) / 0.5) !important;
     }
      .bg-light-subtle {
         background-color: hsl(var(--muted) / 0.3) !important;
      }
      .bg-body {
-        background-color: hsl(var(--background)) !important; /* Ensure bg-body matches dark body */
+        background-color: hsl(var(--background)) !important; 
+     }
+     .border {
+        border-color: hsl(var(--border)) !important;
+     }
+     .border-top, .border-bottom, .border-start, .border-end {
+        border-color: hsl(var(--border)) !important;
      }
 
 
-    /* Fix DayPicker styles for dark mode */
     .rdp {
         --rdp-cell-size: auto;
-        --rdp-accent-color: hsl(var(--primary));
-        --rdp-background-color: hsl(var(--primary) / 0.1);
+        --rdp-accent-color: hsl(var(--primary)); /* Orange accent */
+        --rdp-background-color: hsl(var(--primary) / 0.15); /* Lighter background for selected day */
         --rdp-accent-color-dark: hsl(var(--primary));
-        --rdp-background-color-dark: hsl(var(--primary) / 0.2);
+        --rdp-background-color-dark: hsl(var(--primary) / 0.25);
         --rdp-outline: 2px solid var(--rdp-accent-color);
         --rdp-outline-selected: 3px solid var(--rdp-accent-color);
-        --rdp-selected-color: hsl(var(--primary-foreground));
+        --rdp-selected-color: hsl(var(--primary-foreground)); /* Text color on selected day */
         color: hsl(var(--foreground));
-        background-color: transparent;
+        background-color: hsl(var(--card)); /* Calendar bg matches card bg */
     }
      .rdp-table {
         border-color: hsl(var(--border)) !important;
      }
-     .rdp-cell {
-        border-color: hsl(var(--border)) !important;
-     }
-
      .rdp-head_cell {
         color: hsl(var(--muted-foreground));
         border-color: hsl(var(--border)) !important;
+        background-color: hsl(var(--card) / 0.5); /* Header cells slightly different */
      }
-
-    /* Dark mode for DayContent elements */
-    .rdp-day .bg-light-subtle {
-        background-color: hsl(var(--muted) / 0.2) !important;
-    }
-     .rdp-day .text-dark {
-        color: hsl(var(--foreground)) !important;
+     .rdp-cell {
+        border-color: hsl(var(--border)) !important;
      }
-
-    .rdp-button:hover:not([disabled]):not(.rdp-day_selected) {
-      background-color: hsl(var(--accent) / 0.1);
-    }
+     .rdp-day_selected, .rdp-day_selected:focus-visible, .rdp-day_selected:hover {
+        background-color: hsl(var(--primary)) !important;
+        color: hsl(var(--primary-foreground)) !important;
+     }
+     .rdp-day_today {
+        color: hsl(var(--primary)) !important;
+        font-weight: bold;
+     }
+     .rdp-day_outside {
+        color: hsl(var(--muted-foreground)) !important;
+     }
+     .rdp-button:hover:not([disabled]):not(.rdp-day_selected) {
+       background-color: hsl(var(--accent) / 0.1);
+     }
      .rdp-button:focus-visible:not([disabled]) {
          border: none;
-         box-shadow: 0 0 0 2px var(--rdp-accent-color);
+         box-shadow: 0 0 0 2px hsl(var(--ring));
          z-index: 2;
      }
     .rdp-caption_label {
         color: hsl(var(--foreground));
+        background-color: hsl(var(--card) / 0.8); /* Match card header */
+        padding-bottom: 0.5rem;
     }
-     .rdp-caption_dropdowns {
-        background-color: hsl(var(--input));
+     .rdp-nav_button { /* Ensure nav buttons are visible */
+        color: hsl(var(--foreground)) !important;
      }
-     .rdp-dropdown {
-        background-color: hsl(var(--input));
-        color: hsl(var(--foreground));
-        border: 1px solid hsl(var(--border));
-        border-radius: .25rem;
+     .rdp-nav_button:hover {
+        background-color: hsl(var(--muted) / 0.5) !important;
      }
-      .rdp-dropdown:focus-visible {
-         border-color: hsl(var(--ring));
-         box-shadow: 0 0 0 0.25rem hsla(var(--ring) / 0.25);
-         outline: none;
-      }
+     .rdp-dropdown_month, .rdp-dropdown_year { /* Style dropdowns */
+        background-color: hsl(var(--input)) !important;
+        color: hsl(var(--foreground)) !important;
+        border: 1px solid hsl(var(--border)) !important;
+        border-radius: .25rem !important;
+        padding: 0.25rem 0.5rem !important;
+     }
 
-    /* Dark mode for urgent OS details page */
+    /* Dark mode for DayContent elements in Calendar */
+    .rdp-day .bg-light-subtle { /* If DayContent uses bg-light-subtle directly */
+        background-color: hsl(var(--card) / 0.5) !important; /* Or a slightly different shade of card */
+    }
+     .rdp-day .text-dark { /* text-dark in DayContent */
+        color: hsl(var(--foreground)) !important;
+     }
+     .rdp-day .border-secondary { border-color: hsl(var(--secondary) / 0.5) !important; }
+     .rdp-day .border-warning { border-color: hsl(var(--warning) / 0.5) !important; }
+     /* ... and so on for other border colors used in DayContent */
+
+
     [data-bs-theme="dark"] .os-details-urgent .card {
         border-color: hsl(var(--destructive)) !important;
-        background-color: hsla(var(--destructive) / 0.1) !important;
+        background-color: hsla(var(--destructive) / 0.15) !important; /* Slightly more prominent for urgent */
+        color: hsl(var(--destructive-foreground)) !important;
     }
     [data-bs-theme="dark"] .os-details-urgent .card-header {
-        background-color: hsla(var(--destructive) / 0.15) !important;
-        border-bottom-color: hsla(var(--destructive) / 0.3) !important;
+        background-color: hsla(var(--destructive) / 0.2) !important;
+        border-bottom-color: hsla(var(--destructive) / 0.4) !important;
         color: hsl(var(--destructive-foreground)) !important;
     }
     [data-bs-theme="dark"] .os-details-urgent .card-header .card-title,
     [data-bs-theme="dark"] .os-details-urgent .card-header .card-subtitle,
-    [data-bs-theme="dark"] .os-details-urgent .text-primary {
+    [data-bs-theme="dark"] .os-details-urgent .text-primary { /* Re-target .text-primary within .os-details-urgent */
         color: hsl(var(--destructive-foreground)) !important;
     }
     [data-bs-theme="dark"] .os-details-urgent .text-muted {
@@ -550,8 +587,8 @@ body {
      [data-bs-theme="dark"] .os-details-urgent .form-control,
      [data-bs-theme="dark"] .os-details-urgent .form-select {
         border-color: hsl(var(--destructive));
-        background-color: hsl(var(--input));
-        color: hsl(var(--foreground));
+        background-color: hsl(var(--input)); /* Keep consistent input bg */
+        color: hsl(var(--foreground)); /* Consistent input text color */
     }
     [data-bs-theme="dark"] .os-details-urgent .form-control:focus,
     [data-bs-theme="dark"] .os-details-urgent .form-select:focus {
@@ -569,8 +606,9 @@ body {
 }
 
 [data-bs-theme="dark"] {
-  /* Convert HSL(30, 100%, 55%) to RGB: approx 255, 145, 25 */
-  --bs-primary-rgb: 255,145,25;
-  /* Convert HSL(30, 90%, 60%) to RGB: approx 255, 157, 51 */
-  --bs-secondary-rgb: 255,157,51;
+  /* Convert HSL(30, 100%, 60%) to RGB: approx 255, 153, 51 */
+  --bs-primary-rgb: 255,153,51;
+  /* Convert HSL(30, 90%, 55%) to RGB: approx 255, 140, 26 */
+  --bs-secondary-rgb: 255,140,26;
 }
+

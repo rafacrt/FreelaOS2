@@ -36,14 +36,14 @@ interface OSState {
   toggleProductionTimer: (osId: string, action: 'play' | 'pause') => Promise<OS | null>;
 
   addPartner: (partnerData: { name: string }) => Promise<Partner | null>;
-  updatePartner: (updatedPartner: Partner) => Promise<void>; // DB update still TODO
-  deletePartner: (partnerId: string) => Promise<void>; // DB update still TODO
+  updatePartner: (updatedPartner: Partner) => Promise<void>; 
+  deletePartner: (partnerId: string) => Promise<void>; 
   getPartnerById: (partnerId: string) => Partner | undefined;
   getPartnerByName: (partnerName: string) => Partner | undefined;
 
   addClient: (clientData: { name: string }) => Promise<Client | null>;
-  updateClient: (updatedClient: Client) => Promise<void>; // DB update still TODO
-  deleteClient: (clientId: string) => Promise<void>; // DB update still TODO
+  updateClient: (updatedClient: Client) => Promise<void>; 
+  deleteClient: (clientId: string) => Promise<void>; 
   getClientById: (clientId: string) => Client | undefined;
   getClientByName: (clientName: string) => Client | undefined;
 }
@@ -92,7 +92,7 @@ export const useOSStore = create<OSState>()(
           if (createdOS) {
             console.log('[Store addOS] OS criada no DB:', JSON.stringify(createdOS, null, 2));
             set((state) => ({
-              osList: [...state.osList, createdOS].sort((a, b) => {
+              osList: [...state.osList, { ...createdOS }].sort((a, b) => { // Ensure new reference
                 if (a.isUrgent && !b.isUrgent) return -1;
                 if (!a.isUrgent && b.isUrgent) return 1;
                 return new Date(b.dataAbertura).getTime() - new Date(a.dataAbertura).getTime();
@@ -130,7 +130,7 @@ export const useOSStore = create<OSState>()(
                 console.log('[Store updateOS] OS atualizada no DB retornada pela Action:', JSON.stringify(savedOS, null, 2));
                 set((state) => ({
                     osList: state.osList.map((os) =>
-                        os.id === savedOS.id ? savedOS : os
+                        os.id === savedOS.id ? { ...savedOS } : os // Ensure new reference
                     ).sort((a, b) => {
                         if (a.isUrgent && !b.isUrgent) return -1;
                         if (!a.isUrgent && b.isUrgent) return 1;
@@ -164,7 +164,7 @@ export const useOSStore = create<OSState>()(
             console.log(`[Store updateOSStatus] Status da OS ${osId} atualizado com sucesso no DB. OS retornada:`, JSON.stringify(updatedOS, null, 2));
             set((state) => ({
               osList: state.osList.map((currentOs) =>
-                currentOs.id === osId ? updatedOS : currentOs
+                currentOs.id === osId ? { ...updatedOS } : currentOs // Ensure new reference
               ).sort((a, b) => {
                 if (a.isUrgent && !b.isUrgent) return -1;
                 if (!a.isUrgent && b.isUrgent) return 1;
@@ -190,7 +190,7 @@ export const useOSStore = create<OSState>()(
                 console.log(`[Store toggleProductionTimer] Timer da OS ${osId} atualizado no DB. OS retornada:`, JSON.stringify(updatedOS, null, 2));
                 set((state) => ({
                     osList: state.osList.map((os) =>
-                        os.id === osId ? updatedOS : os
+                        os.id === osId ? { ...updatedOS } : os // Ensure new reference
                     ).sort((a, b) => { 
                         if (a.isUrgent && !b.isUrgent) return -1;
                         if (!a.isUrgent && b.isUrgent) return 1;
@@ -250,7 +250,7 @@ export const useOSStore = create<OSState>()(
                 console.log(`[Store toggleUrgent] Urgência da OS ID: ${osId} atualizada no DB para ${newUrgency}. OS retornada:`, JSON.stringify(savedOS, null, 2));
                 set((state) => ({
                   osList: state.osList.map((currentOs) =>
-                    currentOs.id === osId ? savedOS : currentOs 
+                    currentOs.id === osId ? { ...savedOS } : currentOs // Ensure new reference
                   ).sort((a, b) => {
                     if (a.isUrgent && !b.isUrgent) return -1;
                     if (!a.isUrgent && b.isUrgent) return 1;
