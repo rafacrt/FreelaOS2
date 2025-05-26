@@ -15,7 +15,7 @@ const FreelaOSLogo = () => (
     <rect width="100" height="100" rx="15" fill="hsl(var(--primary))"/>
     <path d="M25 75V25L50 50L25 75Z" fill="hsl(var(--primary-foreground))"/>
     <path d="M75 25V75L50 50L75 25Z" fill="hsl(var(--primary-foreground))"/>
-    <rect x="45" y="15" width="10" height="70" fill="hsl(var(--primary))"/>
+    <rect x="45" y="15" width="10" height="70" fill="hsl(var(--primary-foreground))"/>
   </svg>
 );
 

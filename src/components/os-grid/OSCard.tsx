@@ -17,21 +17,36 @@ interface OSCardProps {
   os: OS;
 }
 
+// Updated getStatusClass to include background and ensure text contrast
 const getStatusClass = (status: OSStatus, isUrgent: boolean, theme: 'light' | 'dark'): string => {
   if (isUrgent) {
-    return theme === 'dark' ? 'border-danger text-danger-emphasis bg-danger-subtle' : 'border-danger text-danger-emphasis bg-danger-subtle';
+    // Using Bootstrap's standard classes for danger, which have good contrast
+    return 'border-danger bg-danger-subtle text-danger-emphasis';
   }
   switch (status) {
-    case OSStatus.NA_FILA: return 'border-secondary text-secondary-emphasis';
-    case OSStatus.AGUARDANDO_CLIENTE: return 'border-warning text-warning-emphasis';
-    case OSStatus.EM_PRODUCAO: return `border-info text-info-emphasis`;
-    case OSStatus.AGUARDANDO_PARCEIRO: return `border-primary text-primary-emphasis`;
-    case OSStatus.FINALIZADO: return 'border-success text-success-emphasis';
-    default: return 'border-secondary text-secondary-emphasis';
+    case OSStatus.NA_FILA: return 'border-secondary bg-secondary-subtle text-secondary-emphasis';
+    case OSStatus.AGUARDANDO_CLIENTE: return 'border-warning bg-warning-subtle text-warning-emphasis';
+    case OSStatus.EM_PRODUCAO: return `border-info bg-info-subtle text-info-emphasis`;
+    case OSStatus.AGUARDANDO_PARCEIRO: return `border-primary bg-primary-subtle text-primary-emphasis`;
+    case OSStatus.FINALIZADO: return 'border-success bg-success-subtle text-success-emphasis';
+    default: return 'border-light bg-light text-dark'; // Fallback, text-dark for light bg
   }
 };
 
-// getStatusIcon é usado pelo select, não precisa mudar
+const getStatusSelectClasses = (status: OSStatus, isUrgent: boolean, theme: 'light' | 'dark'): string => {
+  if (isUrgent) {
+    return 'border-danger text-danger-emphasis bg-danger-subtle';
+  }
+   switch (status) {
+    case OSStatus.NA_FILA: return 'border-secondary text-secondary-emphasis bg-body'; // Use bg-body for select on subtle bg
+    case OSStatus.AGUARDANDO_CLIENTE: return 'border-warning text-warning-emphasis bg-body';
+    case OSStatus.EM_PRODUCAO: return `border-info text-info-emphasis bg-body`;
+    case OSStatus.AGUARDANDO_PARCEIRO: return `border-primary text-primary-emphasis bg-body`;
+    case OSStatus.FINALIZADO: return 'border-success text-success-emphasis bg-body';
+    default: return 'border-light text-dark bg-body';
+  }
+}
+
 const getStatusIcon = (status: OSStatus) => {
   switch (status) {
     case OSStatus.NA_FILA: return <Clock size={14} className="me-1" />;
@@ -48,8 +63,10 @@ export default function OSCard({ os }: OSCardProps) {
   const { theme } = useTheme();
   const [isUpdating, setIsUpdating] = useState(false); 
 
-  const statusThemeClasses = getStatusClass(os.status, os.isUrgent, theme);
-  const cardClasses = `card h-100 shadow-sm border-start border-4 ${statusThemeClasses} transition-shadow duration-200 ease-in-out`;
+  const statusCardClasses = getStatusClass(os.status, os.isUrgent, theme);
+  const statusSelectClasses = getStatusSelectClasses(os.status, os.isUrgent, theme);
+
+  const cardClasses = `card h-100 shadow-sm border-start border-4 ${statusCardClasses} transition-shadow duration-200 ease-in-out`;
   const hoverEffectClass = "hover-lift";
 
   const handleStatusChange = async (event: React.ChangeEvent<HTMLSelectElement>) => {
@@ -125,19 +142,25 @@ export default function OSCard({ os }: OSCardProps) {
   const isTimerRunning = !!os.dataInicioProducaoAtual;
   const isFinalized = os.status === OSStatus.FINALIZADO;
 
+  // Determine text color based on theme and urgency/status for specific elements if needed
+  // For example, the OS number might need a specific color if the card background is too dark.
+  // Bootstrap's text-emphasis classes should handle most cases automatically.
+  const osNumeroColorClass = os.isUrgent ? 'text-danger-emphasis' : 'text-primary';
+
+
   return (
     <Link href={`/os/${os.id}`} passHref legacyBehavior>
-        <a className={`text-decoration-none text-reset d-block h-100 ${hoverEffectClass}`}>
-            <div className={cardClasses}>
-                <div className={`card-header p-2 pb-1 d-flex justify-content-between align-items-center ${os.isUrgent && theme === 'light' ? 'bg-danger-subtle' : (os.isUrgent && theme === 'dark' ? 'bg-danger-subtle' : '')}`}>
-                    <span className="fw-bold text-primary small font-monospace">OS: {os.numero}</span>
+        <a className={`text-decoration-none d-block h-100 ${hoverEffectClass}`}>
+            <div className={cardClasses}> {/* statusCardClasses sets bg and default text color */}
+                <div className={`card-header p-2 pb-1 d-flex justify-content-between align-items-center ${os.isUrgent ? 'bg-danger-subtle' : (os.status === OSStatus.EM_PRODUCAO ? 'bg-info-subtle' : (os.status === OSStatus.AGUARDANDO_PARCEIRO ? 'bg-primary-subtle' : 'bg-light'))}`}>
+                    <span className={`fw-bold small font-monospace ${osNumeroColorClass}`}>OS: {os.numero}</span>
                     {os.isUrgent && (
-                        <span className={`badge ${theme === 'dark' ? 'bg-danger text-white' : 'bg-danger text-white'} rounded-pill px-2 py-1 small d-flex align-items-center ms-auto`} style={{fontSize: '0.7em'}}>
+                        <span className={`badge bg-danger text-white rounded-pill px-2 py-1 small d-flex align-items-center ms-auto`} style={{fontSize: '0.7em'}}>
                             <AlertTriangle size={12} className="me-1" /> URGENTE
                         </span>
                     )}
                 </div>
-                <div className={`card-body p-2 pt-1 pb-2 d-flex flex-column text-wrap ${os.isUrgent && theme === 'light' ? 'bg-danger-subtle' : (os.isUrgent && theme === 'dark' ? 'bg-danger-subtle' : '')}`}>
+                <div className={`card-body p-2 pt-1 pb-2 d-flex flex-column text-wrap`}> {/* Text color should inherit from card or be explicitly set if needed */}
                     <div className="mb-1" title={`Cliente: ${os.cliente}`}>
                         <UserIcon size={14} className="me-1 text-muted align-middle" />
                         <span className="fw-medium small text-break">{truncateText(os.cliente, 30)}</span>
@@ -173,13 +196,14 @@ export default function OSCard({ os }: OSCardProps) {
                                 startTimeISO={os.dataInicioProducaoAtual}
                                 accumulatedSeconds={os.tempoGastoProducaoSegundos}
                                 isRunningClientOverride={os.status === OSStatus.EM_PRODUCAO && !!os.dataInicioProducaoAtual}
+                                osStatus={os.status}
                             />
                         </div>
                     </div>
 
                     <div className="mb-2">
                          <select
-                            className={`form-select form-select-sm ${statusThemeClasses.replace('text-', 'border-').replace('bg-danger-subtle', '')}`}
+                            className={`form-select form-select-sm ${statusSelectClasses}`}
                             value={os.status}
                             onChange={handleStatusChange}
                             onClick={(e) => { e.preventDefault(); e.stopPropagation(); }} 
@@ -195,7 +219,7 @@ export default function OSCard({ os }: OSCardProps) {
                         </select>
                     </div>
                 </div>
-                 <div className={`card-footer p-2 border-top ${theme === 'dark' ? 'bg-dark-subtle' : 'bg-light-subtle'}`}>
+                 <div className={`card-footer p-2 border-top ${theme === 'dark' ? 'bg-dark-subtle' : (os.isUrgent ? 'bg-danger-subtle' : 'bg-light-subtle')}`}>
                     <div className="d-flex flex-column gap-1">
                         {!isFinalized && (
                              <button
@@ -260,5 +284,3 @@ export default function OSCard({ os }: OSCardProps) {
     </Link>
   );
 }
-
-    
