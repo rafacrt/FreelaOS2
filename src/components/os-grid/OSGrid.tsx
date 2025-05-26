@@ -1,14 +1,13 @@
+
 'use client';
 
 import React, { useEffect, useState, useMemo } from 'react';
 import type { OS } from '@/lib/types';
-import { OSStatus } from '@/lib/types'; // ALL_OS_STATUSES removed as it's not directly used here for iteration
+import { OSStatus } from '@/lib/types';
 import { useOSStore } from '@/store/os-store';
 import OSCard from './OSCard';
-import DashboardControls from '@/components/dashboard/DashboardControls';
+import DashboardControls, { type SortKey } from '@/components/dashboard/DashboardControls'; // Import SortKey
 import { parseISO, isSameDay } from 'date-fns';
-
-type SortKey = 'dataAbertura' | 'numero' | 'cliente' | 'projeto';
 
 export default function OSGrid() {
   const osList = useOSStore((state) => state.osList);
@@ -16,7 +15,7 @@ export default function OSGrid() {
 
   // Filter, Sort, Search State
   const [filterStatus, setFilterStatus] = useState<OSStatus | 'all'>('all');
-  const [sortBy, setSortBy] = useState<SortKey>('dataAbertura');
+  const [sortBy, setSortBy] = useState<SortKey>('dataAberturaDesc'); // Default to Mais Recente
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
 
@@ -25,7 +24,7 @@ export default function OSGrid() {
   }, []);
 
   const filteredAndSortedOS = useMemo(() => {
-    let tempOSList = [...osList]; // Operate on a copy
+    let tempOSList = [...osList];
 
     // 1. Filter by Selected Date (programadoPara)
     if (selectedDate) {
@@ -58,32 +57,67 @@ export default function OSGrid() {
     // 3. Filter by Status
     if (filterStatus === OSStatus.FINALIZADO) {
       tempOSList = tempOSList.filter(os => os.status === OSStatus.FINALIZADO);
-    } else if (filterStatus === 'all') { // "all" now means all *active* (non-finalized) OS
+    } else if (filterStatus === 'all') { // "all" means all *active* (non-finalized) OS
       tempOSList = tempOSList.filter(os => os.status !== OSStatus.FINALIZADO);
     } else {
-      // Specific active status selected (e.g., Na Fila)
+      // Specific active status selected
       tempOSList = tempOSList.filter(os => os.status === filterStatus);
     }
 
-    // 4. Sort: Primary sort + Urgent priority
-    tempOSList.sort((a, b) => {
-      if (a.isUrgent && !b.isUrgent) return -1;
-      if (!a.isUrgent && b.isUrgent) return 1;
+    // 4. Sort Logic for Active OSs
+    if (filterStatus !== OSStatus.FINALIZADO) {
+      const awaitingStatus = [OSStatus.AGUARDANDO_CLIENTE, OSStatus.AGUARDANDO_PARCEIRO];
+      
+      const notAwaitingOS = tempOSList.filter(os => !awaitingStatus.includes(os.status));
+      const awaitingOS = tempOSList.filter(os => awaitingStatus.includes(os.status));
 
-      if (sortBy === 'dataAbertura') {
-        return parseISO(b.dataAbertura).getTime() - parseISO(a.dataAbertura).getTime(); // Descending
-      }
-      if (sortBy === 'numero') {
-        return parseInt(a.numero, 10) - parseInt(b.numero, 10); // Ascending
-      }
-      if (sortBy === 'cliente') {
-        return a.cliente.localeCompare(b.cliente); // Ascending
-      }
-      if (sortBy === 'projeto') {
-        return a.projeto.localeCompare(b.projeto); // Ascending
-      }
-      return 0;
-    });
+      const sortFunction = (a: OS, b: OS) => {
+        // Primary: Urgency
+        if (a.isUrgent && !b.isUrgent) return -1;
+        if (!a.isUrgent && b.isUrgent) return 1;
+
+        // Secondary: Chosen sort key
+        if (sortBy === 'dataAberturaDesc') { // Mais Recente
+          return parseISO(b.dataAbertura).getTime() - parseISO(a.dataAbertura).getTime();
+        }
+        if (sortBy === 'dataAberturaAsc') { // Mais Antigo
+          return parseISO(a.dataAbertura).getTime() - parseISO(b.dataAbertura).getTime();
+        }
+        if (sortBy === 'numero') {
+          return parseInt(a.numero, 10) - parseInt(b.numero, 10);
+        }
+        if (sortBy === 'cliente') {
+          return a.cliente.localeCompare(b.cliente);
+        }
+        if (sortBy === 'projeto') {
+          return a.projeto.localeCompare(b.projeto);
+        }
+        return 0;
+      };
+
+      notAwaitingOS.sort(sortFunction);
+      awaitingOS.sort(sortFunction);
+      
+      tempOSList = [...notAwaitingOS, ...awaitingOS];
+
+    } else { // For Finalized OS, simple sort by chosen key (urgency is less relevant)
+        tempOSList.sort((a, b) => {
+            if (sortBy === 'dataAberturaDesc') {
+                return parseISO(b.dataAbertura).getTime() - parseISO(a.dataAbertura).getTime();
+            }
+            if (sortBy === 'dataAberturaAsc') {
+                return parseISO(a.dataAbertura).getTime() - parseISO(b.dataAbertura).getTime();
+            }
+            if (sortBy === 'numero') {
+                return parseInt(a.numero, 10) - parseInt(b.numero, 10);
+            }
+            // Add other sort keys for finalized if needed, e.g., dataFinalizacao
+            return (a.dataFinalizacao && b.dataFinalizacao) 
+                   ? parseISO(b.dataFinalizacao).getTime() - parseISO(a.dataFinalizacao).getTime() // Default sort for finalized: by finalization date desc
+                   : parseISO(b.dataAbertura).getTime() - parseISO(a.dataAbertura).getTime(); // Fallback
+        });
+    }
+
 
     return tempOSList;
   }, [osList, filterStatus, sortBy, searchTerm, selectedDate]);

@@ -9,7 +9,8 @@ import 'react-day-picker/dist/style.css';
 import { ptBR } from 'date-fns/locale';
 import { Calendar as CalendarIcon, Filter, Search, SortAsc, X } from 'lucide-react'; // Icons
 
-type SortKey = 'dataAbertura' | 'numero' | 'cliente' | 'projeto';
+// Updated SortKey to include 'dataAberturaAsc' for "Mais Antigo"
+export type SortKey = 'dataAberturaDesc' | 'dataAberturaAsc' | 'numero' | 'cliente' | 'projeto';
 
 interface DashboardControlsProps {
   filterStatus: OSStatus | 'all';
@@ -57,7 +58,7 @@ export default function DashboardControls({
                         className={`btn btn-sm ${filterStatus === statusValue ? 'btn-primary' : 'btn-outline-secondary'} m-1 transition-colors`}
                         onClick={() => setFilterStatus(statusValue)}
                     >
-                        {statusValue === 'all' ? 'Ver Todos' : statusValue}
+                        {statusValue === 'all' ? 'Ver Todos Ativos' : statusValue}
                     </button>
                 ))}
             </div>
@@ -76,7 +77,8 @@ export default function DashboardControls({
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value as SortKey)}
           >
-            <option value="dataAbertura">Mais Recente</option>
+            <option value="dataAberturaDesc">Mais Recente</option>
+            <option value="dataAberturaAsc">Mais Antigo</option> {/* New Option */}
             <option value="numero">Número da OS</option>
             <option value="cliente">Nome do Cliente</option>
             <option value="projeto">Nome do Projeto</option>
