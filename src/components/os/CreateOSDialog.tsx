@@ -8,19 +8,17 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { PlusCircle, Trash2, CheckSquare, Square } from 'lucide-react';
 
 import { useOSStore } from '@/store/os-store';
-import { OSStatus, ALL_OS_STATUSES, type CreateOSData, type ChecklistItem } from '@/lib/types';
+import { OSStatus, ALL_OS_STATUSES, type CreateOSData, type ChecklistItem as OSChecklistItem } from '@/lib/types'; // Renamed ChecklistItem to avoid conflict
 
 const formSchema = z.object({
   cliente: z.string().min(1, { message: 'Nome do cliente é obrigatório.' }),
   parceiro: z.string().optional(),
   projeto: z.string().min(1, { message: 'Nome do projeto é obrigatório.' }),
-  tarefa: z.string().min(1, { message: 'A descrição da tarefa é obrigatória.' }), // Mantido obrigatório
+  tarefa: z.string().min(1, { message: 'A descrição da tarefa é obrigatória.' }),
   observacoes: z.string().optional(),
-  tempoTrabalhado: z.string().optional(), 
   programadoPara: z.string().optional(),
   status: z.nativeEnum(OSStatus).default(OSStatus.NA_FILA),
   isUrgent: z.boolean().default(false),
-  // Checklist items will be handled by a separate state, not directly in Zod schema for dynamic fields
 });
 
 type CreateOSFormValues = z.infer<typeof formSchema>;
@@ -45,9 +43,8 @@ export function CreateOSDialog() {
   const partnerInputRef = useRef<HTMLInputElement>(null);
   const partnerSuggestionsRef = useRef<HTMLDivElement>(null);
 
-  // Checklist state
   const [checklistActive, setChecklistActive] = useState(false);
-  const [checklistItems, setChecklistItems] = useState<string[]>(['']); // Start with one item if active
+  const [checklistItems, setChecklistItems] = useState<string[]>(['']);
 
   const form = useForm<CreateOSFormValues>({
     resolver: zodResolver(formSchema),
@@ -57,7 +54,6 @@ export function CreateOSDialog() {
       projeto: '',
       tarefa: '',
       observacoes: '',
-      tempoTrabalhado: '',
       programadoPara: '',
       status: OSStatus.NA_FILA,
       isUrgent: false,
@@ -85,7 +81,6 @@ export function CreateOSDialog() {
         if (currentModalElement && !modalInstanceRef.current) {
             modalInstanceRef.current = new BootstrapModal(currentModalElement);
         }
-        // Attach event listener only once when modal instance is created
         if (modalInstanceRef.current) {
              currentModalElement.addEventListener('hidden.bs.modal', resetFormAndStates);
         }
@@ -122,7 +117,6 @@ export function CreateOSDialog() {
     return partners.filter(p => p.name.toLowerCase().includes(lowerInput));
   }, [partnerInput, partners]);
   
-  // Sync form state with local input state for autocomplete fields
   useEffect(() => {
     const subscription = form.watch((value, { name }) => {
       if (name === 'cliente') {
@@ -149,7 +143,7 @@ export function CreateOSDialog() {
   };
 
   const handleShowModal = () => {
-    resetFormAndStates(); // Reset form every time modal is shown
+    resetFormAndStates(); 
     if (modalInstanceRef.current && typeof modalInstanceRef.current.show === 'function') {
         modalInstanceRef.current.show();
     } else {
@@ -157,10 +151,8 @@ export function CreateOSDialog() {
     }
   };
 
-  // Checklist functions
   const handleAddChecklistItem = () => {
     setChecklistItems(prev => [...prev, '']);
-    // Focus the new item - needs a slight delay for the input to render
     setTimeout(() => {
         const inputs = modalElementRef.current?.querySelectorAll<HTMLInputElement>('.checklist-item-input');
         if (inputs && inputs.length > 0) {
@@ -176,7 +168,6 @@ export function CreateOSDialog() {
   const handleRemoveChecklistItem = (index: number) => {
     setChecklistItems(prev => {
       const newItems = prev.filter((_, i) => i !== index);
-      // If all items are removed, add one empty item back if checklist is active
       return newItems.length === 0 && checklistActive ? [''] : newItems;
     });
   };
@@ -197,7 +188,7 @@ export function CreateOSDialog() {
         cliente: clientInput.trim(), 
         parceiro: partnerInput.trim() || undefined, 
         observacoes: values.observacoes || '',
-        tempoTrabalhado: values.tempoTrabalhado || '',
+        // tempoTrabalhado was removed from CreateOSData and formSchema implicitly
         programadoPara: values.programadoPara || undefined,
         checklistItems: checklistActive ? checklistItems.map(item => item.trim()).filter(item => item !== '') : undefined,
       };
@@ -205,16 +196,15 @@ export function CreateOSDialog() {
       await addOS(dataToSubmit);
       
       if (modalInstanceRef.current && typeof modalInstanceRef.current.hide === 'function') {
-        modalInstanceRef.current.hide(); // This will trigger 'hidden.bs.modal' which calls resetFormAndStates
+        modalInstanceRef.current.hide(); 
       } else {
-        resetFormAndStates(); // Fallback if modal instance is lost
+        resetFormAndStates(); 
       }
     } catch (error) {
       console.error("[CreateOSDialog] Failed to create OS:", error);
       alert('Falha ao criar OS. Por favor, tente novamente.');
-      // Do not reset isSubmitting here if modal doesn't close on error, user might want to retry
     } finally {
-       // setIsSubmitting will be reset by resetFormAndStates when modal hides
+      // setIsSubmitting will be reset by resetFormAndStates when modal hides
     }
   }
 
@@ -252,18 +242,18 @@ export function CreateOSDialog() {
       </button>
 
       <div className="modal fade" id="createOSModal" tabIndex={-1} aria-labelledby="createOSModalLabel" aria-hidden="true" ref={modalElementRef}>
-        <div className="modal-dialog modal-dialog-scrollable modal-lg"> {/* modal-dialog-scrollable */}
+        <div className="modal-dialog modal-dialog-scrollable modal-lg">
           <div className="modal-content">
             <div className="modal-header">
               <h5 className="modal-title" id="createOSModalLabel">Criar Nova Ordem de Serviço</h5>
               <button type="button" className="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <div className="modal-body" style={{ maxHeight: 'calc(100vh - 200px)', overflowY: 'auto' }}> {/* Limit height */}
+            <div className="modal-body" style={{ maxHeight: 'calc(100vh - 200px)', overflowY: 'auto' }}>
               <p className="text-muted small mb-3">Preencha os detalhes abaixo para criar uma nova OS. Campos marcados com * são obrigatórios.</p>
               <form onSubmit={form.handleSubmit(onSubmit)} noValidate>
-                 <div className="row g-2 mb-2"> {/* Reduced g-3 to g-2 and mb-3 to mb-2 */}
+                 <div className="row g-2 mb-2">
                     <div className="col-md-6">
-                        <div className="mb-2 position-relative"> {/* Reduced mb-3 to mb-2 */}
+                        <div className="mb-2 position-relative">
                           <label htmlFor="cliente" className="form-label form-label-sm">Nome do Cliente *</label>
                           <input
                             ref={clientInputRef}
@@ -298,7 +288,7 @@ export function CreateOSDialog() {
                         </div>
                     </div>
                     <div className="col-md-6">
-                        <div className="mb-2 position-relative"> {/* Reduced mb-3 to mb-2 */}
+                        <div className="mb-2 position-relative">
                           <label htmlFor="parceiro" className="form-label form-label-sm">Parceiro (opcional)</label>
                           <input
                             ref={partnerInputRef}
@@ -334,7 +324,7 @@ export function CreateOSDialog() {
                     </div>
                  </div>
 
-                <div className="mb-2"> {/* Reduced mb-3 to mb-2 */}
+                <div className="mb-2">
                   <label htmlFor="projeto" className="form-label form-label-sm">Nome do Projeto *</label>
                   <input
                     type="text"
@@ -348,7 +338,7 @@ export function CreateOSDialog() {
                   )}
                 </div>
 
-                <div className="mb-2"> {/* Reduced mb-3 to mb-2 */}
+                <div className="mb-2">
                   <label htmlFor="tarefa" className="form-label form-label-sm">Tarefa Principal *</label>
                   <textarea
                     id="tarefa"
@@ -361,22 +351,7 @@ export function CreateOSDialog() {
                     <div className="invalid-feedback small">{form.formState.errors.tarefa.message}</div>
                   )}
                 </div>
-
-                <div className="mb-2"> {/* Reduced mb-3 to mb-2 */}
-                  <label htmlFor="observacoes" className="form-label form-label-sm">Observações</label>
-                  <textarea
-                    id="observacoes"
-                    placeholder="Notas adicionais, detalhes importantes..."
-                    className={`form-control form-control-sm ${form.formState.errors.observacoes ? 'is-invalid' : ''}`}
-                    rows={2} 
-                    {...form.register('observacoes')}
-                  />
-                   {form.formState.errors.observacoes && (
-                    <div className="invalid-feedback small">{form.formState.errors.observacoes.message}</div>
-                  )}
-                </div>
                 
-                {/* Checklist Section */}
                 <div className="mb-2">
                     <button 
                         type="button" 
@@ -384,9 +359,7 @@ export function CreateOSDialog() {
                         onClick={() => {
                             setChecklistActive(!checklistActive);
                             if (!checklistActive && checklistItems.length === 0) {
-                                setChecklistItems(['']); // Add first item when activating
-                            } else if (checklistActive) {
-                                // setChecklistItems([]); // Optionally clear items when deactivating
+                                setChecklistItems(['']);
                             }
                         }}
                     >
@@ -412,7 +385,7 @@ export function CreateOSDialog() {
                                     type="button" 
                                     onClick={() => handleRemoveChecklistItem(index)}
                                     title="Remover item"
-                                    disabled={checklistItems.length === 1 && item.trim() === ''} // Don't allow removing the last empty item
+                                    disabled={checklistItems.length === 1 && item.trim() === ''}
                                 >
                                     <Trash2 size={14} />
                                 </button>
@@ -429,27 +402,23 @@ export function CreateOSDialog() {
                     )}
                 </div>
 
-
-                 <div className="mb-2"> {/* Reduced mb-3 to mb-2 */}
-                  <label htmlFor="tempoTrabalhado" className="form-label form-label-sm">Notas de Tempo (Manual)</label>
-                  <input
-                    type="text"
-                    id="tempoTrabalhado"
-                    placeholder="Ex: 2h reunião, 4h desenvolvimento"
-                    className={`form-control form-control-sm ${form.formState.errors.tempoTrabalhado ? 'is-invalid' : ''}`}
-                    {...form.register('tempoTrabalhado')}
+                <div className="mb-2">
+                  <label htmlFor="observacoes" className="form-label form-label-sm">Observações</label>
+                  <textarea
+                    id="observacoes"
+                    placeholder="Notas adicionais, detalhes importantes..."
+                    className={`form-control form-control-sm ${form.formState.errors.observacoes ? 'is-invalid' : ''}`}
+                    rows={2} 
+                    {...form.register('observacoes')}
                   />
-                   <div className="form-text small">
-                      Registre o tempo já dedicado ou sessões de trabalho (formato livre). O tempo do cronômetro é automático.
-                    </div>
-                  {form.formState.errors.tempoTrabalhado && (
-                    <div className="invalid-feedback small">{form.formState.errors.tempoTrabalhado.message}</div>
+                   {form.formState.errors.observacoes && (
+                    <div className="invalid-feedback small">{form.formState.errors.observacoes.message}</div>
                   )}
                 </div>
 
                 <div className="row g-2">
                     <div className="col-md-6">
-                        <div className="mb-2"> {/* Reduced mb-3 to mb-2 */}
+                        <div className="mb-2">
                           <label htmlFor="status" className="form-label form-label-sm">Status Inicial</label>
                           <select
                             id="status"
@@ -469,7 +438,7 @@ export function CreateOSDialog() {
                         </div>
                     </div>
                      <div className="col-md-6">
-                        <div className="mb-2"> {/* Reduced mb-3 to mb-2 */}
+                        <div className="mb-2">
                             <label htmlFor="programadoPara" className="form-label form-label-sm">Programado Para</label>
                             <input
                                 type="date"
@@ -487,7 +456,7 @@ export function CreateOSDialog() {
                     </div>
                 </div>
 
-                <div className="mb-3 form-check"> {/* Kept mb-3 for spacing before footer */}
+                <div className="mb-3 form-check">
                     <input
                         type="checkbox"
                         className="form-check-input"
@@ -523,3 +492,5 @@ export function CreateOSDialog() {
     </>
   );
 }
+
+    
