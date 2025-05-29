@@ -15,7 +15,7 @@ export default function OSGrid() {
 
   // Filter, Sort, Search State
   const [filterStatus, setFilterStatus] = useState<OSStatus | 'all'>('all');
-  const [sortBy, setSortBy] = useState<SortKey>('dataAberturaDesc'); // Default to Mais Recente
+  const [sortBy, setSortBy] = useState<SortKey>('dataAberturaAsc'); // Padrão para Mais Antigo
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
 
@@ -31,10 +31,10 @@ export default function OSGrid() {
       tempOSList = tempOSList.filter(os => {
         if (os.programadoPara) {
           try {
-            const programadoDate = parseISO(os.programadoPara.split('T')[0]);
+            const programadoDate = parseISO(os.programadoPara.split('T')[0]); // Considerar apenas a data
             return isSameDay(programadoDate, selectedDate);
-          } catch {
-            console.warn(`Invalid programadoPara date format for OS ${os.numero}: ${os.programadoPara}`);
+          } catch (e){
+            console.warn(`Invalid programadoPara date format for OS ${os.numero}: ${os.programadoPara}`, e);
             return false;
           }
         }
@@ -48,7 +48,7 @@ export default function OSGrid() {
       tempOSList = tempOSList.filter(os =>
         os.cliente.toLowerCase().includes(lowerSearchTerm) ||
         os.projeto.toLowerCase().includes(lowerSearchTerm) ||
-        os.numero.includes(searchTerm) ||
+        os.numero.includes(searchTerm) || // Número é case-sensitive
         (os.parceiro && os.parceiro.toLowerCase().includes(lowerSearchTerm)) ||
         os.tarefa.toLowerCase().includes(lowerSearchTerm)
       );
@@ -64,57 +64,70 @@ export default function OSGrid() {
       tempOSList = tempOSList.filter(os => os.status === filterStatus);
     }
 
-    // 4. Sort Logic for Active OSs
+    // 4. Sort Logic
+    // Helper function to get sortable value
+    const getSortableValue = (os: OS, key: SortKey) => {
+        switch (key) {
+            case 'dataAberturaDesc':
+            case 'dataAberturaAsc':
+                return parseISO(os.dataAbertura).getTime();
+            case 'numero':
+                return parseInt(os.numero, 10);
+            case 'cliente':
+                return os.cliente.toLowerCase();
+            case 'projeto':
+                return os.projeto.toLowerCase();
+            default:
+                return 0;
+        }
+    };
+    
+    // Separate OSs that are "Aguardando Cliente" or "Aguardando Parceiro" only if not showing "Finalizado"
     if (filterStatus !== OSStatus.FINALIZADO) {
-      const awaitingStatus = [OSStatus.AGUARDANDO_CLIENTE, OSStatus.AGUARDANDO_PARCEIRO];
-      
-      const notAwaitingOS = tempOSList.filter(os => !awaitingStatus.includes(os.status));
-      const awaitingOS = tempOSList.filter(os => awaitingStatus.includes(os.status));
+        const awaitingStatus = [OSStatus.AGUARDANDO_CLIENTE, OSStatus.AGUARDANDO_PARCEIRO];
+        
+        const primaryOS = tempOSList.filter(os => !awaitingStatus.includes(os.status));
+        const secondaryOS = tempOSList.filter(os => awaitingStatus.includes(os.status));
 
-      const sortFunction = (a: OS, b: OS) => {
-        // Primary: Urgency
-        if (a.isUrgent && !b.isUrgent) return -1;
-        if (!a.isUrgent && b.isUrgent) return 1;
+        const sortFn = (a: OS, b: OS) => {
+            // Primary sort: Urgency (Urgente first)
+            if (a.isUrgent && !b.isUrgent) return -1;
+            if (!a.isUrgent && b.isUrgent) return 1;
 
-        // Secondary: Chosen sort key
-        if (sortBy === 'dataAberturaDesc') { // Mais Recente
-          return parseISO(b.dataAbertura).getTime() - parseISO(a.dataAbertura).getTime();
-        }
-        if (sortBy === 'dataAberturaAsc') { // Mais Antigo
-          return parseISO(a.dataAbertura).getTime() - parseISO(b.dataAbertura).getTime();
-        }
-        if (sortBy === 'numero') {
-          return parseInt(a.numero, 10) - parseInt(b.numero, 10);
-        }
-        if (sortBy === 'cliente') {
-          return a.cliente.localeCompare(b.cliente);
-        }
-        if (sortBy === 'projeto') {
-          return a.projeto.localeCompare(b.projeto);
-        }
-        return 0;
-      };
+            // Secondary sort: Selected key
+            const valA = getSortableValue(a, sortBy);
+            const valB = getSortableValue(b, sortBy);
 
-      notAwaitingOS.sort(sortFunction);
-      awaitingOS.sort(sortFunction);
-      
-      tempOSList = [...notAwaitingOS, ...awaitingOS];
+            if (typeof valA === 'number' && typeof valB === 'number') {
+                return sortBy === 'dataAberturaDesc' ? valB - valA : valA - valB;
+            }
+            if (typeof valA === 'string' && typeof valB === 'string') {
+                return valA.localeCompare(valB);
+            }
+            return 0;
+        };
 
-    } else { // For Finalized OS, simple sort by chosen key (urgency is less relevant)
+        primaryOS.sort(sortFn);
+        secondaryOS.sort(sortFn);
+        
+        tempOSList = [...primaryOS, ...secondaryOS];
+
+    } else { // For Finalized OS, simpler sort (urgency less relevant)
         tempOSList.sort((a, b) => {
-            if (sortBy === 'dataAberturaDesc') {
-                return parseISO(b.dataAbertura).getTime() - parseISO(a.dataAbertura).getTime();
+            const valA = getSortableValue(a, sortBy === 'dataAberturaAsc' || sortBy === 'dataAberturaDesc' ? sortBy : 'dataAberturaDesc'); // Default to desc for finalized if other sort
+            const valB = getSortableValue(b, sortBy === 'dataAberturaAsc' || sortBy === 'dataAberturaDesc' ? sortBy : 'dataAberturaDesc');
+            
+            if (a.dataFinalizacao && b.dataFinalizacao && sortBy !== 'dataAberturaAsc' && sortBy !== 'dataAberturaDesc' && sortBy !== 'numero' && sortBy !== 'cliente' && sortBy !== 'projeto') {
+                 return parseISO(b.dataFinalizacao).getTime() - parseISO(a.dataFinalizacao).getTime(); // Default: newest finalized first
             }
-            if (sortBy === 'dataAberturaAsc') {
-                return parseISO(a.dataAbertura).getTime() - parseISO(b.dataAbertura).getTime();
+
+            if (typeof valA === 'number' && typeof valB === 'number') {
+                return sortBy === 'dataAberturaDesc' ? valB - valA : valA - valB;
             }
-            if (sortBy === 'numero') {
-                return parseInt(a.numero, 10) - parseInt(b.numero, 10);
+             if (typeof valA === 'string' && typeof valB === 'string') {
+                return valA.localeCompare(valB);
             }
-            // Add other sort keys for finalized if needed, e.g., dataFinalizacao
-            return (a.dataFinalizacao && b.dataFinalizacao) 
-                   ? parseISO(b.dataFinalizacao).getTime() - parseISO(a.dataFinalizacao).getTime() // Default sort for finalized: by finalization date desc
-                   : parseISO(b.dataAbertura).getTime() - parseISO(a.dataAbertura).getTime(); // Fallback
+            return 0;
         });
     }
 
@@ -173,13 +186,14 @@ export default function OSGrid() {
               Limpar Filtro de Data
             </button>
           )}
-          {(filterStatus !== 'all' || searchTerm) && (
+          {(filterStatus !== 'all' || searchTerm || sortBy !== 'dataAberturaAsc') && (
             <button
               className="btn btn-sm btn-outline-secondary mt-2 ms-2"
               onClick={() => {
                 setFilterStatus('all');
                 setSearchTerm('');
                 setSelectedDate(undefined);
+                setSortBy('dataAberturaAsc'); // Reset sort to default
               }}
             >
               Limpar Todos os Filtros
