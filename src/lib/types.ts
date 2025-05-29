@@ -15,6 +15,12 @@ export const ALL_OS_STATUSES: OSStatus[] = [
   OSStatus.FINALIZADO,
 ];
 
+export interface ChecklistItem {
+  id: string; // Unique ID for React key prop
+  text: string;
+  completed: boolean;
+}
+
 export interface OS {
   id: string;
   numero: string;
@@ -25,18 +31,17 @@ export interface OS {
   projeto: string;
   tarefa: string;
   observacoes: string;
-  tempoTrabalhado?: string;
+  tempoTrabalhado?: string; // For manual text notes about time
   status: OSStatus;
   dataAbertura: string; // ISO string
   dataFinalizacao?: string; // ISO string
   programadoPara?: string; // YYYY-MM-DD string
   isUrgent: boolean;
-  dataInicioProducao?: string; // ISO string, quando a OS entrou em produção pela primeira vez (histórico)
-  tempoProducaoMinutos?: number; // Tempo total em produção, calculado na finalização. Pode ser depreciado em favor de tempoGastoProducaoSegundos.
-
-  // Novos campos para o cronômetro
-  tempoGastoProducaoSegundos: number; // Total de segundos acumulados em produção
-  dataInicioProducaoAtual: string | null; // ISO string, timestamp do início da sessão de produção ATUAL, null se pausado/não em produção
+  dataInicioProducao?: string; // ISO string, when the OS entered production for the first time (historical)
+  tempoProducaoMinutos?: number; // Deprecated, prefer tempoGastoProducaoSegundos
+  tempoGastoProducaoSegundos: number; // Total seconds accumulated in production from chronometer
+  dataInicioProducaoAtual: string | null; // ISO string, timestamp of the CURRENT production session start, null if paused/not in production
+  checklist?: ChecklistItem[]; // Array of checklist items
 }
 
 export interface User {
@@ -44,7 +49,6 @@ export interface User {
   username: string;
   isAdmin: boolean;
   isApproved: boolean;
-  // Do not include password_hash here for security when passing user object around
 }
 
 export interface CreateOSData {
@@ -57,6 +61,7 @@ export interface CreateOSData {
   status: OSStatus;
   programadoPara?: string; // YYYY-MM-DD
   isUrgent: boolean;
+  checklistItems?: string[]; // Array of checklist item texts for creation
 }
 
 export interface Client {
@@ -64,12 +69,7 @@ export interface Client {
     name: string;
 }
 
-// export interface Partner { // This is defined in os-store.ts, ensure consistency or a single source of truth
-//     id: string;
-//     name: string;
-// }
-
-// State type for authentication server actions
+// AuthActionState (mantido para referência, mas o AuthForm está um pouco diferente agora)
 export type AuthActionState = {
   message: string | null;
   type?: 'success' | 'error';

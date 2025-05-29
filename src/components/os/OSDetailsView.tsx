@@ -2,10 +2,15 @@
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import type { OS } from '@/lib/types';
+import type { OS, ChecklistItem } from '@/lib/types';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, CalendarClock, CheckCircle2, FileText, Flag, Server, User as UserIconLucide, Users, Briefcase, MessageSquare, Clock3, Save, Edit, Calendar as CalendarIcon, Printer, CheckSquare, Play, Pause, RotateCcw, UploadCloud, Paperclip, AlertTriangle, Clock } from 'lucide-react';
+import { 
+    ArrowLeft, CalendarClock, CheckCircle2, FileText, Flag, Server, User as UserIconLucide, 
+    Users, Briefcase, MessageSquare, Clock3, Save, Edit, Calendar as CalendarIcon, Printer, 
+    CheckSquare as CheckSquareIcon, Square, Play, Pause, RotateCcw, UploadCloud, Paperclip, AlertTriangle, Clock, 
+    PlusCircle, Trash2 
+} from 'lucide-react';
 import { format, parseISO, isValid, differenceInSeconds, formatDistanceStrict } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useOSStore } from '@/store/os-store';
@@ -38,14 +43,13 @@ const getStatusIcon = (status: OSStatus) => {
 
 interface DetailItemProps {
   label: string;
-  value?: string | null | boolean | number;
+  value?: string | null | boolean | number | React.ReactNode;
   icon?: React.ReactNode;
-  name?: keyof OS;
+  name?: keyof OS | string; // Allow string for custom field names like checklist
   isEditableField: boolean;
   children?: React.ReactNode;
   className?: string;
   isEditingMode: boolean;
-  // os prop is not directly used for value display here, formData or initialOs are used.
 }
 
 const DetailItem = ({ label, value, icon, name, isEditableField, children, className, isEditingMode }: DetailItemProps) => {
@@ -54,20 +58,22 @@ const DetailItem = ({ label, value, icon, name, isEditableField, children, class
   if (name === 'programadoPara' && typeof value === 'string' && value) {
     try {
       const date = /^\d{4}-\d{2}-\d{2}$/.test(value) ? parseISO(value + 'T00:00:00Z') : parseISO(value);
-      if (isValid(date)) {
+      if (isValidDate(date)) {
         displayValue = format(date, "dd/MM/yyyy", { locale: ptBR });
       }
     } catch { /* fallback to original value */ }
   } else if ((name === 'dataAbertura' || name === 'dataFinalizacao' || name === 'dataInicioProducao' || name === 'dataInicioProducaoAtual') && typeof value === 'string' && value) {
     try {
       const date = parseISO(value);
-      if (isValid(date)) {
+      if (isValidDate(date)) {
         displayValue = format(date, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR });
       }
     } catch { /* fallback to original value */ }
   } else if (typeof value === 'boolean') {
     displayValue = value ? 'Sim' : 'Não';
   }
+  
+  const valueIsReactNode = React.isValidElement(displayValue);
 
   return (
     <div className={`row py-2 ${className || ''}`}>
@@ -76,24 +82,32 @@ const DetailItem = ({ label, value, icon, name, isEditableField, children, class
         {isEditingMode && isEditableField ? (
           children
         ) : (
-          <span className={`form-control-plaintext p-0 text-break small ${name === 'observacoes' || name === 'tarefa' || name === 'tempoTrabalhado' ? 'text-pre-wrap' : ''}`}>
-            {displayValue === undefined || displayValue === null || (typeof displayValue === 'string' && displayValue.trim() === '') ? (
-              <span className="text-muted fst-italic">N/A</span>
-            ) : (
-              displayValue
-            )}
-          </span>
+          valueIsReactNode ? displayValue : (
+            <span className={`form-control-plaintext p-0 text-break small ${name === 'observacoes' || name === 'tarefa' || name === 'tempoTrabalhado' || name === 'checklist' ? 'text-pre-wrap' : ''}`}>
+              {displayValue === undefined || displayValue === null || (typeof displayValue === 'string' && displayValue.trim() === '') ? (
+                <span className="text-muted fst-italic">N/A</span>
+              ) : (
+                displayValue
+              )}
+            </span>
+          )
         )}
       </dd>
     </div>
   );
 };
 
+
+// Helper to validate if a date object is valid
+function isValidDate(d: any): d is Date {
+    return d instanceof Date && !isNaN(d.getTime());
+}
+
 const formatDateForDetailsSection = (dateString?: string | null): string | React.ReactNode => {
     if (!dateString) return <span className="text-muted fst-italic">N/D</span>;
     try {
         const date = parseISO(dateString);
-        if (isValid(date)) {
+        if (isValidDate(date)) {
             return format(date, "dd/MM/yyyy 'às' HH:mm:ss", { locale: ptBR });
         }
     } catch (e) { /* fallback */ }
@@ -107,11 +121,10 @@ const CurrentSessionDuration: React.FC<{ startTimeISO: string | null | undefined
         let intervalId: NodeJS.Timeout | undefined;
         if (startTimeISO) {
             const startDate = parseISO(startTimeISO);
-            if (isValid(startDate)) {
+            if (isValidDate(startDate)) {
                 const updateDuration = () => {
                     const now = new Date();
                     const seconds = differenceInSeconds(now, startDate);
-                    // Ensure it always shows at least seconds part, even if 0
                     setDuration(formatDistanceStrict(now, startDate, { locale: ptBR, unit: seconds < 60 ? 's' : (seconds < 3600 ? 'm' : 'h'), addSuffix: false }) || '0s');
                 };
                 updateDuration();
@@ -120,7 +133,7 @@ const CurrentSessionDuration: React.FC<{ startTimeISO: string | null | undefined
                 setDuration('Início inválido');
             }
         } else {
-            setDuration('0s'); // Show 0s if no start time
+            setDuration('0s');
         }
         return () => {
             if (intervalId) clearInterval(intervalId);
@@ -141,27 +154,51 @@ export default function OSDetailsView({ initialOs }: OSDetailsViewProps) {
 
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-
+  
   const formatProgramadoParaForInput = useCallback((isoDate?: string) => {
     if (!isoDate) return '';
     try {
       const date = /^\d{4}-\d{2}-\d{2}$/.test(isoDate) ? parseISO(isoDate + 'T00:00:00Z') : parseISO(isoDate);
-      return isValid(date) ? format(date, 'yyyy-MM-dd') : '';
+      return isValidDate(date) ? format(date, 'yyyy-MM-dd') : '';
     } catch {
       return '';
     }
   }, []);
 
-  // formData holds the current state of the form, initialized with initialOs or user edits
   const [formData, setFormData] = useState<OS>({
     ...initialOs,
     programadoPara: formatProgramadoParaForInput(initialOs.programadoPara),
+    checklist: initialOs.checklist ? [...initialOs.checklist.map(item => ({...item}))] : [], // Deep copy
   });
   
-  console.log("[OSDetailsView] Render. initialOs:", initialOs, "formData:", formData, "isEditing:", isEditing);
+  useEffect(() => {
+    console.log("[OSDetailsView Effect] initialOs or isEditing changed. Current isEditing:", isEditing, "OS ID:", initialOs.id);
+    if (!isEditing) { // Always sync if not editing, or if OS ID changes
+      setFormData({
+        ...initialOs,
+        programadoPara: formatProgramadoParaForInput(initialOs.programadoPara),
+        checklist: initialOs.checklist ? [...initialOs.checklist.map(item => ({...item}))] : [],
+      });
+      setClientInput(initialOs.cliente || '');
+      setPartnerInput(initialOs.parceiro || '');
+      setSelectedFiles([]);
+      setPastedImages([]);
+    } else { // In editing mode, only update non-form fields like timer and status from initialOs
+        setFormData(prev => ({
+            ...prev, // Keep form edits
+            dataInicioProducaoAtual: initialOs.dataInicioProducaoAtual,
+            tempoGastoProducaoSegundos: initialOs.tempoGastoProducaoSegundos,
+            status: initialOs.status, 
+            dataInicioProducao: initialOs.dataInicioProducao,
+            dataFinalizacao: initialOs.dataFinalizacao,
+            numero: initialOs.numero, // Ensure non-editable fields are from source
+            dataAbertura: initialOs.dataAbertura,
+            // Checklist is handled by its own state while editing
+        }));
+    }
+  }, [initialOs, isEditing, formatProgramadoParaForInput]);
 
 
-  // States for controlled inputs with suggestions
   const [clientInput, setClientInput] = useState(initialOs.cliente || '');
   const [showClientSuggestions, setShowClientSuggestions] = useState(false);
   const clientInputRef = useRef<HTMLInputElement>(null);
@@ -172,47 +209,20 @@ export default function OSDetailsView({ initialOs }: OSDetailsViewProps) {
   const partnerInputRef = useRef<HTMLInputElement>(null);
   const partnerSuggestionsRef = useRef<HTMLDivElement>(null);
 
-  // States for file/image attachments (UI simulation)
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [pastedImages, setPastedImages] = useState<{ name: string, url: string }[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Effect to synchronize formData with initialOs when not editing or when initialOs itself changes
-  useEffect(() => {
-    console.log("[OSDetailsView Effect] initialOs changed or isEditing changed. Current isEditing:", isEditing);
-    
-    if (!isEditing || initialOs.id !== formData.id) { // If not editing OR if a different OS is loaded
-      setFormData({
-        ...initialOs,
-        programadoPara: formatProgramadoParaForInput(initialOs.programadoPara),
-      });
-      setClientInput(initialOs.cliente || '');
-      setPartnerInput(initialOs.parceiro || '');
-       if (initialOs.id !== formData.id) { // Clear attachments if OS ID changes
-            setSelectedFiles([]);
-            setPastedImages([]);
-        }
-    }
-    // If isEditing and it's the same OS, formData holds the user's current edits.
-    // We only need to ensure clientInput/partnerInput are consistent if initialOs's respective fields changed AND formData didn't already reflect that
-    else if (isEditing && initialOs.id === formData.id) {
-        if (initialOs.cliente !== clientInput) {
-            setClientInput(initialOs.cliente || '');
-        }
-        if (initialOs.parceiro !== partnerInput) {
-            setPartnerInput(initialOs.parceiro || '');
-        }
-        // Make sure timer-related fields in formData are also synced from initialOs,
-        // as they are updated by system actions (play/pause/status change)
-        setFormData(prev => ({
-            ...prev,
-            dataInicioProducaoAtual: initialOs.dataInicioProducaoAtual,
-            tempoGastoProducaoSegundos: initialOs.tempoGastoProducaoSegundos,
-            status: initialOs.status, // Status can be updated by timer actions
-        }));
+  // Checklist state for editing mode
+  const [editableChecklist, setEditableChecklist] = useState<ChecklistItem[]>([]);
 
+  useEffect(() => {
+    if (isEditing) {
+        setEditableChecklist(initialOs.checklist ? initialOs.checklist.map(item => ({...item})) : [{id: `item-${Date.now()}`, text: '', completed: false}]);
+    } else {
+        setEditableChecklist([]);
     }
-  }, [initialOs, isEditing, formatProgramadoParaForInput, formData.id]); // Added formData.id to dependencies
+  }, [isEditing, initialOs.checklist]);
 
 
   const filteredClients = useMemo(() => {
@@ -227,7 +237,6 @@ export default function OSDetailsView({ initialOs }: OSDetailsViewProps) {
     return partners.filter(p => p.name.toLowerCase().includes(lowerInput));
   }, [partnerInput, partners]);
 
-  // Generic input handler for simple fields in formData
   const handleFormInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
     setFormData(prev => ({
@@ -236,31 +245,25 @@ export default function OSDetailsView({ initialOs }: OSDetailsViewProps) {
     }));
   };
 
-  // Specific handler for client input to manage suggestions
   const handleClientInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setClientInput(value);
-    // Don't update formData.cliente directly here if selection is preferred method to set it
     setShowClientSuggestions(!!value && clients.filter(c => c.name.toLowerCase().includes(value.toLowerCase())).length > 0 && document.activeElement === clientInputRef.current);
   };
 
-  // Specific handler for partner input
   const handlePartnerInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setPartnerInput(value);
     setShowPartnerSuggestions(!!value && partners.filter(p => p.name.toLowerCase().includes(value.toLowerCase())).length > 0 && document.activeElement === partnerInputRef.current);
   };
 
-
   const handleClientSelect = (clientName: string) => {
     setClientInput(clientName);
-    setFormData(prev => ({...prev, cliente: clientName})); 
     setShowClientSuggestions(false);
   };
 
   const handlePartnerSelect = (partnerName: string) => {
     setPartnerInput(partnerName);
-    setFormData(prev => ({...prev, parceiro: partnerName}));
     setShowPartnerSuggestions(false);
   };
 
@@ -303,24 +306,60 @@ export default function OSDetailsView({ initialOs }: OSDetailsViewProps) {
     }
   };
 
+  // Checklist editing functions
+  const handleAddEditableChecklistItem = () => {
+    setEditableChecklist(prev => [...prev, { id: `item-${Date.now()}-${prev.length}`, text: '', completed: false }]);
+    setTimeout(() => {
+        const inputs = document.querySelectorAll<HTMLInputElement>('.editable-checklist-item-input');
+        if (inputs && inputs.length > 0) inputs[inputs.length - 1].focus();
+    }, 0);
+  };
+
+  const handleEditableChecklistItemChange = (id: string, newText: string) => {
+    setEditableChecklist(prev => prev.map(item => item.id === id ? { ...item, text: newText } : item));
+  };
+  
+  const handleToggleEditableChecklistItem = (id: string) => {
+    setEditableChecklist(prev => prev.map(item => item.id === id ? { ...item, completed: !item.completed } : item));
+  };
+
+  const handleRemoveEditableChecklistItem = (id: string) => {
+    setEditableChecklist(prev => {
+        const newItems = prev.filter(item => item.id !== id);
+        return newItems.length === 0 ? [{ id: `item-${Date.now()}`, text: '', completed: false }] : newItems;
+    });
+  };
+
+  const handleEditableChecklistKeyDown = (id: string, event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      handleAddEditableChecklistItem();
+    }
+  };
+
 
   const handleSave = async () => {
     setIsSaving(true);
-    console.log("[OSDetailsView handleSave] Current formData for save (before direct client/partner input):", formData);
+    console.log("[OSDetailsView handleSave] Current formData (before direct client/partner input):", formData);
     console.log("[OSDetailsView handleSave] Current clientInput:", clientInput, "Current partnerInput:", partnerInput);
     
+    const finalChecklist = isEditing ? editableChecklist.filter(item => item.text.trim() !== '') : initialOs.checklist;
+
     const dataToSave: OS = {
       ...formData, 
       cliente: clientInput.trim(), 
       parceiro: partnerInput.trim() || undefined, 
       id: initialOs.id,
-      numero: initialOs.numero,
-      dataAbertura: initialOs.dataAbertura,
-      dataInicioProducao: initialOs.dataInicioProducao, 
-      dataInicioProducaoAtual: initialOs.dataInicioProducaoAtual,
-      tempoGastoProducaoSegundos: initialOs.tempoGastoProducaoSegundos,
+      numero: initialOs.numero, // Should not change
+      dataAbertura: initialOs.dataAbertura, // Should not change
+      // Timer related fields are taken from formData which should be synced with initialOs if not edited
+      dataInicioProducao: formData.dataInicioProducao, 
+      dataInicioProducaoAtual: formData.dataInicioProducaoAtual,
+      tempoGastoProducaoSegundos: formData.tempoGastoProducaoSegundos,
+      dataFinalizacao: formData.dataFinalizacao,
       clientId: clients.find(c => c.name === clientInput.trim())?.id || initialOs.clientId,
       partnerId: partners.find(p => p.name === partnerInput.trim())?.id || initialOs.partnerId,
+      checklist: finalChecklist,
     };
     console.log('[OSDetailsView handleSave] Data para updateOS (store):', JSON.stringify(dataToSave, null, 2));
 
@@ -330,6 +369,7 @@ export default function OSDetailsView({ initialOs }: OSDetailsViewProps) {
         setIsEditing(false);
         setSelectedFiles([]); 
         setPastedImages([]);
+        // formData will be updated by the useEffect watching initialOs
         console.log('[OSDetailsView handleSave] OS salva com sucesso. Saindo do modo de edição.');
       } else {
         alert('Falha ao atualizar OS. Verifique os logs.');
@@ -345,12 +385,7 @@ export default function OSDetailsView({ initialOs }: OSDetailsViewProps) {
 
   const handleCancel = () => {
     setIsEditing(false);
-    setFormData({
-        ...initialOs,
-        programadoPara: formatProgramadoParaForInput(initialOs.programadoPara),
-    });
-    setClientInput(initialOs.cliente || '');
-    setPartnerInput(initialOs.parceiro || '');
+    // useEffect will reset formData, clientInput, partnerInput based on initialOs
     setSelectedFiles([]);
     setPastedImages([]);
   };
@@ -422,6 +457,13 @@ export default function OSDetailsView({ initialOs }: OSDetailsViewProps) {
 
   const isTimerEffectivelyRunning = initialOs.status === OSStatus.EM_PRODUCAO && !!initialOs.dataInicioProducaoAtual;
   const isFinalized = initialOs.status === OSStatus.FINALIZADO;
+  const displayData = isEditing ? formData : initialOs; // Use formData for display in edit mode for form fields, initialOs for timer/status logic
+
+  console.log("[OSDetailsView Render] initialOs.status:", initialOs.status, "initialOs.dataInicioProducaoAtual:", initialOs.dataInicioProducaoAtual);
+  console.log("[OSDetailsView Render] formData.status:", formData.status, "formData.dataInicioProducaoAtual:", formData.dataInicioProducaoAtual);
+  console.log("[OSDetailsView Render] isTimerEffectivelyRunning:", isTimerEffectivelyRunning, "isFinalized:", isFinalized);
+  console.log("[OSDetailsView Render] initialOs.checklist:", initialOs.checklist);
+  console.log("[OSDetailsView Render] editableChecklist:", editableChecklist);
 
 
   return (
@@ -436,7 +478,7 @@ export default function OSDetailsView({ initialOs }: OSDetailsViewProps) {
               <button className="btn btn-outline-secondary btn-sm" onClick={handleCancel} disabled={isSaving}>
                 Cancelar
               </button>
-              <button className="btn btn-success btn-sm" onClick={handleSave} disabled={isSaving || !clientInput.trim() || !formData.projeto?.trim() || !formData.tarefa?.trim()}>
+              <button className="btn btn-success btn-sm" onClick={handleSave} disabled={isSaving || !clientInput.trim() || !formData.projeto?.trim()}>
                 {isSaving ? <span className="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span> : <Save size={16} className="me-1" />}
                 Salvar Alterações
               </button>
@@ -453,10 +495,10 @@ export default function OSDetailsView({ initialOs }: OSDetailsViewProps) {
             <button 
               className="btn btn-info btn-sm" 
               onClick={handleFinalizeOS} 
-              disabled={isSaving || (initialOs.status === OSStatus.EM_PRODUCAO && !!initialOs.dataInicioProducaoAtual)} 
-              title={ (initialOs.status === OSStatus.EM_PRODUCAO && !!initialOs.dataInicioProducaoAtual) ? "Pause o timer primeiro para finalizar" : "Finalizar Ordem de Serviço"}
+              disabled={isSaving || isTimerEffectivelyRunning} 
+              title={isTimerEffectivelyRunning ? "Pause o timer primeiro para finalizar" : "Finalizar Ordem de Serviço"}
             >
-              <CheckSquare size={16} className="me-1" /> Finalizar OS
+              <CheckSquareIcon size={16} className="me-1" /> Finalizar OS
             </button>
           )}
           {!isEditing && isFinalized && (
@@ -516,7 +558,7 @@ export default function OSDetailsView({ initialOs }: OSDetailsViewProps) {
         <div className="card-body p-4">
           
           {initialOs.status !== OSStatus.FINALIZADO && (
-            <div className="card bg-light-subtle p-3 mb-4 shadow-sm small">
+            <div className="card bg-light-subtle p-2 mb-3 shadow-sm small">
               <h6 className="card-title text-primary mb-2 d-flex align-items-center">
                   <Clock3 size={18} className="me-2" /> Detalhes do Cronômetro
               </h6>
@@ -535,7 +577,7 @@ export default function OSDetailsView({ initialOs }: OSDetailsViewProps) {
                           <dd className="col-sm-7 col-md-8 mb-1"><CurrentSessionDuration startTimeISO={initialOs.dataInicioProducaoAtual} /></dd>
                       </>
                   )}
-                   <dt className="col-sm-5 col-md-4 text-muted fw-medium">Tempo (Cronômetro):</dt>
+                   <dt className="col-sm-5 col-md-4 text-muted fw-medium">Tempo Total em Produção:</dt>
                    <dd className="col-sm-7 col-md-8 mb-0">
                       <ChronometerDisplay
                           startTimeISO={initialOs.dataInicioProducaoAtual} 
@@ -634,9 +676,9 @@ export default function OSDetailsView({ initialOs }: OSDetailsViewProps) {
                   <select
                     className="form-select form-select-sm"
                     name="status"
-                    value={formData.status} // Use formData for current edit value
+                    value={formData.status} 
                     onChange={handleFormInputChange}
-                    disabled={!isEditing || isFinalized} // Cannot change status if OS is finalized (must reopen first)
+                    disabled={!isEditing || isFinalized} 
                   >
                     {ALL_OS_STATUSES.map(s => (
                       <option key={s} value={s} disabled={isFinalized && s !== OSStatus.FINALIZADO}>
@@ -707,12 +749,50 @@ export default function OSDetailsView({ initialOs }: OSDetailsViewProps) {
                     </label>
                   </div>
                 </DetailItem>
+                 <DetailItem
+                    label="Tempo Trabalhado"
+                    icon={<Clock3 size={16} className="me-2 text-secondary" />}
+                    name="tempoTrabalhado"
+                    isEditableField={true}
+                    isEditingMode={isEditing}
+                    value={
+                        !isEditing ? (
+                            <ChronometerDisplay
+                                startTimeISO={initialOs.dataInicioProducaoAtual}
+                                accumulatedSeconds={initialOs.tempoGastoProducaoSegundos}
+                                isRunningClientOverride={isTimerEffectivelyRunning}
+                                osStatus={initialOs.status}
+                            />
+                        ) : undefined // Render children in edit mode
+                    }
+                    >
+                    <textarea
+                        className="form-control form-control-sm"
+                        name="tempoTrabalhado"
+                        rows={2}
+                        value={formData.tempoTrabalhado || ''}
+                        onChange={handleFormInputChange}
+                        placeholder="Notas de tempo trabalhado (ex: 2h reunião)"
+                        disabled={!isEditing}
+                    />
+                    {!isEditing && (
+                        <small className="d-block text-muted mt-1">
+                            Tempo automático do cronômetro. Edite para adicionar notas manuais.
+                        </small>
+                    )}
+                    {isEditing && (
+                         <small className="d-block text-muted mt-1">
+                            Adicione notas sobre tempo (ex: 2h reunião). O tempo do cronômetro é separado.
+                        </small>
+                    )}
+                 </DetailItem>
+
               </dl>
             </div> 
 
             <div className="col-md-6"> 
               <dl className="mb-0">
-                <div className="row py-2 border-bottom mb-3">
+                <div className="row py-2 border-bottom mb-2">
                   <dt className="col-sm-4 col-lg-3 text-muted d-flex align-items-center small fw-medium">
                      Controle Timer
                   </dt>
@@ -741,7 +821,7 @@ export default function OSDetailsView({ initialOs }: OSDetailsViewProps) {
                       </div>
                     )}
                     {(isEditing || isFinalized) && (
-                        <span className="text-muted fst-italic small">Controles do timer desabilitados.</span>
+                        <span className="text-muted fst-italic small">Controles do timer desabilitados {isEditing ? 'enquanto edita.' : 'pois a OS está finalizada.'}</span>
                     )}
                   </dd>
                 </div>
@@ -834,25 +914,69 @@ export default function OSDetailsView({ initialOs }: OSDetailsViewProps) {
                     </div>
                   )}
                 </DetailItem>
-
-                 <DetailItem
-                  label="Notas de Tempo (Manual)"
-                  icon={<MessageSquare size={16} className="me-2 text-secondary" />}
-                  name="tempoTrabalhado"
-                  isEditableField={true}
-                  isEditingMode={isEditing}
-                  value={isEditing ? formData.tempoTrabalhado : initialOs.tempoTrabalhado}
-                >
-                   <textarea
-                      className="form-control form-control-sm"
-                      name="tempoTrabalhado" 
-                      rows={2}
-                      value={formData.tempoTrabalhado || ''} 
-                      onChange={handleFormInputChange}
-                      placeholder="Ex: 1h reunião (15/05)&#10;3h desenvolvimento (16/05)"
-                      disabled={!isEditing}
-                    />
-                </DetailItem>
+                
+                {/* Checklist display/edit section */}
+                <div className="row py-2">
+                    <dt className="col-sm-4 col-lg-3 text-muted d-flex align-items-center small fw-medium">
+                        <CheckSquareIcon size={16} className="me-2 text-primary" />Checklist
+                    </dt>
+                    <dd className="col-sm-8 col-lg-9 mb-0">
+                        {isEditing ? (
+                            <div>
+                                {editableChecklist.map((item, index) => (
+                                    <div key={item.id} className="input-group input-group-sm mb-1">
+                                        <div className="input-group-text">
+                                            <input 
+                                                className="form-check-input mt-0" 
+                                                type="checkbox" 
+                                                checked={item.completed}
+                                                onChange={() => handleToggleEditableChecklistItem(item.id)}
+                                                aria-label={`Marcar item ${index + 1} do checklist`}
+                                            />
+                                        </div>
+                                        <input
+                                            type="text"
+                                            className={`form-control form-control-sm editable-checklist-item-input ${item.completed ? 'text-decoration-line-through text-muted' : ''}`}
+                                            placeholder={`Item ${index + 1}`}
+                                            value={item.text}
+                                            onChange={(e) => handleEditableChecklistItemChange(item.id, e.target.value)}
+                                            onKeyDown={(e) => handleEditableChecklistKeyDown(item.id, e)}
+                                        />
+                                        <button
+                                            className="btn btn-outline-danger btn-sm"
+                                            type="button"
+                                            onClick={() => handleRemoveEditableChecklistItem(item.id)}
+                                            title="Remover item"
+                                            disabled={editableChecklist.length === 1 && item.text.trim() === ''}
+                                        >
+                                            <Trash2 size={14} />
+                                        </button>
+                                    </div>
+                                ))}
+                                <button
+                                    type="button"
+                                    className="btn btn-sm btn-success mt-1"
+                                    onClick={handleAddEditableChecklistItem}
+                                >
+                                    <PlusCircle size={14} className="me-1" /> Adicionar Item ao Checklist
+                                </button>
+                            </div>
+                        ) : (
+                            initialOs.checklist && initialOs.checklist.length > 0 ? (
+                                <ul className="list-unstyled mb-0 small">
+                                    {initialOs.checklist.map((item, index) => (
+                                        <li key={item.id} className={`d-flex align-items-center ${item.completed ? 'text-decoration-line-through text-muted' : ''}`}>
+                                            {item.completed ? <CheckSquareIcon size={14} className="me-1 text-success flex-shrink-0"/> : <Square size={14} className="me-1 text-muted flex-shrink-0"/>}
+                                            <span className="text-break">{item.text}</span>
+                                        </li>
+                                    ))}
+                                </ul>
+                            ) : (
+                                <span className="text-muted fst-italic small">Nenhum item no checklist.</span>
+                            )
+                        )}
+                    </dd>
+                </div>
 
 
               </dl>
@@ -863,5 +987,3 @@ export default function OSDetailsView({ initialOs }: OSDetailsViewProps) {
     </div>
   );
 }
-
-    

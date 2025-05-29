@@ -171,18 +171,29 @@ body {
     background-color: hsl(var(--destructive) / 0.3) !important; /* Dark red background */
     border-color: hsl(var(--destructive) / 0.7) !important;
   }
+  .card.border-danger .card-header,
+  .card.border-danger .card-footer { /* Specific for card header/footer in urgent dark mode */
+     background-color: hsl(var(--destructive) / 0.35) !important; /* Slightly more intense for header */
+  }
+
   .card.border-danger,
   .card.border-danger .text-muted,
   .card.border-danger .small,
-  .card.border-danger .fw-medium {
+  .card.border-danger .fw-medium,
+  .card.border-danger .card-body,
+  .card.border-danger .card-title,
+  .card.border-danger .card-subtitle,
+  .card.border-danger .card-text {
     color: hsl(var(--destructive-foreground)) !important; /* Light text on dark red */
   }
-  .card.border-danger .text-primary { /* Ensure OS number has contrast if it uses text-primary */
+  .card.border-danger .text-primary, /* Ensure OS number has contrast if it uses text-primary */
+  .card.border-danger .text-primary-emphasis {
      color: hsl(var(--destructive-foreground)) !important;
   }
    .card.border-danger .badge.bg-danger { /* Badge URGENTE dentro do card */
       background-color: hsl(var(--destructive)) !important;
       color: hsl(var(--destructive-foreground)) !important;
+      border: 1px solid hsl(var(--destructive-foreground) / 0.5);
    }
 }
 
@@ -239,7 +250,6 @@ body {
   }
 }
 
-
 /* Ensure DayPicker takes full height available in its container */
 .rdp {
   width: 100%;
@@ -257,6 +267,12 @@ body {
 /* Utility class for fixed table layout */
 .table-fixed {
     table-layout: fixed;
+}
+
+/* Utility class to preserve line breaks and wrap text */
+.text-pre-wrap {
+  white-space: pre-wrap; /* Preserves spaces and line breaks, wraps text */
+  word-wrap: break-word; /* Ensures long words break to prevent overflow */
 }
 
 
@@ -299,7 +315,7 @@ body {
 /* Urgent OS Details Styling */
 .os-details-urgent .card {
   border-color: var(--bs-danger, #dc3545) !important;
-  background-color: var(--bs-danger-bg-subtle, #f8d7da); 
+  background-color: var(--bs-danger-bg-subtle, #f8d7da) !important; 
 }
 
 .os-details-urgent .card-header {
@@ -493,8 +509,11 @@ body {
        color: hsl(var(--card-foreground)) !important; /* Default text within card */
     }
     /* Text color for status-specific cards if needed (usually handled by text-emphasis classes) */
-    .card.bg-secondary-subtle .card-body, .card.bg-secondary-subtle .card-title { color: var(--bs-secondary-text-emphasis) !important; }
-    .card.bg-warning-subtle .card-body, .card.bg-warning-subtle .card-title { color: var(--bs-warning-text-emphasis) !important; }
+    .card.bg-secondary-subtle .card-body, .card.bg-secondary-subtle .card-title, .card.bg-secondary-subtle .text-muted { color: var(--bs-secondary-text-emphasis) !important; }
+    .card.bg-warning-subtle .card-body, .card.bg-warning-subtle .card-title, .card.bg-warning-subtle .text-muted { color: var(--bs-warning-text-emphasis) !important; }
+    .card.bg-info-subtle .card-body, .card.bg-info-subtle .card-title, .card.bg-info-subtle .text-muted { color: var(--bs-info-text-emphasis) !important; }
+    .card.bg-primary-subtle .card-body, .card.bg-primary-subtle .card-title, .card.bg-primary-subtle .text-muted { color: var(--bs-primary-text-emphasis) !important; }
+    .card.bg-success-subtle .card-body, .card.bg-success-subtle .card-title, .card.bg-success-subtle .text-muted { color: var(--bs-success-text-emphasis) !important; }
     /* ... and so on for other statuses if default card-foreground isn't enough */
 
 
@@ -694,4 +713,3 @@ body {
   /* Convert HSL(30, 90%, 55%) to RGB: approx 255, 140, 26 */
   --bs-secondary-rgb: 255,140,26;
 }
-

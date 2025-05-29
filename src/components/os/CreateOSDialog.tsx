@@ -5,23 +5,22 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { PlusCircle } from 'lucide-react';
+import { PlusCircle, Trash2, CheckSquare, Square } from 'lucide-react';
 
 import { useOSStore } from '@/store/os-store';
-// import type { Partner } from '@/store/os-store'; // Not directly used, store handles types
-// import type { Client } from '@/lib/types'; // Not directly used, store handles types
-import { OSStatus, ALL_OS_STATUSES, type CreateOSData } from '@/lib/types';
+import { OSStatus, ALL_OS_STATUSES, type CreateOSData, type ChecklistItem } from '@/lib/types';
 
 const formSchema = z.object({
   cliente: z.string().min(1, { message: 'Nome do cliente é obrigatório.' }),
   parceiro: z.string().optional(),
   projeto: z.string().min(1, { message: 'Nome do projeto é obrigatório.' }),
-  tarefa: z.string().min(1, { message: 'A descrição da tarefa é obrigatória.' }),
+  tarefa: z.string().min(1, { message: 'A descrição da tarefa é obrigatória.' }), // Mantido obrigatório
   observacoes: z.string().optional(),
-  tempoTrabalhado: z.string().optional(), // This is for manual notes/time
+  tempoTrabalhado: z.string().optional(), 
   programadoPara: z.string().optional(),
   status: z.nativeEnum(OSStatus).default(OSStatus.NA_FILA),
   isUrgent: z.boolean().default(false),
+  // Checklist items will be handled by a separate state, not directly in Zod schema for dynamic fields
 });
 
 type CreateOSFormValues = z.infer<typeof formSchema>;
@@ -46,6 +45,9 @@ export function CreateOSDialog() {
   const partnerInputRef = useRef<HTMLInputElement>(null);
   const partnerSuggestionsRef = useRef<HTMLDivElement>(null);
 
+  // Checklist state
+  const [checklistActive, setChecklistActive] = useState(false);
+  const [checklistItems, setChecklistItems] = useState<string[]>(['']); // Start with one item if active
 
   const form = useForm<CreateOSFormValues>({
     resolver: zodResolver(formSchema),
@@ -69,6 +71,8 @@ export function CreateOSDialog() {
     setShowClientSuggestions(false);
     setPartnerInput('');
     setShowPartnerSuggestions(false);
+    setChecklistActive(false);
+    setChecklistItems(['']);
     setIsSubmitting(false);
   }, [form]);
 
@@ -80,7 +84,10 @@ export function CreateOSDialog() {
         const BootstrapModal = ModalModule.default;
         if (currentModalElement && !modalInstanceRef.current) {
             modalInstanceRef.current = new BootstrapModal(currentModalElement);
-            currentModalElement.addEventListener('hidden.bs.modal', resetFormAndStates);
+        }
+        // Attach event listener only once when modal instance is created
+        if (modalInstanceRef.current) {
+             currentModalElement.addEventListener('hidden.bs.modal', resetFormAndStates);
         }
     }).catch(error => console.error("Failed to initialize Bootstrap modal:", error));
 
@@ -102,6 +109,7 @@ export function CreateOSDialog() {
     };
   }, [resetFormAndStates]);
 
+
   const filteredClients = useMemo(() => {
     if (!clientInput) return [];
     const lowerInput = clientInput.toLowerCase();
@@ -113,7 +121,8 @@ export function CreateOSDialog() {
     const lowerInput = partnerInput.toLowerCase();
     return partners.filter(p => p.name.toLowerCase().includes(lowerInput));
   }, [partnerInput, partners]);
-
+  
+  // Sync form state with local input state for autocomplete fields
   useEffect(() => {
     const subscription = form.watch((value, { name }) => {
       if (name === 'cliente') {
@@ -129,19 +138,18 @@ export function CreateOSDialog() {
 
   const handleClientSelect = (clientName: string) => {
     form.setValue('cliente', clientName, { shouldValidate: true });
-    setClientInput(clientName); // Sync controlled input
+    setClientInput(clientName);
     setShowClientSuggestions(false);
-    // clientInputRef.current?.focus(); // Avoid auto-focus issues
   };
 
   const handlePartnerSelect = (partnerName: string) => {
     form.setValue('parceiro', partnerName, { shouldValidate: true });
-    setPartnerInput(partnerName); // Sync controlled input
+    setPartnerInput(partnerName);
     setShowPartnerSuggestions(false);
-    // partnerInputRef.current?.focus(); // Avoid auto-focus issues
   };
 
   const handleShowModal = () => {
+    resetFormAndStates(); // Reset form every time modal is shown
     if (modalInstanceRef.current && typeof modalInstanceRef.current.show === 'function') {
         modalInstanceRef.current.show();
     } else {
@@ -149,29 +157,64 @@ export function CreateOSDialog() {
     }
   };
 
+  // Checklist functions
+  const handleAddChecklistItem = () => {
+    setChecklistItems(prev => [...prev, '']);
+    // Focus the new item - needs a slight delay for the input to render
+    setTimeout(() => {
+        const inputs = modalElementRef.current?.querySelectorAll<HTMLInputElement>('.checklist-item-input');
+        if (inputs && inputs.length > 0) {
+            inputs[inputs.length - 1].focus();
+        }
+    }, 0);
+  };
+
+  const handleChecklistItemChange = (index: number, value: string) => {
+    setChecklistItems(prev => prev.map((item, i) => (i === index ? value : item)));
+  };
+
+  const handleRemoveChecklistItem = (index: number) => {
+    setChecklistItems(prev => {
+      const newItems = prev.filter((_, i) => i !== index);
+      // If all items are removed, add one empty item back if checklist is active
+      return newItems.length === 0 && checklistActive ? [''] : newItems;
+    });
+  };
+
+  const handleChecklistKeyDown = (index: number, event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      handleAddChecklistItem();
+    }
+  };
+
+
   async function onSubmit(values: CreateOSFormValues) {
     setIsSubmitting(true);
     try {
       const dataToSubmit: CreateOSData = {
         ...values,
-        cliente: clientInput.trim(), // Use the state variable that's definitely up-to-date
-        parceiro: partnerInput.trim() || undefined, // Use the state variable
+        cliente: clientInput.trim(), 
+        parceiro: partnerInput.trim() || undefined, 
         observacoes: values.observacoes || '',
         tempoTrabalhado: values.tempoTrabalhado || '',
         programadoPara: values.programadoPara || undefined,
+        checklistItems: checklistActive ? checklistItems.map(item => item.trim()).filter(item => item !== '') : undefined,
       };
       console.log('[CreateOSDialog onSubmit] Data para addOS:', JSON.stringify(dataToSubmit, null, 2));
       await addOS(dataToSubmit);
       
       if (modalInstanceRef.current && typeof modalInstanceRef.current.hide === 'function') {
-        modalInstanceRef.current.hide();
+        modalInstanceRef.current.hide(); // This will trigger 'hidden.bs.modal' which calls resetFormAndStates
       } else {
-        resetFormAndStates();
+        resetFormAndStates(); // Fallback if modal instance is lost
       }
     } catch (error) {
       console.error("[CreateOSDialog] Failed to create OS:", error);
       alert('Falha ao criar OS. Por favor, tente novamente.');
-      setIsSubmitting(false);
+      // Do not reset isSubmitting here if modal doesn't close on error, user might want to retry
+    } finally {
+       // setIsSubmitting will be reset by resetFormAndStates when modal hides
     }
   }
 
@@ -209,35 +252,34 @@ export function CreateOSDialog() {
       </button>
 
       <div className="modal fade" id="createOSModal" tabIndex={-1} aria-labelledby="createOSModalLabel" aria-hidden="true" ref={modalElementRef}>
-        <div className="modal-dialog modal-dialog-scrollable modal-lg">
+        <div className="modal-dialog modal-dialog-scrollable modal-lg"> {/* modal-dialog-scrollable */}
           <div className="modal-content">
             <div className="modal-header">
               <h5 className="modal-title" id="createOSModalLabel">Criar Nova Ordem de Serviço</h5>
               <button type="button" className="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <div className="modal-body">
+            <div className="modal-body" style={{ maxHeight: 'calc(100vh - 200px)', overflowY: 'auto' }}> {/* Limit height */}
               <p className="text-muted small mb-3">Preencha os detalhes abaixo para criar uma nova OS. Campos marcados com * são obrigatórios.</p>
               <form onSubmit={form.handleSubmit(onSubmit)} noValidate>
-                 <div className="row g-3">
+                 <div className="row g-2 mb-2"> {/* Reduced g-3 to g-2 and mb-3 to mb-2 */}
                     <div className="col-md-6">
-                        <div className="mb-3 position-relative">
-                          <label htmlFor="cliente" className="form-label">Nome do Cliente *</label>
+                        <div className="mb-2 position-relative"> {/* Reduced mb-3 to mb-2 */}
+                          <label htmlFor="cliente" className="form-label form-label-sm">Nome do Cliente *</label>
                           <input
                             ref={clientInputRef}
                             type="text"
                             id="cliente"
                             placeholder="Ex: Empresa Acme"
                             className={`form-control form-control-sm ${form.formState.errors.cliente ? 'is-invalid' : ''}`}
-                            {...form.register('cliente')} // Still register for validation
-                            value={clientInput} // Controlled by clientInput state
+                            {...form.register('cliente')}
+                            value={clientInput} 
                             onChange={(e) => {
                                 const val = e.target.value;
-                                setClientInput(val); // Update controlled state
-                                form.setValue('cliente', val, { shouldValidate: true }); // Update form state for validation
+                                setClientInput(val); 
+                                form.setValue('cliente', val, { shouldValidate: true });
                                 setShowClientSuggestions(!!val && clients.filter(c => c.name.toLowerCase().includes(val.toLowerCase())).length > 0);
                             }}
                             onFocus={() => setShowClientSuggestions(!!clientInput && filteredClients.length > 0)}
-                            // onBlur removed to rely on document click away
                             autoComplete="off"
                           />
                           {showClientSuggestions && filteredClients.length > 0 && (
@@ -256,24 +298,23 @@ export function CreateOSDialog() {
                         </div>
                     </div>
                     <div className="col-md-6">
-                        <div className="mb-3 position-relative">
-                          <label htmlFor="parceiro" className="form-label">Parceiro (opcional)</label>
+                        <div className="mb-2 position-relative"> {/* Reduced mb-3 to mb-2 */}
+                          <label htmlFor="parceiro" className="form-label form-label-sm">Parceiro (opcional)</label>
                           <input
                             ref={partnerInputRef}
                             type="text"
                             id="parceiro"
                             placeholder="Ex: Agência XYZ"
                             className={`form-control form-control-sm ${form.formState.errors.parceiro ? 'is-invalid' : ''}`}
-                            {...form.register('parceiro')} // Still register for validation
-                            value={partnerInput} // Controlled by partnerInput state
+                            {...form.register('parceiro')} 
+                            value={partnerInput} 
                              onChange={(e) => {
                                 const val = e.target.value;
-                                setPartnerInput(val); // Update controlled state
-                                form.setValue('parceiro', val, { shouldValidate: true }); // Update form state for validation
+                                setPartnerInput(val); 
+                                form.setValue('parceiro', val, { shouldValidate: true });
                                 setShowPartnerSuggestions(!!val && partners.filter(p => p.name.toLowerCase().includes(val.toLowerCase())).length > 0);
                             }}
                             onFocus={() => setShowPartnerSuggestions(!!partnerInput && filteredPartners.length > 0)}
-                             // onBlur removed to rely on document click away
                             autoComplete="off"
                           />
                           {showPartnerSuggestions && filteredPartners.length > 0 && (
@@ -293,8 +334,8 @@ export function CreateOSDialog() {
                     </div>
                  </div>
 
-                <div className="mb-3">
-                  <label htmlFor="projeto" className="form-label">Nome do Projeto *</label>
+                <div className="mb-2"> {/* Reduced mb-3 to mb-2 */}
+                  <label htmlFor="projeto" className="form-label form-label-sm">Nome do Projeto *</label>
                   <input
                     type="text"
                     id="projeto"
@@ -307,13 +348,13 @@ export function CreateOSDialog() {
                   )}
                 </div>
 
-                <div className="mb-3">
-                  <label htmlFor="tarefa" className="form-label">Tarefa Principal *</label>
+                <div className="mb-2"> {/* Reduced mb-3 to mb-2 */}
+                  <label htmlFor="tarefa" className="form-label form-label-sm">Tarefa Principal *</label>
                   <textarea
                     id="tarefa"
                     placeholder="Descreva a tarefa principal a ser realizada..."
                     className={`form-control form-control-sm ${form.formState.errors.tarefa ? 'is-invalid' : ''}`}
-                    rows={2} // Reduced rows
+                    rows={2} 
                     {...form.register('tarefa')}
                   />
                   {form.formState.errors.tarefa && (
@@ -321,22 +362,76 @@ export function CreateOSDialog() {
                   )}
                 </div>
 
-                <div className="mb-3">
-                  <label htmlFor="observacoes" className="form-label">Observações</label>
+                <div className="mb-2"> {/* Reduced mb-3 to mb-2 */}
+                  <label htmlFor="observacoes" className="form-label form-label-sm">Observações</label>
                   <textarea
                     id="observacoes"
                     placeholder="Notas adicionais, detalhes importantes..."
                     className={`form-control form-control-sm ${form.formState.errors.observacoes ? 'is-invalid' : ''}`}
-                    rows={2} // Reduced rows
+                    rows={2} 
                     {...form.register('observacoes')}
                   />
                    {form.formState.errors.observacoes && (
                     <div className="invalid-feedback small">{form.formState.errors.observacoes.message}</div>
                   )}
                 </div>
+                
+                {/* Checklist Section */}
+                <div className="mb-2">
+                    <button 
+                        type="button" 
+                        className="btn btn-sm btn-outline-secondary mb-2" 
+                        onClick={() => {
+                            setChecklistActive(!checklistActive);
+                            if (!checklistActive && checklistItems.length === 0) {
+                                setChecklistItems(['']); // Add first item when activating
+                            } else if (checklistActive) {
+                                // setChecklistItems([]); // Optionally clear items when deactivating
+                            }
+                        }}
+                    >
+                        {checklistActive ? <Square size={14} className="me-1"/> : <CheckSquare size={14} className="me-1"/>}
+                        {checklistActive ? 'Remover Checklist' : 'Adicionar Checklist'}
+                    </button>
 
-                 <div className="mb-3">
-                  <label htmlFor="tempoTrabalhado" className="form-label">Notas de Tempo (Manual)</label>
+                    {checklistActive && (
+                        <div className="p-2 border rounded bg-light-subtle">
+                            <label className="form-label form-label-sm d-block mb-1">Itens do Checklist:</label>
+                            {checklistItems.map((item, index) => (
+                                <div key={index} className="input-group input-group-sm mb-1">
+                                <input
+                                    type="text"
+                                    className="form-control form-control-sm checklist-item-input"
+                                    placeholder={`Item ${index + 1}`}
+                                    value={item}
+                                    onChange={(e) => handleChecklistItemChange(index, e.target.value)}
+                                    onKeyDown={(e) => handleChecklistKeyDown(index, e)}
+                                />
+                                <button 
+                                    className="btn btn-outline-danger btn-sm" 
+                                    type="button" 
+                                    onClick={() => handleRemoveChecklistItem(index)}
+                                    title="Remover item"
+                                    disabled={checklistItems.length === 1 && item.trim() === ''} // Don't allow removing the last empty item
+                                >
+                                    <Trash2 size={14} />
+                                </button>
+                                </div>
+                            ))}
+                            <button 
+                                type="button" 
+                                className="btn btn-sm btn-success mt-1" 
+                                onClick={handleAddChecklistItem}
+                            >
+                                <PlusCircle size={14} className="me-1"/> Adicionar Item
+                            </button>
+                        </div>
+                    )}
+                </div>
+
+
+                 <div className="mb-2"> {/* Reduced mb-3 to mb-2 */}
+                  <label htmlFor="tempoTrabalhado" className="form-label form-label-sm">Notas de Tempo (Manual)</label>
                   <input
                     type="text"
                     id="tempoTrabalhado"
@@ -352,10 +447,10 @@ export function CreateOSDialog() {
                   )}
                 </div>
 
-                <div className="row g-3">
+                <div className="row g-2">
                     <div className="col-md-6">
-                        <div className="mb-3">
-                          <label htmlFor="status" className="form-label">Status Inicial</label>
+                        <div className="mb-2"> {/* Reduced mb-3 to mb-2 */}
+                          <label htmlFor="status" className="form-label form-label-sm">Status Inicial</label>
                           <select
                             id="status"
                             className={`form-select form-select-sm ${form.formState.errors.status ? 'is-invalid' : ''}`}
@@ -374,8 +469,8 @@ export function CreateOSDialog() {
                         </div>
                     </div>
                      <div className="col-md-6">
-                        <div className="mb-3">
-                            <label htmlFor="programadoPara" className="form-label">Programado Para</label>
+                        <div className="mb-2"> {/* Reduced mb-3 to mb-2 */}
+                            <label htmlFor="programadoPara" className="form-label form-label-sm">Programado Para</label>
                             <input
                                 type="date"
                                 id="programadoPara"
@@ -392,7 +487,7 @@ export function CreateOSDialog() {
                     </div>
                 </div>
 
-                <div className="mb-3 form-check">
+                <div className="mb-3 form-check"> {/* Kept mb-3 for spacing before footer */}
                     <input
                         type="checkbox"
                         className="form-check-input"
@@ -428,5 +523,3 @@ export function CreateOSDialog() {
     </>
   );
 }
-
-    

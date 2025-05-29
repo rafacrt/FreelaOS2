@@ -1,8 +1,7 @@
 
 import { create } from 'zustand';
-import type { OS, CreateOSData, Client } from '@/lib/types';
+import type { OS, CreateOSData, Client, ChecklistItem } from '@/lib/types';
 import { OSStatus } from '@/lib/types';
-// import { parseISO, differenceInSeconds, isValid } from 'date-fns'; // Not used directly here anymore for time calc
 import { 
     createOSInDB, 
     getAllOSFromDB, 
@@ -63,24 +62,31 @@ export const useOSStore = create<OSState>()(
         }
         console.log('[Store initializeStore] Tentando inicializar o store a partir do DB...');
         try {
-            const [osList, clients, partners] = await Promise.all([
+            const [osListFromDB, clientsFromDB, partnersFromDB] = await Promise.all([
                 getAllOSFromDB(),
                 getAllClientsFromDB(),
                 getAllPartnersFromDB()
             ]);
+            
+            const processedOSList = osListFromDB.map(os => ({
+                ...os,
+                checklist: os.checklist || [], // Ensure checklist is always an array
+            }));
+
             set({
-              osList: osList || [], 
-              clients: clients || [],
-              partners: partners || [],
+              osList: processedOSList || [], 
+              clients: clientsFromDB || [],
+              partners: partnersFromDB || [],
               isStoreInitialized: true,
             });
             console.log('[Store initializeStore] Store inicializado com sucesso do DB:', {
-                osCount: osList?.length || 0,
-                clientCount: clients?.length || 0,
-                partnerCount: partners?.length || 0,
+                osCount: processedOSList?.length || 0,
+                clientCount: clientsFromDB?.length || 0,
+                partnerCount: partnersFromDB?.length || 0,
             });
         } catch (error) {
             console.error('[Store initializeStore] Falha ao inicializar store do DB:', error);
+            // Still mark as initialized to prevent repeated attempts, but with empty data
             set({ osList: [], clients: [], partners: [], isStoreInitialized: true }); 
         }
       },
@@ -91,28 +97,32 @@ export const useOSStore = create<OSState>()(
           const createdOS = await createOSInDB(data); 
           if (createdOS) {
             console.log('[Store addOS] OS criada no DB:', JSON.stringify(createdOS, null, 2));
+            const newOSWithDefaults = {
+                ...createdOS,
+                checklist: createdOS.checklist || [], // Ensure checklist is an array
+            };
             set((state) => ({
-              osList: [...state.osList, { ...createdOS }].sort((a, b) => { // Ensure new reference
+              osList: [...state.osList, newOSWithDefaults].sort((a, b) => { 
                 if (a.isUrgent && !b.isUrgent) return -1;
                 if (!a.isUrgent && b.isUrgent) return 1;
                 return new Date(b.dataAbertura).getTime() - new Date(a.dataAbertura).getTime();
               }),
             }));
 
-            const clientExists = get().clients.some(c => c.id === createdOS.clientId);
-            if (!clientExists && createdOS.clientId && createdOS.cliente) {
-                console.log(`[Store addOS] Adicionando novo cliente ${createdOS.cliente} (ID: ${createdOS.clientId}) localmente.`);
-                set(state => ({ clients: [...state.clients, { id: createdOS.clientId, name: createdOS.cliente }].sort((a,b) => a.name.localeCompare(b.name)) }));
+            const clientExists = get().clients.some(c => c.id === newOSWithDefaults.clientId);
+            if (!clientExists && newOSWithDefaults.clientId && newOSWithDefaults.cliente) {
+                console.log(`[Store addOS] Adicionando novo cliente ${newOSWithDefaults.cliente} (ID: ${newOSWithDefaults.clientId}) localmente.`);
+                set(state => ({ clients: [...state.clients, { id: newOSWithDefaults.clientId, name: newOSWithDefaults.cliente }].sort((a,b) => a.name.localeCompare(b.name)) }));
             }
-            if (createdOS.partnerId && createdOS.parceiro) {
-              const partnerExists = get().partners.some(p => p.id === createdOS.partnerId);
+            if (newOSWithDefaults.partnerId && newOSWithDefaults.parceiro) {
+              const partnerExists = get().partners.some(p => p.id === newOSWithDefaults.partnerId);
               if (!partnerExists) {
-                console.log(`[Store addOS] Adicionando novo parceiro ${createdOS.parceiro} (ID: ${createdOS.partnerId}) localmente.`);
-                set(state => ({ partners: [...state.partners, { id: createdOS.partnerId!, name: createdOS.parceiro! }].sort((a,b) => a.name.localeCompare(b.name)) }));
+                console.log(`[Store addOS] Adicionando novo parceiro ${newOSWithDefaults.parceiro} (ID: ${newOSWithDefaults.partnerId}) localmente.`);
+                set(state => ({ partners: [...state.partners, { id: newOSWithDefaults.partnerId!, name: newOSWithDefaults.parceiro! }].sort((a,b) => a.name.localeCompare(b.name)) }));
               }
             }
             console.log('[Store addOS] Estado do store atualizado com nova OS.');
-            return createdOS;
+            return newOSWithDefaults;
           }
           console.error('[Store addOS] createOSInDB retornou null.');
           return null;
@@ -128,25 +138,29 @@ export const useOSStore = create<OSState>()(
             const savedOS = await updateOSActionDB(updatedOSData); 
             if (savedOS) {
                 console.log('[Store updateOS] OS atualizada no DB retornada pela Action:', JSON.stringify(savedOS, null, 2));
+                const updatedOSWithDefaults = {
+                    ...savedOS,
+                    checklist: savedOS.checklist || [], // Ensure checklist is an array
+                };
                 set((state) => ({
                     osList: state.osList.map((os) =>
-                        os.id === savedOS.id ? { ...savedOS } : os // Ensure new reference
+                        os.id === updatedOSWithDefaults.id ? { ...updatedOSWithDefaults } : os 
                     ).sort((a, b) => {
                         if (a.isUrgent && !b.isUrgent) return -1;
                         if (!a.isUrgent && b.isUrgent) return 1;
                         return new Date(b.dataAbertura).getTime() - new Date(a.dataAbertura).getTime();
                     }),
                 }));
-                 if (savedOS.clientId && savedOS.cliente && !get().clients.some(c => c.id === savedOS.clientId && c.name === savedOS.cliente)) {
-                    console.log(`[Store updateOS] Cliente ${savedOS.cliente} (ID: ${savedOS.clientId}) parece ser novo ou atualizado, adicionando/atualizando localmente.`);
-                    set(state => ({ clients: [...state.clients.filter(c => c.id !== savedOS.clientId), { id: savedOS.clientId, name: savedOS.cliente }].sort((a,b) => a.name.localeCompare(b.name)) }));
+                 if (updatedOSWithDefaults.clientId && updatedOSWithDefaults.cliente && !get().clients.some(c => c.id === updatedOSWithDefaults.clientId && c.name === updatedOSWithDefaults.cliente)) {
+                    console.log(`[Store updateOS] Cliente ${updatedOSWithDefaults.cliente} (ID: ${updatedOSWithDefaults.clientId}) parece ser novo ou atualizado, adicionando/atualizando localmente.`);
+                    set(state => ({ clients: [...state.clients.filter(c => c.id !== updatedOSWithDefaults.clientId), { id: updatedOSWithDefaults.clientId, name: updatedOSWithDefaults.cliente }].sort((a,b) => a.name.localeCompare(b.name)) }));
                 }
-                if (savedOS.partnerId && savedOS.parceiro && !get().partners.some(p => p.id === savedOS.partnerId && p.name === savedOS.parceiro)) {
-                     console.log(`[Store updateOS] Parceiro ${savedOS.parceiro} (ID: ${savedOS.partnerId}) parece ser novo ou atualizado, adicionando/atualizando localmente.`);
-                    set(state => ({ partners: [...state.partners.filter(p => p.id !== savedOS.partnerId), { id: savedOS.partnerId!, name: savedOS.parceiro! }].sort((a,b) => a.name.localeCompare(b.name)) }));
+                if (updatedOSWithDefaults.partnerId && updatedOSWithDefaults.parceiro && !get().partners.some(p => p.id === updatedOSWithDefaults.partnerId && p.name === updatedOSWithDefaults.parceiro)) {
+                     console.log(`[Store updateOS] Parceiro ${updatedOSWithDefaults.parceiro} (ID: ${updatedOSWithDefaults.partnerId}) parece ser novo ou atualizado, adicionando/atualizando localmente.`);
+                    set(state => ({ partners: [...state.partners.filter(p => p.id !== updatedOSWithDefaults.partnerId), { id: updatedOSWithDefaults.partnerId!, name: updatedOSWithDefaults.parceiro! }].sort((a,b) => a.name.localeCompare(b.name)) }));
                 }
                 console.log('[Store updateOS] Estado do store atualizado com OS modificada.');
-                return savedOS;
+                return updatedOSWithDefaults;
             }
             console.error('[Store updateOS] updateOSActionDB retornou null ou um erro ocorreu.');
             return null;
@@ -162,9 +176,13 @@ export const useOSStore = create<OSState>()(
           const updatedOS = await updateOSStatusInDB(osId, newStatus);
           if (updatedOS) {
             console.log(`[Store updateOSStatus] Status da OS ${osId} atualizado com sucesso no DB. OS retornada:`, JSON.stringify(updatedOS, null, 2));
+            const updatedOSWithDefaults = {
+                ...updatedOS,
+                checklist: updatedOS.checklist || [],
+            };
             set((state) => ({
               osList: state.osList.map((currentOs) =>
-                currentOs.id === osId ? { ...updatedOS } : currentOs // Ensure new reference
+                currentOs.id === osId ? { ...updatedOSWithDefaults } : currentOs 
               ).sort((a, b) => {
                 if (a.isUrgent && !b.isUrgent) return -1;
                 if (!a.isUrgent && b.isUrgent) return 1;
@@ -172,7 +190,7 @@ export const useOSStore = create<OSState>()(
               }),
             }));
             console.log('[Store updateOSStatus] Estado do store atualizado.');
-            return updatedOS;
+            return updatedOSWithDefaults;
           }
           console.error(`[Store updateOSStatus] Falha ao atualizar status da OS ${osId} no DB (updateOSStatusInDB retornou null).`);
           return null;
@@ -188,9 +206,13 @@ export const useOSStore = create<OSState>()(
             const updatedOS = await toggleOSProductionTimerInDB(osId, action);
             if (updatedOS) {
                 console.log(`[Store toggleProductionTimer] Timer da OS ${osId} atualizado no DB. OS retornada:`, JSON.stringify(updatedOS, null, 2));
+                const updatedOSWithDefaults = {
+                    ...updatedOS,
+                    checklist: updatedOS.checklist || [],
+                };
                 set((state) => ({
                     osList: state.osList.map((os) =>
-                        os.id === osId ? { ...updatedOS } : os // Ensure new reference
+                        os.id === osId ? { ...updatedOSWithDefaults } : os 
                     ).sort((a, b) => { 
                         if (a.isUrgent && !b.isUrgent) return -1;
                         if (!a.isUrgent && b.isUrgent) return 1;
@@ -198,11 +220,11 @@ export const useOSStore = create<OSState>()(
                     }),
                 }));
                 console.log(`[Store toggleProductionTimer] Estado do store atualizado para OS ID: ${osId}.`);
-                return updatedOS;
+                return updatedOSWithDefaults;
             }
             console.error(`[Store toggleProductionTimer] Falha ao alternar timer para OS ${osId} no DB.`);
             return null;
-        } catch (error) {
+        } catch (error: any) {
             console.error(`[Store toggleProductionTimer] Erro ao alternar timer para OS ${osId}:`, error);
             return null;
         }
@@ -231,6 +253,7 @@ export const useOSStore = create<OSState>()(
             status: OSStatus.NA_FILA, 
             programadoPara: undefined, 
             isUrgent: false, 
+            checklistItems: osToDuplicate.checklist ? osToDuplicate.checklist.map(item => item.text) : undefined,
         };
         console.log('[Store duplicateOS] Dados para nova OS duplicada:', JSON.stringify(duplicatedOSData, null, 2));
         return get().addOS(duplicatedOSData);
@@ -241,16 +264,20 @@ export const useOSStore = create<OSState>()(
         const os = get().osList.find(o => o.id === osId);
         if (os) {
             const newUrgency = !os.isUrgent;
-            const updatedOSWithUrgency: OS = { ...os, isUrgent: newUrgency };
+            const updatedOSWithUrgency: OS = { ...os, isUrgent: newUrgency, checklist: os.checklist || [] };
             
             console.log(`[Store toggleUrgent] Tentando chamar updateOSActionDB para OS ID: ${osId} com urgência ${newUrgency}.`);
             const savedOS = await updateOSActionDB(updatedOSWithUrgency);
             
             if (savedOS) {
                 console.log(`[Store toggleUrgent] Urgência da OS ID: ${osId} atualizada no DB para ${newUrgency}. OS retornada:`, JSON.stringify(savedOS, null, 2));
+                const updatedOSWithDefaults = {
+                    ...savedOS,
+                    checklist: savedOS.checklist || [],
+                };
                 set((state) => ({
                   osList: state.osList.map((currentOs) =>
-                    currentOs.id === osId ? { ...savedOS } : currentOs // Ensure new reference
+                    currentOs.id === osId ? { ...updatedOSWithDefaults } : currentOs 
                   ).sort((a, b) => {
                     if (a.isUrgent && !b.isUrgent) return -1;
                     if (!a.isUrgent && b.isUrgent) return 1;
@@ -266,15 +293,6 @@ export const useOSStore = create<OSState>()(
         }
       },
 
-      // --- Partner Actions ---
-      getPartnerById: (partnerId) => {
-          const partner = get().partners.find(p => p.id === partnerId);
-          return partner;
-      },
-      getPartnerByName: (partnerName) => {
-          const partner = get().partners.find(p => p.name.toLowerCase() === partnerName.toLowerCase());
-          return partner;
-      },
       addPartner: async (partnerData) => {
         console.log('[Store addPartner] Adicionando parceiro:', partnerData.name);
         try {
@@ -297,7 +315,6 @@ export const useOSStore = create<OSState>()(
         }
       },
       updatePartner: async (updatedPartner) => {
-        // TODO: Implementar Server Action para updatePartnerInDB
         console.warn(`[Store updatePartner] ATENÇÃO: Atualização de parceiro no DB pendente para ID: ${updatedPartner.id}. Nome: ${updatedPartner.name}. Implementar Server Action.`);
         set(state => ({
             partners: state.partners.map(p => p.id === updatedPartner.id ? updatedPartner : p).sort((a,b) => a.name.localeCompare(b.name))
@@ -305,23 +322,15 @@ export const useOSStore = create<OSState>()(
         console.log('[Store updatePartner] Parceiro atualizado localmente (sem persistência no DB).');
       },
       deletePartner: async (partnerId) => {
-        // TODO: Implementar Server Action para deletePartnerInDB
         console.warn(`[Store deletePartner] ATENÇÃO: Deleção de parceiro no DB pendente para ID: ${partnerId}. Implementar Server Action.`);
          set(state => ({
             partners: state.partners.filter(p => p.id !== partnerId)
         }));
         console.log('[Store deletePartner] Parceiro deletado localmente (sem persistência no DB).');
       },
+      getPartnerById: (partnerId) => get().partners.find(p => p.id === partnerId),
+      getPartnerByName: (partnerName) => get().partners.find(p => p.name.toLowerCase() === partnerName.toLowerCase()),
 
-      // --- Client Actions ---
-      getClientById: (clientId) => {
-          const client = get().clients.find(c => c.id === clientId);
-          return client;
-        },
-      getClientByName: (clientName) => {
-          const client = get().clients.find(c => c.name.toLowerCase() === clientName.toLowerCase());
-          return client;
-      },
       addClient: async (clientData) => {
         console.log('[Store addClient] Adicionando cliente:', clientData.name);
         try {
@@ -344,7 +353,6 @@ export const useOSStore = create<OSState>()(
         }
       },
       updateClient: async (updatedClient) => {
-        // TODO: Implementar Server Action para updateClientInDB
         console.warn(`[Store updateClient] ATENÇÃO: Atualização de cliente no DB pendente para ID: ${updatedClient.id}. Nome: ${updatedClient.name}. Implementar Server Action.`);
         set(state => ({
             clients: state.clients.map(c => c.id === updatedClient.id ? updatedClient : c).sort((a,b) => a.name.localeCompare(b.name))
@@ -352,12 +360,13 @@ export const useOSStore = create<OSState>()(
         console.log('[Store updateClient] Cliente atualizado localmente (sem persistência no DB).');
       },
       deleteClient: async (clientId) => {
-        // TODO: Implementar Server Action para deleteClientInDB
         console.warn(`[Store deleteClient] ATENÇÃO: Deleção de cliente no DB pendente para ID: ${clientId}. Implementar Server Action.`);
         set(state => ({
             clients: state.clients.filter(c => c.id !== clientId)
         }));
         console.log('[Store deleteClient] Cliente deletado localmente (sem persistência no DB).');
       },
+      getClientById: (clientId) => get().clients.find(c => c.id === clientId),
+      getClientByName: (clientName) => get().clients.find(c => c.name.toLowerCase() === clientName.toLowerCase()),
     })
 );
