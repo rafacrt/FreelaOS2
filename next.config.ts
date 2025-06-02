@@ -19,20 +19,12 @@ const nextConfig: NextConfig = {
       },
     ],
   },
-  webpack: (config, { isServer }) => {
-    if (!isServer) {
-      // Prevent bundling of Node.js core modules for the client-side
-      config.resolve.fallback = {
-        ...config.resolve.fallback, // Spread existing fallbacks
-        fs: false, // Example: if 'fs' was an issue
-        net: false, // Specifically for the 'net' module
-        tls: false, // Often related to 'net' or database drivers
-        // Add other Node.js core modules here if they cause similar errors
-        // e.g., 'child_process': false, 'crypto': false, etc.
-      };
-    }
-    return config;
-  },
+  // The webpack configuration block below is removed
+  // because Turbopack is enabled via the --turbopack flag in the dev script.
+  // Turbopack does not use this webpack configuration, and having it present
+  // can cause warnings or unexpected behavior.
+  // If client-side fallbacks for Node.js core modules were critical,
+  // a Turbopack-specific solution or disabling Turbopack would be needed.
 };
 
 export default nextConfig;
