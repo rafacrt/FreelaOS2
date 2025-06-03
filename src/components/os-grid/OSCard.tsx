@@ -4,7 +4,7 @@
 import Link from 'next/link';
 import type { OS } from '@/lib/types';
 import { OSStatus, ALL_OS_STATUSES } from '@/lib/types';
-import { CalendarClock, Flag, Copy, AlertTriangle, CheckCircle2, Server, Users, FileText, User as UserIcon, Briefcase, Calendar as CalendarIcon, CheckSquare, Play, Pause, Clock } from 'lucide-react';
+import { CalendarClock, Flag, Copy, AlertTriangle, CheckCircle2, Server, Users, FileText, User as UserIcon, Briefcase, Calendar as CalendarIcon, CheckSquare, Play, Pause, Clock, UserCheck } from 'lucide-react'; // Added UserCheck
 import { format, parseISO, isValid } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useOSStore } from '@/store/os-store';
@@ -61,7 +61,7 @@ const getStatusIcon = (status: OSStatus) => {
 export default function OSCard({ os }: OSCardProps) {
   const { updateOSStatus, toggleUrgent, duplicateOS, toggleProductionTimer } = useOSStore();
   const { theme } = useTheme();
-  const [isUpdating, setIsUpdating] = useState(false); 
+  const [isUpdating, setIsUpdating] = useState(false);
 
   const statusCardClasses = getStatusClass(os.status, os.isUrgent, theme);
   const statusSelectClasses = getStatusSelectClasses(os.status, os.isUrgent, theme);
@@ -71,7 +71,7 @@ export default function OSCard({ os }: OSCardProps) {
 
   const handleStatusChange = async (event: React.ChangeEvent<HTMLSelectElement>) => {
     const newStatus = event.target.value as OSStatus;
-    event.preventDefault(); 
+    event.preventDefault();
     event.stopPropagation();
     setIsUpdating(true);
     try {
@@ -126,8 +126,8 @@ export default function OSCard({ os }: OSCardProps) {
   const formattedProgramadoPara = useMemo(() => {
       if (!os.programadoPara) return null;
       try {
-          const date = /^\d{4}-\d{2}-\d{2}$/.test(os.programadoPara) 
-            ? parseISO(os.programadoPara + 'T00:00:00Z') 
+          const date = /^\d{4}-\d{2}-\d{2}$/.test(os.programadoPara)
+            ? parseISO(os.programadoPara + 'T00:00:00Z')
             : parseISO(os.programadoPara);
 
           if (isValid(date)) {
@@ -136,37 +136,41 @@ export default function OSCard({ os }: OSCardProps) {
       } catch (e) {
         console.warn(`[OSCard] Error parsing programadoPara date "${os.programadoPara}":`, e);
       }
-      return os.programadoPara; 
+      return os.programadoPara;
   }, [os.programadoPara]);
 
   const isTimerRunning = !!os.dataInicioProducaoAtual;
   const isFinalized = os.status === OSStatus.FINALIZADO;
 
-  // Determine text color based on theme and urgency/status for specific elements if needed
-  // For example, the OS number might need a specific color if the card background is too dark.
-  // Bootstrap's text-emphasis classes should handle most cases automatically.
   const osNumeroColorClass = os.isUrgent ? 'text-danger-emphasis' : 'text-primary';
 
 
   return (
     <Link href={`/os/${os.id}`} passHref legacyBehavior>
         <a className={`text-decoration-none d-block h-100 ${hoverEffectClass}`}>
-            <div className={cardClasses}> {/* statusCardClasses sets bg and default text color */}
+            <div className={cardClasses}>
                 <div className={`card-header p-2 pb-1 d-flex justify-content-between align-items-center ${os.isUrgent ? 'bg-danger-subtle' : (os.status === OSStatus.EM_PRODUCAO ? 'bg-info-subtle' : (os.status === OSStatus.AGUARDANDO_PARCEIRO ? 'bg-primary-subtle' : 'bg-light'))}`}>
-                    <span className={`fw-bold small font-monospace ${osNumeroColorClass}`}>OS: {os.numero}</span>
+                    <div className="d-flex flex-column">
+                        <span className={`fw-bold small font-monospace ${osNumeroColorClass}`}>OS: {os.numero}</span>
+                        {os.createdByPartnerName && (
+                            <span className="badge bg-secondary-subtle text-dark-emphasis mt-1 d-flex align-items-center" style={{ fontSize: '0.65em', width: 'fit-content' }}>
+                                <UserCheck size={10} className="me-1" /> Aberta por: {truncateText(os.createdByPartnerName, 20)}
+                            </span>
+                        )}
+                    </div>
                     {os.isUrgent && (
                         <span className={`badge bg-danger text-white rounded-pill px-2 py-1 small d-flex align-items-center ms-auto`} style={{fontSize: '0.7em'}}>
                             <AlertTriangle size={12} className="me-1" /> URGENTE
                         </span>
                     )}
                 </div>
-                <div className={`card-body p-2 pt-1 pb-2 d-flex flex-column text-wrap`}> {/* Text color should inherit from card or be explicitly set if needed */}
+                <div className={`card-body p-2 pt-1 pb-2 d-flex flex-column text-wrap`}>
                     <div className="mb-1" title={`Cliente: ${os.cliente}`}>
                         <UserIcon size={14} className="me-1 text-muted align-middle" />
                         <span className="fw-medium small text-break">{truncateText(os.cliente, 30)}</span>
                     </div>
                     {os.parceiro && (
-                        <div className="mb-1" title={`Parceiro: ${os.parceiro}`}>
+                        <div className="mb-1" title={`Parceiro de Execução: ${os.parceiro}`}>
                             <Users size={14} className="me-1 text-muted align-middle" />
                             <span className="text-muted small text-break">{truncateText(os.parceiro, 30)}</span>
                         </div>
@@ -206,7 +210,7 @@ export default function OSCard({ os }: OSCardProps) {
                             className={`form-select form-select-sm ${statusSelectClasses}`}
                             value={os.status}
                             onChange={handleStatusChange}
-                            onClick={(e) => { e.preventDefault(); e.stopPropagation(); }} 
+                            onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
                             aria-label="Mudar status da OS"
                             style={{ fontSize: '0.75rem' }}
                             disabled={isUpdating || isFinalized}
@@ -226,8 +230,8 @@ export default function OSCard({ os }: OSCardProps) {
                                 className="btn btn-info btn-sm w-100 d-flex align-items-center justify-content-center"
                                 onClick={handleFinalizeOS}
                                 style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem' }}
-                                disabled={isUpdating}
-                                title="Finalizar Ordem de Serviço"
+                                disabled={isUpdating || isTimerRunning} // Impede finalizar se timer rodando
+                                title={isTimerRunning ? "Pause o timer para finalizar" : "Finalizar Ordem de Serviço"}
                             >
                                 <CheckSquare size={14} className="me-1" /> Finalizar OS
                             </button>
