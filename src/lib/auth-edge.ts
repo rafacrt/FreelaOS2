@@ -23,17 +23,18 @@ if (JWT_SECRET_KEY_STRING) {
     console.error('[Auth-Edge] Failed to encode JWT_SECRET_KEY. Error:', error.message, error);
   }
 } else {
-  if (process.env.DEV_LOGIN_ENABLED === "true") {
+  // Use fallback key if JWT_SECRET is not set AND (DEV_LOGIN_ENABLED is true OR NEXT_PUBLIC_DEV_MODE is true)
+  if (process.env.DEV_LOGIN_ENABLED === "true" || process.env.NEXT_PUBLIC_DEV_MODE === "true") {
     console.warn(`
     **************************************************************************************
     ** [Auth-Edge] WARNING: JWT_SECRET environment variable is not set or is empty!     **
-    ** Using a default, INSECURE key because DEV_LOGIN_ENABLED is true.                 **
+    ** Using a default, INSECURE key because DEV_LOGIN_ENABLED or NEXT_PUBLIC_DEV_MODE is true. **
     ** This is FOR DEVELOPMENT ONLY and is NOT SECURE for production.                   **
     **************************************************************************************
     `);
     key = new TextEncoder().encode("DEFAULT_INSECURE_FALLBACK_SECRET_FOR_DEV_LOGIN_ONLY_MIN_32_CHARS");
   } else {
-    console.error('[Auth-Edge] CRITICAL: JWT_SECRET environment variable is not set or is empty, and DEV_LOGIN_ENABLED is not "true". Authentication will fail.');
+    console.error('[Auth-Edge] CRITICAL: JWT_SECRET environment variable is not set or is empty, and neither DEV_LOGIN_ENABLED nor NEXT_PUBLIC_DEV_MODE is "true". Authentication will fail.');
   }
 }
 
