@@ -25,43 +25,59 @@ export interface OS {
   id: string;
   numero: string;
   cliente: string;
-  parceiro?: string;
+  parceiro?: string; // Parceiro responsável pela execução
   clientId: string;
-  partnerId?: string;
+  partnerId?: string; // ID do parceiro responsável pela execução
   projeto: string;
   tarefa: string;
   observacoes: string;
-  tempoTrabalhado?: string; // For manual text notes about time
   status: OSStatus;
   dataAbertura: string; // ISO string
   dataFinalizacao?: string; // ISO string
   programadoPara?: string; // YYYY-MM-DD string
   isUrgent: boolean;
   dataInicioProducao?: string; // ISO string, when the OS entered production for the first time (historical)
-  tempoProducaoMinutos?: number; // Deprecated, prefer tempoGastoProducaoSegundos
   tempoGastoProducaoSegundos: number; // Total seconds accumulated in production from chronometer
   dataInicioProducaoAtual: string | null; // ISO string, timestamp of the CURRENT production session start, null if paused/not in production
   checklist?: ChecklistItem[]; // Array of checklist items
+  createdByPartnerId?: string; // ID of the partner who created this OS
+  createdByPartnerName?: string; // Name of the partner who created this OS (for display)
 }
 
+// User (Admin/Internal) Session Data
 export interface User {
   id: string;
   username: string;
   isAdmin: boolean;
-  isApproved: boolean;
+  isApproved: boolean; // Should always be true for logged-in internal users based on middleware
 }
+
+// Partner Session Data (for logged-in partners)
+export interface PartnerSessionData {
+  id: string; // This is the partner's ID from the 'partners' table
+  username: string; // Partner's login username
+  partnerName: string; // Actual name of the partner company/individual
+  email?: string;
+  isApproved: boolean; // Partner login account approval status
+  // Add any other partner-specific session data you might need
+}
+
+export type SessionPayload =
+  | ({ sessionType: 'admin' } & User)
+  | ({ sessionType: 'partner' } & PartnerSessionData);
+
 
 export interface CreateOSData {
   cliente: string;
-  parceiro?: string;
+  parceiro?: string; // Parceiro de execução
   projeto: string;
   tarefa: string;
   observacoes: string;
-  tempoTrabalhado?: string;
   status: OSStatus;
   programadoPara?: string; // YYYY-MM-DD
   isUrgent: boolean;
   checklistItems?: string[]; // Array of checklist item texts for creation
+  // createdByPartnerId will be set by the server action if a partner is creating it
 }
 
 export interface Client {
@@ -69,14 +85,12 @@ export interface Client {
     name: string;
 }
 
-// AuthActionState (mantido para referência, mas o AuthForm está um pouco diferente agora)
 export type AuthActionState = {
   message: string | null;
   type?: 'success' | 'error';
   redirect?: string;
 };
 
-// Helper function to validate if a date object is valid
 export function isValidDate(d: any): d is Date {
   return d instanceof Date && !isNaN(d.getTime());
 }

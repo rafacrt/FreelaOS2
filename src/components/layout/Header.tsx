@@ -2,14 +2,13 @@
 'use client';
 
 import Link from 'next/link';
-import type { User } from '@/lib/types';
-import { Moon, Sun, UserCircle, LogOut, LogIn, UserPlus } from 'lucide-react';
+import type { SessionPayload } from '@/lib/types'; // Use SessionPayload
+import { Moon, Sun, UserCircle, LogOut, LogIn, UserPlus, Briefcase } from 'lucide-react'; // Added Briefcase for Partner
 import { useTheme } from '@/hooks/useTheme';
 import { logoutAction } from '@/lib/actions/auth-actions';
 import { usePathname } from 'next/navigation';
-import { useActionState } from 'react'; // For logout form
+import { useActionState } from 'react'; 
 
-// Updated Abstract Logo SVG (Orange Theme)
 const FreelaOSLogo = () => (
   <svg width="28" height="28" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
     <rect width="100" height="100" rx="15" fill="hsl(var(--primary))"/>
@@ -20,21 +19,41 @@ const FreelaOSLogo = () => (
 );
 
 interface HeaderProps {
-  user: User | null;
+  session: SessionPayload | null; // Updated to SessionPayload
 }
 
-export default function Header({ user }: HeaderProps) {
+export default function Header({ session }: HeaderProps) {
   const { theme, toggleTheme } = useTheme();
   const pathname = usePathname();
   const [logoutState, logoutFormAction] = useActionState(logoutAction, { message: null });
 
+  const isLoginPage = pathname === '/login';
+  const isRegisterPage = pathname === '/register';
+  const isPartnerLoginPage = pathname === '/partner-login'; // Assuming this will be the partner login page
+  const showAuthButtons = !session && !isLoginPage && !isRegisterPage && !isPartnerLoginPage;
 
-  const showAuthButtons = !user && pathname !== '/login' && pathname !== '/register';
+  let greeting = "Olá!";
+  let isAdminBadge = false;
+  let isPartnerBadge = false;
+  let homeLink = "/login";
+
+  if (session) {
+    if (session.sessionType === 'admin') {
+      greeting = `Olá, ${session.username}`;
+      isAdminBadge = session.isAdmin;
+      homeLink = "/dashboard";
+    } else if (session.sessionType === 'partner') {
+      greeting = `Olá, ${session.partnerName}`; // Use partnerName for display
+      isPartnerBadge = true; // Or some other identifier for partner
+      homeLink = "/partner/dashboard"; // Partner dashboard link
+    }
+  }
+
 
   return (
     <header className="navbar navbar-expand-sm navbar-light bg-light border-bottom sticky-top shadow-sm" data-bs-theme={theme === 'dark' ? 'dark' : 'light'}>
       <div className="container">
-        <Link href={user ? "/dashboard" : "/login"} className="navbar-brand d-flex align-items-center">
+        <Link href={homeLink} className="navbar-brand d-flex align-items-center">
           <FreelaOSLogo />
           <span className="fs-5 fw-bold ms-2" style={{ color: 'hsl(var(--primary))' }}>FreelaOS</span>
         </Link>
@@ -48,12 +67,16 @@ export default function Header({ user }: HeaderProps) {
             {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
           </button>
 
-          {user ? (
+          {session ? (
             <div className="d-flex align-items-center">
-              <UserCircle className="text-secondary me-2" size={24} aria-label={`Usuário: ${user.username}`} />
+              {session.sessionType === 'admin' ? 
+                <UserCircle className="text-secondary me-2" size={24} aria-label={`Usuário: ${session.username}`} />
+                : <Briefcase className="text-secondary me-2" size={24} aria-label={`Parceiro: ${session.partnerName}`} />
+              }
               <span className="navbar-text me-3 d-none d-sm-inline">
-                Olá, {user.username}
-                {user.isAdmin && <span className="badge bg-primary ms-1 small">Admin</span>}
+                {greeting}
+                {isAdminBadge && <span className="badge bg-primary ms-1 small">Admin</span>}
+                {isPartnerBadge && <span className="badge bg-info ms-1 small">Parceiro</span>}
               </span>
               <form action={logoutFormAction}>
                 <button type="submit" className="btn btn-sm btn-outline-danger d-flex align-items-center">
@@ -65,11 +88,16 @@ export default function Header({ user }: HeaderProps) {
             showAuthButtons && (
                 <div className="d-flex gap-2">
                     <Link href="/login" className="btn btn-sm btn-outline-primary d-flex align-items-center">
-                        <LogIn size={16} className="me-1" /> Entrar
+                        <LogIn size={16} className="me-1" /> Admin Login
                     </Link>
-                    <Link href="/register" className="btn btn-sm btn-primary d-flex align-items-center">
+                    {/* Link to partner login might also be useful here or on main login page */}
+                    <Link href="/partner-login" className="btn btn-sm btn-outline-info d-flex align-items-center">
+                        <LogIn size={16} className="me-1" /> Parceiro Login 
+                    </Link>
+                    {/* Registration might be for admins or a separate one for partners */}
+                    {/* <Link href="/register" className="btn btn-sm btn-primary d-flex align-items-center">
                          <UserPlus size={16} className="me-1" /> Registrar
-                    </Link>
+                    </Link> */}
                 </div>
             )
           )}

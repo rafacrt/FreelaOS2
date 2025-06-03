@@ -4,17 +4,14 @@
 import type { ReactNode } from 'react';
 import { useEffect, useState } from 'react';
 import Header from './Header';
-import type { User } from '@/lib/types';
+import type { SessionPayload } from '@/lib/types'; // Use SessionPayload
 import FooterContent from './FooterContent';
 import { useOSStore } from '@/store/os-store';
 import { getSessionFromToken } from '@/lib/auth-edge'; 
-// useRouter is not used here, so it can be removed if not needed for other logic.
-// import { useRouter } from 'next/navigation'; 
 import { AUTH_COOKIE_NAME } from '@/lib/constants';
 
-// Helper to get cookie client-side (only for non-HttpOnly cookies if used for that)
 function getCookie(name: string): string | undefined {
-  if (typeof document === 'undefined') return undefined; // Guard for SSR
+  if (typeof document === 'undefined') return undefined; 
   const value = `; ${document.cookie}`;
   const parts = value.split(`; ${name}=`);
   if (parts.length === 2) {
@@ -26,53 +23,50 @@ function getCookie(name: string): string | undefined {
 
 interface AuthenticatedLayoutProps {
   children: ReactNode;
+  // We might pass expectedSessionType if we want to be very strict,
+  // but middleware should handle unauthorized access.
+  // expectedSessionType: 'admin' | 'partner'; 
 }
 
 export default function AuthenticatedLayout({ children }: AuthenticatedLayoutProps) {
-  const [user, setUser] = useState<User | null>(null);
+  // User state can now be AdminUser or PartnerUser, or null
+  const [session, setSession] = useState<SessionPayload | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [authCheckCompleted, setAuthCheckCompleted] = useState(false);
 
   const initializeStore = useOSStore((state) => state.initializeStore);
   const isStoreInitialized = useOSStore((state) => state.isStoreInitialized);
-  // const router = useRouter(); // Keep for potential future use.
 
   useEffect(() => {
     console.log('[AuthenticatedLayout] useEffect triggered.');
     async function checkSessionAndInitializeData() {
       try {
-        // Attempt to get user session details client-side for display purposes.
-        // Middleware is the primary source of truth for authentication.
-        // This client-side check might fail to get full user details if the cookie is HttpOnly.
         const tokenValue = getCookie(AUTH_COOKIE_NAME);
-        // console.log(`[AuthenticatedLayout] Client-side tokenValue for ${AUTH_COOKIE_NAME}:`, tokenValue ? tokenValue.substring(0,10)+'...' : 'undefined');
-        
-        // getSessionFromToken from auth-edge will attempt to decrypt.
-        // If JWT_SECRET is not available on the client (which it shouldn't be for security),
-        // and if auth-edge.ts is bundled with client code that calls this,
-        // then decryptPayload might fail or be unable to verify.
-        // For now, we assume `getSessionFromToken` handles this gracefully (e.g., by returning null if key is unavailable).
-        const sessionUser = await getSessionFromToken(tokenValue);
+        const sessionData = await getSessionFromToken(tokenValue);
 
-        if (sessionUser) {
-          // console.log('[AuthenticatedLayout] Client-side sessionUser retrieved:', sessionUser);
-          setUser(sessionUser);
+        if (sessionData) {
+          console.log('[AuthenticatedLayout] Client-side sessionData retrieved:', sessionData);
+          setSession(sessionData);
         } else {
-          // console.warn(
-          //   '[AuthenticatedLayout] Client-side session details not retrieved or token invalid. Trusting middleware. User details for Header might be unavailable.'
-          // );
-          setUser(null); // Explicitly set to null if no session found client-side
+          console.warn('[AuthenticatedLayout] Client-side session details not retrieved. Trusting middleware.');
+          setSession(null); 
         }
 
-        if (!isStoreInitialized) {
-          console.log('[AuthenticatedLayout] Store not initialized, calling initializeStore.');
-          await initializeStore(); // This is currently simplified to not make DB calls
-        } else {
-          console.log('[AuthenticatedLayout] Store already initialized.');
+        // Initialize OS store only if user is admin and store not initialized
+        // Partners might not need the full OS list immediately, or will fetch their own.
+        if (sessionData?.sessionType === 'admin' && !isStoreInitialized) {
+          console.log('[AuthenticatedLayout] Admin session detected, store not initialized, calling initializeStore.');
+          await initializeStore(); 
+        } else if (sessionData?.sessionType === 'admin' && isStoreInitialized) {
+            console.log('[AuthenticatedLayout] Admin session, store already initialized.');
+        } else if (sessionData?.sessionType === 'partner') {
+            console.log('[AuthenticatedLayout] Partner session detected. OS Store initialization skipped for now (or handled by partner dashboard).');
+            // Partners might have a different store initialization or data fetching logic
         }
+
       } catch (e: any) {
         console.error("[AuthenticatedLayout] Error during client-side data initialization:", e);
-        setUser(null); // Ensure user is null on error
+        setSession(null); 
       } finally {
         setIsLoading(false);
         setAuthCheckCompleted(true);
@@ -96,7 +90,8 @@ export default function AuthenticatedLayout({ children }: AuthenticatedLayoutPro
   
   return (
     <div className="d-flex flex-column min-vh-100">
-      <Header user={user} />
+      {/* Pass the whole session object to Header */}
+      <Header session={session} /> 
       <main className="container flex-grow-1 py-4 py-lg-5">
         {children}
       </main>

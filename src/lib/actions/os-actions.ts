@@ -3,11 +3,11 @@
 
 import db from '@/lib/db';
 import type { OS, CreateOSData, ChecklistItem } from '@/lib/types';
-import { OSStatus, isValidDate as isValidDateCustomUtil } from '@/lib/types'; // Renamed to avoid conflict with date-fns isValid
+import { OSStatus } from '@/lib/types'; 
 import { findOrCreateClientByName } from './client-actions';
 import { findOrCreatePartnerByName } from './partner-actions';
 import type { ResultSetHeader, RowDataPacket, PoolConnection } from 'mysql2/promise';
-import { parseISO, differenceInSeconds, format as formatDateFns, isValid } from 'date-fns'; // Import isValid from date-fns
+import { parseISO, differenceInSeconds, format as formatDateFns, isValid } from 'date-fns'; 
 import { ptBR } from 'date-fns/locale';
 
 const generateNewOSNumero = async (connection: PoolConnection): Promise<string> => {
@@ -20,45 +20,42 @@ const generateNewOSNumero = async (connection: PoolConnection): Promise<string> 
   return newNumeroStr;
 };
 
-export async function createOSInDB(data: CreateOSData): Promise<OS | null> {
+// Updated to accept createdByPartnerId
+export async function createOSInDB(data: CreateOSData, createdByPartnerId?: string): Promise<OS | null> {
   const connection = await db.getConnection();
-  console.log('[OSAction createOSInDB] Iniciando com dados:', JSON.stringify(data, null, 2));
+  console.log('[OSAction createOSInDB] Iniciando com dados:', JSON.stringify(data, null, 2), `CreatedByPartnerID: ${createdByPartnerId}`);
   try {
     await connection.beginTransaction();
     console.log('[OSAction createOSInDB] Transação iniciada.');
 
     const client = await findOrCreateClientByName(data.cliente, connection);
     if (!client || !client.id) {
-      console.error('[OSAction createOSInDB] Falha ao obter ID do cliente para:', data.cliente, 'Objeto cliente recebido:', client);
+      console.error('[OSAction createOSInDB] Falha ao obter ID do cliente para:', data.cliente);
       await connection.rollback();
       throw new Error('Falha ao obter ID do cliente.');
     }
     console.log(`[OSAction createOSInDB] Cliente resolvido: ID ${client.id}, Nome ${client.name}`);
 
-    let partnerId: string | null = null;
-    let partnerName: string | undefined = undefined;
+    let executionPartnerId: string | null = null; // Partner responsible for execution
+    let executionPartnerName: string | undefined = undefined;
     if (data.parceiro && data.parceiro.trim() !== '') {
-      const partner = await findOrCreatePartnerByName(data.parceiro, connection);
-      if (!partner || !partner.id) {
-        console.error('[OSAction createOSInDB] Falha ao obter ID do parceiro para:', data.parceiro, 'Objeto parceiro recebido:', partner);
+      const execPartner = await findOrCreatePartnerByName(data.parceiro, connection);
+      if (!execPartner || !execPartner.id) {
         await connection.rollback();
-        throw new Error('Falha ao obter ID do parceiro.');
+        throw new Error('Falha ao obter ID do parceiro de execução.');
       }
-      partnerId = partner.id;
-      partnerName = partner.name;
-      console.log(`[OSAction createOSInDB] Parceiro resolvido: ID ${partner.id}, Nome ${partner.name}`);
-    } else {
-      console.log('[OSAction createOSInDB] Nenhum parceiro fornecido ou nome do parceiro está vazio.');
+      executionPartnerId = execPartner.id;
+      executionPartnerName = execPartner.name;
+      console.log(`[OSAction createOSInDB] Parceiro de execução resolvido: ID ${executionPartnerId}, Nome ${executionPartnerName}`);
     }
 
     const newOsNumero = await generateNewOSNumero(connection);
-
     let programadoParaDate: string | null = null;
     if (data.programadoPara && data.programadoPara.trim() !== '') {
       try {
         if (/^\d{4}-\d{2}-\d{2}$/.test(data.programadoPara)) {
-          const parsedDate = parseISO(data.programadoPara + "T00:00:00.000Z"); // Treat as UTC date part
-          if (isValid(parsedDate)) { // Use date-fns isValid
+          const parsedDate = parseISO(data.programadoPara + "T00:00:00.000Z"); 
+          if (isValid(parsedDate)) {
             programadoParaDate = data.programadoPara;
           }
         }
@@ -76,14 +73,13 @@ export async function createOSInDB(data: CreateOSData): Promise<OS | null> {
         checklistJsonForDB = JSON.stringify(checklistToStore);
       }
     }
-    console.log('[OSAction createOSInDB] Checklist para DB:', checklistJsonForDB);
-
 
     const now = new Date();
     const osDataForDB = {
       numero: newOsNumero,
       cliente_id: parseInt(client.id, 10),
-      parceiro_id: partnerId ? parseInt(partnerId, 10) : null,
+      parceiro_id: executionPartnerId ? parseInt(executionPartnerId, 10) : null, // Execution partner
+      created_by_partner_id: createdByPartnerId ? parseInt(createdByPartnerId, 10) : null, // Creator partner
       projeto: data.projeto,
       tarefa: data.tarefa,
       observacoes: data.observacoes || '',
@@ -102,30 +98,35 @@ export async function createOSInDB(data: CreateOSData): Promise<OS | null> {
     console.log('[OSAction createOSInDB] Dados da OS para o DB:', JSON.stringify(osDataForDB, null, 2));
 
     const [result] = await connection.execute<ResultSetHeader>(
-      `INSERT INTO os_table (numero, cliente_id, parceiro_id, projeto, tarefa, observacoes, checklist_json, status, dataAbertura, programadoPara, isUrgent, dataFinalizacao, dataInicioProducao, tempoGastoProducaoSegundos, dataInicioProducaoAtual, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO os_table (numero, cliente_id, parceiro_id, created_by_partner_id, projeto, tarefa, observacoes, checklist_json, status, dataAbertura, programadoPara, isUrgent, dataFinalizacao, dataInicioProducao, tempoGastoProducaoSegundos, dataInicioProducaoAtual, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
-        osDataForDB.numero, osDataForDB.cliente_id, osDataForDB.parceiro_id, osDataForDB.projeto,
-        osDataForDB.tarefa, osDataForDB.observacoes, osDataForDB.checklist_json, osDataForDB.status,
-        osDataForDB.dataAbertura, osDataForDB.programadoPara, osDataForDB.isUrgent, osDataForDB.dataFinalizacao,
-        osDataForDB.dataInicioProducao, osDataForDB.tempoGastoProducaoSegundos,
+        osDataForDB.numero, osDataForDB.cliente_id, osDataForDB.parceiro_id, osDataForDB.created_by_partner_id, 
+        osDataForDB.projeto, osDataForDB.tarefa, osDataForDB.observacoes, osDataForDB.checklist_json, 
+        osDataForDB.status, osDataForDB.dataAbertura, osDataForDB.programadoPara, osDataForDB.isUrgent, 
+        osDataForDB.dataFinalizacao, osDataForDB.dataInicioProducao, osDataForDB.tempoGastoProducaoSegundos,
         osDataForDB.dataInicioProducaoAtual, osDataForDB.created_at, osDataForDB.updated_at
       ]
     );
 
     if (!result.insertId) {
-      console.error('[OSAction createOSInDB] Falha ao criar OS: insertId é 0 ou não foi retornado. Verifique se a coluna `id` é AUTO_INCREMENT na tabela `os_table` ou se há outras restrições no DB.', result);
       await connection.rollback();
-      throw new Error('Falha ao criar OS: Nenhum insertId válido retornado do DB. Verifique a configuração da tabela.');
+      throw new Error('Falha ao criar OS: Nenhum insertId válido retornado.');
     }
     await connection.commit();
     console.log('[OSAction createOSInDB] OS criada e transação commitada. ID:', result.insertId);
 
+    // Fetch the newly created OS along with related names
     const [createdOSRows] = await connection.query<RowDataPacket[]>(
-      `SELECT os.*, c.name as cliente_name, p.name as partner_name
+      `SELECT 
+         os.*, 
+         c.name as cliente_name, 
+         exec_p.name as execution_partner_name,
+         creator_p.name as creator_partner_name 
        FROM os_table os
        JOIN clients c ON os.cliente_id = c.id
-       LEFT JOIN partners p ON os.parceiro_id = p.id
+       LEFT JOIN partners exec_p ON os.parceiro_id = exec_p.id
+       LEFT JOIN partners creator_p ON os.created_by_partner_id = creator_p.id
        WHERE os.id = ?`,
       [result.insertId]
     );
@@ -133,7 +134,6 @@ export async function createOSInDB(data: CreateOSData): Promise<OS | null> {
       throw new Error('Falha ao buscar OS recém-criada.');
     }
     const createdOSRow = createdOSRows[0];
-
     let parsedChecklist: ChecklistItem[] = [];
     if (createdOSRow.checklist_json) {
       try {
@@ -154,9 +154,11 @@ export async function createOSInDB(data: CreateOSData): Promise<OS | null> {
       id: String(createdOSRow.id),
       numero: createdOSRow.numero,
       cliente: createdOSRow.cliente_name,
-      parceiro: createdOSRow.partner_name || undefined,
+      parceiro: createdOSRow.execution_partner_name || undefined, // Execution partner
       clientId: String(createdOSRow.cliente_id),
       partnerId: createdOSRow.parceiro_id ? String(createdOSRow.parceiro_id) : undefined,
+      createdByPartnerId: createdOSRow.created_by_partner_id ? String(createdOSRow.created_by_partner_id) : undefined,
+      createdByPartnerName: createdOSRow.creator_partner_name || undefined,
       projeto: createdOSRow.projeto,
       tarefa: createdOSRow.tarefa,
       observacoes: createdOSRow.observacoes,
@@ -174,15 +176,11 @@ export async function createOSInDB(data: CreateOSData): Promise<OS | null> {
     return createdOSForReturn;
 
   } catch (error: any) {
-    console.error('[OSAction createOSInDB] Erro durante a criação da OS. Rollback será tentado.', error.message, error.stack, error.code, error.sqlMessage);
+    console.error('[OSAction createOSInDB] Erro durante a criação da OS:', error.message, error.stack);
     if (connection) await connection.rollback();
-    console.error('[OSAction createOSInDB] Rollback da transação bem-sucedido.');
-    throw new Error(`Falha ao criar OS no banco de dados: ${error.message || 'Erro desconhecido'}`);
+    throw new Error(`Falha ao criar OS no banco: ${error.message || 'Erro desconhecido'}`);
   } finally {
-    if (connection) {
-      connection.release();
-      console.log('[OSAction createOSInDB] Conexão liberada.');
-    }
+    if (connection) connection.release();
   }
 }
 
@@ -192,7 +190,6 @@ export async function updateOSInDB(osData: OS): Promise<OS | null> {
   console.log(`[OSAction updateOSInDB] Iniciando atualização para OS ID: ${osData.id}. Dados recebidos:`, JSON.stringify(osData, null, 2));
   try {
     await connection.beginTransaction();
-    console.log(`[OSAction updateOSInDB] Transação iniciada para OS ID: ${osData.id}`);
 
     const [currentOSRows] = await connection.query<RowDataPacket[]>(
       'SELECT * FROM os_table WHERE id = ? FOR UPDATE',
@@ -200,26 +197,24 @@ export async function updateOSInDB(osData: OS): Promise<OS | null> {
     );
     if (currentOSRows.length === 0) {
       await connection.rollback();
-      throw new Error(`OS com ID ${osData.id} não encontrada para atualização.`);
+      throw new Error(`OS com ID ${osData.id} não encontrada.`);
     }
     const currentOSFromDB = currentOSRows[0];
-    console.log('[OSAction updateOSInDB] Estado atual da OS no DB:', JSON.stringify(currentOSFromDB, null, 2));
 
     const client = await findOrCreateClientByName(osData.cliente, connection);
     if (!client || !client.id) {
       await connection.rollback();
       throw new Error('Falha ao obter ID do cliente para atualização.');
     }
-    let partnerIdSQL: number | null = null;
+    let executionPartnerIdSQL: number | null = null;
     if (osData.parceiro && osData.parceiro.trim() !== '') {
-      const partner = await findOrCreatePartnerByName(osData.parceiro, connection);
-      if (!partner || !partner.id) {
+      const execPartner = await findOrCreatePartnerByName(osData.parceiro, connection);
+      if (!execPartner || !execPartner.id) {
         await connection.rollback();
-        throw new Error('Falha ao obter ID do parceiro para atualização.');
+        throw new Error('Falha ao obter ID do parceiro de execução.');
       }
-      partnerIdSQL = parseInt(partner.id, 10);
+      executionPartnerIdSQL = parseInt(execPartner.id, 10);
     }
-    console.log(`[OSAction updateOSInDB] Cliente resolvido: ID ${client.id}. Parceiro ID: ${partnerIdSQL}`);
 
     const now = new Date();
     let newStatus = osData.status;
@@ -229,47 +224,29 @@ export async function updateOSInDB(osData: OS): Promise<OS | null> {
     let newDataInicioProducaoHistoricoSQL: Date | null = currentOSFromDB.dataInicioProducao ? new Date(currentOSFromDB.dataInicioProducao) : null;
 
     if (newStatus !== currentOSFromDB.status) {
-      console.log(`[OSAction updateOSInDB] Status mudou de ${currentOSFromDB.status} para ${newStatus} para OS ID: ${osData.id}`);
       if (newStatus === OSStatus.EM_PRODUCAO) {
         if (!newDataInicioProducaoAtualSQL) {
           newDataInicioProducaoAtualSQL = now;
-          if (!newDataInicioProducaoHistoricoSQL) {
-            newDataInicioProducaoHistoricoSQL = now;
-          }
-          console.log(`[OSAction updateOSInDB] Iniciando timer: dataInicioProducaoAtual = ${newDataInicioProducaoAtualSQL?.toISOString()}, dataInicioProducaoHistorico = ${newDataInicioProducaoHistoricoSQL?.toISOString()}`);
+          if (!newDataInicioProducaoHistoricoSQL) newDataInicioProducaoHistoricoSQL = now;
         }
       } else {
         if (newDataInicioProducaoAtualSQL) {
-          const secondsElapsed = differenceInSeconds(now, newDataInicioProducaoAtualSQL);
-          newTempoGastoProducaoSegundosSQL += secondsElapsed;
+          newTempoGastoProducaoSegundosSQL += differenceInSeconds(now, newDataInicioProducaoAtualSQL);
           newDataInicioProducaoAtualSQL = null;
-          console.log(`[OSAction updateOSInDB] Pausando timer por mudança de status. Segundos acumulados: ${secondsElapsed}. Total agora: ${newTempoGastoProducaoSegundosSQL}`);
         }
       }
-
-      if (newStatus === OSStatus.FINALIZADO) {
-        if (!newDataFinalizacaoSQL) newDataFinalizacaoSQL = now;
-        console.log(`[OSAction updateOSInDB] OS Finalizada. DataFinalizacao = ${newDataFinalizacaoSQL?.toISOString()}`);
-      } else if (currentOSFromDB.status === OSStatus.FINALIZADO && newStatus !== OSStatus.FINALIZADO) {
-        newDataFinalizacaoSQL = null;
-        console.log(`[OSAction updateOSInDB] OS Reaberta. DataFinalizacao removida.`);
-      }
+      if (newStatus === OSStatus.FINALIZADO && !newDataFinalizacaoSQL) newDataFinalizacaoSQL = now;
+      else if (currentOSFromDB.status === OSStatus.FINALIZADO && newStatus !== OSStatus.FINALIZADO) newDataFinalizacaoSQL = null;
     }
 
     let programadoParaSQL: string | null = null;
     if (osData.programadoPara && osData.programadoPara.trim() !== '') {
       if (/^\d{4}-\d{2}-\d{2}$/.test(osData.programadoPara)) {
-        const parsedDate = parseISO(osData.programadoPara); // Directly parse YYYY-MM-DD
+        const parsedDate = parseISO(osData.programadoPara); 
         if (isValid(parsedDate)) programadoParaSQL = osData.programadoPara;
-      } else {
-        try {
-          const parsedDate = parseISO(osData.programadoPara);
-          if (isValid(parsedDate)) programadoParaSQL = formatDateFns(parsedDate, 'yyyy-MM-dd');
-        } catch (e) { console.warn(`[OSAction updateOSInDB] Erro ao parsear programadoPara ISO "${osData.programadoPara}" para update.`); }
       }
     }
-    console.log(`[OSAction updateOSInDB] ProgramadoPara para SQL: ${programadoParaSQL}`);
-
+    
     let checklistJsonToSave: string | null = null;
     if (osData.checklist && Array.isArray(osData.checklist) && osData.checklist.length > 0) {
         const checklistToStore = osData.checklist.map(item => ({
@@ -280,9 +257,8 @@ export async function updateOSInDB(osData: OS): Promise<OS | null> {
             checklistJsonToSave = JSON.stringify(checklistToStore);
         }
     }
-    console.log('[OSAction updateOSInDB] Checklist JSON para salvar:', checklistJsonToSave);
-
-
+    // created_by_partner_id is set on creation and typically not updated.
+    // If it needs to be updatable, add it to the SET clause and values.
     const updateQuery = `
       UPDATE os_table SET
         cliente_id = ?, parceiro_id = ?, projeto = ?, tarefa = ?, observacoes = ?, checklist_json = ?,
@@ -291,39 +267,34 @@ export async function updateOSInDB(osData: OS): Promise<OS | null> {
         tempoGastoProducaoSegundos = ?, dataInicioProducaoAtual = ?, updated_at = NOW()
       WHERE id = ?`;
     const values = [
-      parseInt(client.id, 10), partnerIdSQL, osData.projeto, osData.tarefa,
+      parseInt(client.id, 10), executionPartnerIdSQL, osData.projeto, osData.tarefa,
       osData.observacoes || '', checklistJsonToSave, newStatus,
       programadoParaSQL, osData.isUrgent, newDataFinalizacaoSQL,
       newDataInicioProducaoHistoricoSQL, newTempoGastoProducaoSegundosSQL,
       newDataInicioProducaoAtualSQL, parseInt(osData.id, 10)
     ];
-    console.log('[OSAction updateOSInDB] Query de Update SQL:', updateQuery.trim().replace(/\s+/g, ' '));
-    console.log('[OSAction updateOSInDB] Valores para Update:', values.map(v => v instanceof Date ? v.toISOString() : v));
-
+    
     const [result] = await connection.execute<ResultSetHeader>(updateQuery, values);
-    console.log('[OSAction updateOSInDB] Resultado da execução do Update:', result);
-
-    if (result.affectedRows === 0 && result.changedRows === 0) {
-      console.warn(`[OSAction updateOSInDB] Nenhuma linha foi alterada para OS ID: ${osData.id}. Isso pode acontecer se os dados enviados forem idênticos aos existentes ou se o ID não corresponder.`);
-    }
-
     await connection.commit();
-    console.log(`[OSAction updateOSInDB] Transação commitada para OS ID: ${osData.id}`);
 
+    // Fetch the updated OS along with related names
     const [updatedOSRows] = await connection.query<RowDataPacket[]>(
-      `SELECT os.*, c.name as cliente_name, p.name as partner_name
+      `SELECT 
+         os.*, 
+         c.name as cliente_name, 
+         exec_p.name as execution_partner_name,
+         creator_p.name as creator_partner_name 
        FROM os_table os
        JOIN clients c ON os.cliente_id = c.id
-       LEFT JOIN partners p ON os.parceiro_id = p.id
+       LEFT JOIN partners exec_p ON os.parceiro_id = exec_p.id
+       LEFT JOIN partners creator_p ON os.created_by_partner_id = creator_p.id
        WHERE os.id = ?`,
       [osData.id]
     );
     if (updatedOSRows.length === 0) {
-      await connection.rollback();
-      throw new Error('Falha ao buscar OS atualizada após o update.');
+      throw new Error('Falha ao buscar OS atualizada.');
     }
     const updatedOSRow = updatedOSRows[0];
-
     let parsedChecklistUpdate: ChecklistItem[] = [];
     if (updatedOSRow.checklist_json) {
       try {
@@ -344,9 +315,11 @@ export async function updateOSInDB(osData: OS): Promise<OS | null> {
       id: String(updatedOSRow.id),
       numero: updatedOSRow.numero,
       cliente: updatedOSRow.cliente_name,
-      parceiro: updatedOSRow.partner_name || undefined,
+      parceiro: updatedOSRow.execution_partner_name || undefined,
       clientId: String(updatedOSRow.cliente_id),
       partnerId: updatedOSRow.parceiro_id ? String(updatedOSRow.parceiro_id) : undefined,
+      createdByPartnerId: updatedOSRow.created_by_partner_id ? String(updatedOSRow.created_by_partner_id) : undefined,
+      createdByPartnerName: updatedOSRow.creator_partner_name || undefined,
       projeto: updatedOSRow.projeto,
       tarefa: updatedOSRow.tarefa,
       observacoes: updatedOSRow.observacoes,
@@ -360,21 +333,14 @@ export async function updateOSInDB(osData: OS): Promise<OS | null> {
       tempoGastoProducaoSegundos: updatedOSRow.tempoGastoProducaoSegundos || 0,
       dataInicioProducaoAtual: updatedOSRow.dataInicioProducaoAtual ? new Date(updatedOSRow.dataInicioProducaoAtual).toISOString() : null,
     };
-    console.log('[OSAction updateOSInDB] OS atualizada retornada para o store:', JSON.stringify(updatedOSForReturn, null, 2));
     return updatedOSForReturn;
 
   } catch (error: any) {
-    console.error(`[OSAction updateOSInDB] Erro ao atualizar OS ID ${osData.id}. Rollback será tentado. Erro:`, error.message, error.stack, error.code, error.sqlMessage);
-    if (connection) {
-      await connection.rollback();
-      console.log(`[OSAction updateOSInDB] Rollback da transação para OS ID ${osData.id} bem-sucedido.`);
-    }
+    console.error(`[OSAction updateOSInDB] Erro ao atualizar OS ID ${osData.id}:`, error.message, error.stack);
+    if (connection) await connection.rollback();
     return null;
   } finally {
-    if (connection) {
-      connection.release();
-      console.log(`[OSAction updateOSInDB] Conexão liberada para OS ID: ${osData.id}`);
-    }
+    if (connection) connection.release();
   }
 }
 
@@ -388,11 +354,13 @@ export async function getAllOSFromDB(): Promise<OS[]> {
         os.id, os.numero, os.projeto, os.tarefa, os.observacoes, os.checklist_json, os.status,
         os.dataAbertura, os.dataFinalizacao, os.programadoPara, os.isUrgent,
         os.dataInicioProducao, os.tempoGastoProducaoSegundos, os.dataInicioProducaoAtual,
+        os.created_by_partner_id, creator_p.name as creator_partner_name,
         c.name as cliente_name, c.id as cliente_id_val,
-        p.name as partner_name, p.id as partner_id_val
+        exec_p.name as execution_partner_name, exec_p.id as execution_partner_id_val
       FROM os_table os
       JOIN clients c ON os.cliente_id = c.id
-      LEFT JOIN partners p ON os.parceiro_id = p.id
+      LEFT JOIN partners exec_p ON os.parceiro_id = exec_p.id
+      LEFT JOIN partners creator_p ON os.created_by_partner_id = creator_p.id
       ORDER BY os.isUrgent DESC, os.dataAbertura DESC
     `;
     const [rows] = await connection.query<RowDataPacket[]>(query);
@@ -420,59 +388,43 @@ export async function getAllOSFromDB(): Promise<OS[]> {
       if (isValid(dataAberturaParsed)) {
         dataAberturaISO = dataAberturaParsed.toISOString();
       } else {
-        console.error(`[OSAction getAllOSFromDB] CRITICAL: Invalid dataAbertura for OS ID ${row.id}: "${row.dataAbertura}". Falling back to epoch. THIS INDICATES DATA CORRUPTION.`);
-        dataAberturaISO = new Date(0).toISOString(); // Epoch as fallback
+        console.error(`[OSAction getAllOSFromDB] CRITICAL: Invalid dataAbertura for OS ID ${row.id}: "${row.dataAbertura}". Falling back to epoch.`);
+        dataAberturaISO = new Date(0).toISOString(); 
       }
 
       let dataFinalizacaoISO: string | undefined = undefined;
       if (row.dataFinalizacao) {
         const parsed = new Date(row.dataFinalizacao);
-        if (isValid(parsed)) {
-          dataFinalizacaoISO = parsed.toISOString();
-        } else {
-          console.warn(`[OSAction getAllOSFromDB] Invalid dataFinalizacao for OS ID ${row.id}: "${row.dataFinalizacao}".`);
-        }
+        if (isValid(parsed)) dataFinalizacaoISO = parsed.toISOString();
       }
 
       let programadoParaFormatted: string | undefined = undefined;
       if (row.programadoPara && typeof row.programadoPara === 'string') {
-        const parsed = parseISO(row.programadoPara); // parseISO for 'YYYY-MM-DD'
-        if (isValid(parsed)) {
-          programadoParaFormatted = formatDateFns(parsed, 'yyyy-MM-dd');
-        } else {
-          console.warn(`[OSAction getAllOSFromDB] Invalid programadoPara for OS ID ${row.id}: "${row.programadoPara}".`);
-        }
-      } else if (row.programadoPara) {
-          console.warn(`[OSAction getAllOSFromDB] programadoPara for OS ID ${row.id} is not a string: ${typeof row.programadoPara}, value: "${row.programadoPara}".`);
+        const parsed = parseISO(row.programadoPara); 
+        if (isValid(parsed)) programadoParaFormatted = formatDateFns(parsed, 'yyyy-MM-dd');
       }
 
       let dataInicioProducaoISO: string | undefined = undefined;
       if (row.dataInicioProducao) {
         const parsed = new Date(row.dataInicioProducao);
-        if (isValid(parsed)) {
-          dataInicioProducaoISO = parsed.toISOString();
-        } else {
-          console.warn(`[OSAction getAllOSFromDB] Invalid dataInicioProducao for OS ID ${row.id}: "${row.dataInicioProducao}".`);
-        }
+        if (isValid(parsed)) dataInicioProducaoISO = parsed.toISOString();
       }
 
       let dataInicioProducaoAtualISO: string | null = null;
       if (row.dataInicioProducaoAtual) {
         const parsed = new Date(row.dataInicioProducaoAtual);
-        if (isValid(parsed)) {
-          dataInicioProducaoAtualISO = parsed.toISOString();
-        } else {
-          console.warn(`[OSAction getAllOSFromDB] Invalid dataInicioProducaoAtual for OS ID ${row.id}: "${row.dataInicioProducaoAtual}".`);
-        }
+        if (isValid(parsed)) dataInicioProducaoAtualISO = parsed.toISOString();
       }
       
       return {
         id: String(row.id),
         numero: row.numero,
         cliente: row.cliente_name,
-        parceiro: row.partner_name || undefined,
+        parceiro: row.execution_partner_name || undefined,
         clientId: String(row.cliente_id_val),
-        partnerId: row.partner_id_val ? String(row.partner_id_val) : undefined,
+        partnerId: row.execution_partner_id_val ? String(row.execution_partner_id_val) : undefined,
+        createdByPartnerId: row.created_by_partner_id ? String(row.created_by_partner_id) : undefined,
+        createdByPartnerName: row.creator_partner_name || undefined,
         projeto: row.projeto,
         tarefa: row.tarefa,
         observacoes: row.observacoes,
@@ -488,7 +440,7 @@ export async function getAllOSFromDB(): Promise<OS[]> {
       };
     });
   } catch (error: any) {
-    console.error('[OSAction getAllOSFromDB] Erro original do DB:', error.message, error.stack, error.code, error.sqlMessage);
+    console.error('[OSAction getAllOSFromDB] Erro original do DB:', error.message, error.stack);
     throw new Error(`Falha ao buscar lista de OS do banco: ${error.message || 'Erro desconhecido'}`);
   } finally {
     if (connection) connection.release();
@@ -510,7 +462,6 @@ export async function updateOSStatusInDB(osId: string, newStatus: OSStatus): Pro
       throw new Error(`OS ID ${osId} não encontrada.`);
     }
     const currentOSFromDB = currentOSRows[0];
-    console.log(`[OSAction updateOSStatusInDB] Estado atual (antes de mudar status) da OS ID ${osId} no DB:`, JSON.stringify(currentOSFromDB, null, 2));
 
     const now = new Date();
     let newDataInicioProducaoAtualSQL = currentOSFromDB.dataInicioProducaoAtual ? new Date(currentOSFromDB.dataInicioProducaoAtual) : null;
@@ -519,30 +470,21 @@ export async function updateOSStatusInDB(osId: string, newStatus: OSStatus): Pro
     let newDataInicioProducaoHistoricoSQL: Date | null = currentOSFromDB.dataInicioProducao ? new Date(currentOSFromDB.dataInicioProducao) : null;
 
     if (newStatus === OSStatus.EM_PRODUCAO) {
-      if (!newDataInicioProducaoAtualSQL) { // Only start if not already running
+      if (!newDataInicioProducaoAtualSQL) { 
         newDataInicioProducaoAtualSQL = now;
-        if (!newDataInicioProducaoHistoricoSQL) { // Set historical start if it's the very first time
-          newDataInicioProducaoHistoricoSQL = now;
-        }
-        console.log(`[OSAction updateOSStatusInDB] Timer iniciado para OS ${osId} devido à mudança para EM_PRODUCAO.`);
+        if (!newDataInicioProducaoHistoricoSQL) newDataInicioProducaoHistoricoSQL = now;
       }
-    } else { // If new status is NOT Em Produção
-      if (newDataInicioProducaoAtualSQL) { // If it was running, stop it
-        const secondsElapsed = differenceInSeconds(now, newDataInicioProducaoAtualSQL);
-        newTempoGastoProducaoSegundosSQL = (currentOSFromDB.tempoGastoProducaoSegundos || 0) + secondsElapsed;
+    } else { 
+      if (newDataInicioProducaoAtualSQL) { 
+        newTempoGastoProducaoSegundosSQL = (currentOSFromDB.tempoGastoProducaoSegundos || 0) + differenceInSeconds(now, newDataInicioProducaoAtualSQL);
         newDataInicioProducaoAtualSQL = null;
-        console.log(`[OSAction updateOSStatusInDB] Timer pausado para OS ${osId}. Segundos nesta sessão: ${secondsElapsed}. Total acumulado: ${newTempoGastoProducaoSegundosSQL}`);
       }
     }
 
-    if (newStatus === OSStatus.FINALIZADO) {
-      if (!newDataFinalizacaoSQL) { // Only set if not already finalized
+    if (newStatus === OSStatus.FINALIZADO && !newDataFinalizacaoSQL) {
         newDataFinalizacaoSQL = now;
-        console.log(`[OSAction updateOSStatusInDB] OS ${osId} marcada como FINALIZADO. Data finalização: ${newDataFinalizacaoSQL.toISOString()}`);
-      }
-    } else if (currentOSFromDB.status === OSStatus.FINALIZADO && newStatus !== OSStatus.FINALIZADO) { // Re-opening a finalized OS
-      newDataFinalizacaoSQL = null; // Clear finalization date
-      console.log(`[OSAction updateOSStatusInDB] OS ${osId} reaberta (status mudou de FINALIZADO). Data finalização removida.`);
+    } else if (currentOSFromDB.status === OSStatus.FINALIZADO && newStatus !== OSStatus.FINALIZADO) {
+      newDataFinalizacaoSQL = null; 
     }
 
     const sql = `
@@ -554,28 +496,22 @@ export async function updateOSStatusInDB(osId: string, newStatus: OSStatus): Pro
       newStatus, newDataFinalizacaoSQL, newDataInicioProducaoHistoricoSQL,
       newTempoGastoProducaoSegundosSQL, newDataInicioProducaoAtualSQL, parseInt(osId, 10)
     ];
-    console.log(`[OSAction updateOSStatusInDB] SQL: ${sql.trim().replace(/\s+/g, ' ')}`);
-    console.log(`[OSAction updateOSStatusInDB] Valores:`, values.map(v => v instanceof Date ? v.toISOString() : v));
-
+    
     const [result] = await connection.execute<ResultSetHeader>(sql, values);
-    console.log(`[OSAction updateOSStatusInDB] Resultado do update para OS ${osId}:`, result);
     await connection.commit();
-    console.log(`[OSAction updateOSStatusInDB] Transação commitada para OS ${osId}.`);
 
     if (result.affectedRows > 0 || result.changedRows > 0) {
       const [updatedOSRows] = await connection.query<RowDataPacket[]>(
-        `SELECT os.*, c.name as cliente_name, p.name as partner_name
+        `SELECT os.*, c.name as cliente_name, exec_p.name as execution_partner_name, creator_p.name as creator_partner_name
          FROM os_table os
          JOIN clients c ON os.cliente_id = c.id
-         LEFT JOIN partners p ON os.parceiro_id = p.id
+         LEFT JOIN partners exec_p ON os.parceiro_id = exec_p.id
+         LEFT JOIN partners creator_p ON os.created_by_partner_id = creator_p.id
          WHERE os.id = ?`,
         [osId]
       );
-      if (updatedOSRows.length === 0) {
-        throw new Error('Falha ao buscar OS atualizada após update de status.');
-      }
+      if (updatedOSRows.length === 0) throw new Error('Falha ao buscar OS atualizada.');
       const updatedOSRow = updatedOSRows[0];
-
       let parsedChecklistStatus: ChecklistItem[] = [];
       if (updatedOSRow.checklist_json) {
         try {
@@ -587,18 +523,18 @@ export async function updateOSStatusInDB(osId: string, newStatus: OSStatus): Pro
               completed: item.completed || false,
             }));
           }
-        } catch (e) {
-          console.error(`[OSAction updateOSStatusInDB] Erro ao parsear checklist_json da OS ID ${updatedOSRow.id} após update de status:`, e);
-        }
+        } catch (e) { console.error(`[OSAction updateOSStatusInDB] Erro parse checklist ${updatedOSRow.id}:`, e); }
       }
 
       const updatedOS: OS = {
         id: osId,
         numero: updatedOSRow.numero,
         cliente: updatedOSRow.cliente_name,
-        parceiro: updatedOSRow.partner_name || undefined,
+        parceiro: updatedOSRow.execution_partner_name || undefined,
         clientId: String(updatedOSRow.cliente_id),
         partnerId: updatedOSRow.parceiro_id ? String(updatedOSRow.parceiro_id) : undefined,
+        createdByPartnerId: updatedOSRow.created_by_partner_id ? String(updatedOSRow.created_by_partner_id) : undefined,
+        createdByPartnerName: updatedOSRow.creator_partner_name || undefined,
         projeto: updatedOSRow.projeto,
         tarefa: updatedOSRow.tarefa,
         observacoes: updatedOSRow.observacoes,
@@ -612,15 +548,13 @@ export async function updateOSStatusInDB(osId: string, newStatus: OSStatus): Pro
         tempoGastoProducaoSegundos: newTempoGastoProducaoSegundosSQL,
         dataInicioProducaoAtual: newDataInicioProducaoAtualSQL ? newDataInicioProducaoAtualSQL.toISOString() : null,
       };
-      console.log(`[OSAction updateOSStatusInDB] OS atualizada retornada para o store:`, JSON.stringify(updatedOS, null, 2));
       return updatedOS;
     }
-    console.warn(`[OSAction updateOSStatusInDB] Nenhuma linha alterada para OS ${osId} ao tentar mudar status para ${newStatus}. Retornando null.`);
-    await connection.rollback(); // Rollback if no changes were made, just in case.
+    await connection.rollback(); 
     return null;
 
   } catch (error: any) {
-    console.error(`[OSAction updateOSStatusInDB] Erro ao atualizar status da OS ID ${osId} para ${newStatus}:`, error.message, error.stack, error.code, error.sqlMessage);
+    console.error(`[OSAction updateOSStatusInDB] Erro OS ID ${osId} para ${newStatus}:`, error.message, error.stack);
     if (connection) await connection.rollback();
     return null;
   } finally {
@@ -630,52 +564,40 @@ export async function updateOSStatusInDB(osId: string, newStatus: OSStatus): Pro
 
 export async function toggleOSProductionTimerInDB(osId: string, action: 'play' | 'pause'): Promise<OS | null> {
   const connection = await db.getConnection();
-  console.log(`[OSAction toggleOSProductionTimerInDB] OS ID: ${osId}, Ação: ${action}`);
+  console.log(`[OSAction toggleTimerInDB] OS ID: ${osId}, Ação: ${action}`);
   try {
     await connection.beginTransaction();
-
     const [currentOSRows] = await connection.query<RowDataPacket[]>(
-      'SELECT * FROM os_table WHERE id = ? FOR UPDATE',
-      [osId]
+      'SELECT * FROM os_table WHERE id = ? FOR UPDATE', [osId]
     );
     if (currentOSRows.length === 0) {
       await connection.rollback();
-      throw new Error(`OS ID ${osId} não encontrada para toggle.`);
+      throw new Error(`OS ID ${osId} não encontrada.`);
     }
     const currentOSFromDB = currentOSRows[0];
-    console.log(`[OSAction toggleOSProductionTimerInDB] Estado atual da OS ID ${osId}:`, JSON.stringify(currentOSFromDB, null, 2));
 
     if (currentOSFromDB.status === OSStatus.FINALIZADO && action === 'play') {
-      console.warn(`[OSAction toggleOSProductionTimerInDB] Não é possível iniciar o timer para OS ${osId} pois ela já está FINALIZADA.`);
-      await connection.rollback();
-       const updatedOSRow = currentOSRows[0];
-       let parsedChecklistTogglePlayFinalized: ChecklistItem[] = [];
-       if (updatedOSRow.checklist_json) {
-            try {
-                const rawChecklist = JSON.parse(updatedOSRow.checklist_json);
-                 if (Array.isArray(rawChecklist)) {
-                    parsedChecklistTogglePlayFinalized = rawChecklist.map((item, index) => ({
-                        id: `db-item-${updatedOSRow.id}-${index}`,
-                        text: item.text || '',
-                        completed: item.completed || false,
-                    }));
-                }
-            } catch (e) {/* ignore */}
-        }
-        return {
-            id: osId, numero: updatedOSRow.numero, cliente: updatedOSRow.cliente_name, parceiro: updatedOSRow.partner_name || undefined,
-            clientId: String(updatedOSRow.cliente_id), partnerId: updatedOSRow.parceiro_id ? String(updatedOSRow.parceiro_id) : undefined,
-            projeto: updatedOSRow.projeto, tarefa: updatedOSRow.tarefa, observacoes: updatedOSRow.observacoes,
-            checklist: parsedChecklistTogglePlayFinalized,
-            status: updatedOSRow.status as OSStatus,
-            dataAbertura: new Date(updatedOSRow.dataAbertura).toISOString(),
-            programadoPara: updatedOSRow.programadoPara ? formatDateFns(parseISO(updatedOSRow.programadoPara), 'yyyy-MM-dd') : undefined,
-            isUrgent: Boolean(updatedOSRow.isUrgent),
-            dataFinalizacao: updatedOSRow.dataFinalizacao ? new Date(updatedOSRow.dataFinalizacao).toISOString() : undefined,
-            dataInicioProducao: updatedOSRow.dataInicioProducao ? new Date(updatedOSRow.dataInicioProducao).toISOString() : undefined,
-            tempoGastoProducaoSegundos: updatedOSRow.tempoGastoProducaoSegundos || 0,
-            dataInicioProducaoAtual: updatedOSRow.dataInicioProducaoAtual ? new Date(updatedOSRow.dataInicioProducaoAtual).toISOString() : null,
-        };
+      await connection.rollback(); // No changes needed if finalized and trying to play
+       // Re-fetch to return consistent data
+      const finalOSRow = currentOSRows[0]; // Use the already fetched row
+      let parsedChecklistFinal: ChecklistItem[] = [];
+      if (finalOSRow.checklist_json) { try { const r = JSON.parse(finalOSRow.checklist_json); if (Array.isArray(r)) parsedChecklistFinal = r.map((item,idx)=>({id:`db-item-${finalOSRow.id}-${idx}`,text:item.text||'',completed:item.completed||false})); } catch(e){}}
+      return {
+          id: osId, numero: finalOSRow.numero, cliente: finalOSRow.cliente_name, parceiro: finalOSRow.partner_name || undefined,
+          clientId: String(finalOSRow.cliente_id), partnerId: finalOSRow.parceiro_id ? String(finalOSRow.parceiro_id) : undefined,
+          createdByPartnerId: finalOSRow.created_by_partner_id ? String(finalOSRow.created_by_partner_id) : undefined,
+          createdByPartnerName: finalOSRow.creator_partner_name || undefined,
+          projeto: finalOSRow.projeto, tarefa: finalOSRow.tarefa, observacoes: finalOSRow.observacoes,
+          checklist: parsedChecklistFinal,
+          status: finalOSRow.status as OSStatus,
+          dataAbertura: new Date(finalOSRow.dataAbertura).toISOString(),
+          programadoPara: finalOSRow.programadoPara ? formatDateFns(parseISO(finalOSRow.programadoPara), 'yyyy-MM-dd') : undefined,
+          isUrgent: Boolean(finalOSRow.isUrgent),
+          dataFinalizacao: finalOSRow.dataFinalizacao ? new Date(finalOSRow.dataFinalizacao).toISOString() : undefined,
+          dataInicioProducao: finalOSRow.dataInicioProducao ? new Date(finalOSRow.dataInicioProducao).toISOString() : undefined,
+          tempoGastoProducaoSegundos: finalOSRow.tempoGastoProducaoSegundos || 0,
+          dataInicioProducaoAtual: finalOSRow.dataInicioProducaoAtual ? new Date(finalOSRow.dataInicioProducaoAtual).toISOString() : null,
+      };
     }
 
     const now = new Date();
@@ -685,151 +607,84 @@ export async function toggleOSProductionTimerInDB(osId: string, action: 'play' |
     let newDataInicioProducaoHistoricoSQL: Date | null = currentOSFromDB.dataInicioProducao ? new Date(currentOSFromDB.dataInicioProducao) : null;
 
     if (action === 'play') {
-      if (!newDataInicioProducaoAtualSQL) { // Only start if not already running
+      if (!newDataInicioProducaoAtualSQL) {
         newDataInicioProducaoAtualSQL = now;
-        newStatus = OSStatus.EM_PRODUCAO; // Force status to Em Produção when timer starts
-        if (!newDataInicioProducaoHistoricoSQL) { // Set historical start if it's the very first time
-          newDataInicioProducaoHistoricoSQL = now;
-        }
-        console.log(`[OSAction toggleOSProductionTimerInDB] Timer iniciado para OS ${osId}. Novo status: ${newStatus}.`);
-      } else {
-        console.log(`[OSAction toggleOSProductionTimerInDB] Timer para OS ${osId} já estava rodando. Nenhuma ação tomada no DB, retornando estado atual.`);
-        await connection.rollback();
-        const updatedOSRow = currentOSRows[0];
-        let parsedChecklistTogglePlayRunning: ChecklistItem[] = [];
-        if (updatedOSRow.checklist_json) {
-            try {
-                const rawChecklist = JSON.parse(updatedOSRow.checklist_json);
-                 if (Array.isArray(rawChecklist)) {
-                    parsedChecklistTogglePlayRunning = rawChecklist.map((item, index) => ({
-                        id: `db-item-${updatedOSRow.id}-${index}`,
-                        text: item.text || '',
-                        completed: item.completed || false,
-                    }));
-                }
-            } catch (e) {/* ignore */}
-        }
-        return {
-            id: osId, numero: updatedOSRow.numero, cliente: updatedOSRow.cliente_name, parceiro: updatedOSRow.partner_name || undefined,
-            clientId: String(updatedOSRow.cliente_id), partnerId: updatedOSRow.parceiro_id ? String(updatedOSRow.parceiro_id) : undefined,
-            projeto: updatedOSRow.projeto, tarefa: updatedOSRow.tarefa, observacoes: updatedOSRow.observacoes,
-            checklist: parsedChecklistTogglePlayRunning,
-            status: updatedOSRow.status as OSStatus, // Return current status
-            dataAbertura: new Date(updatedOSRow.dataAbertura).toISOString(),
-            programadoPara: updatedOSRow.programadoPara ? formatDateFns(parseISO(updatedOSRow.programadoPara), 'yyyy-MM-dd') : undefined,
-            isUrgent: Boolean(updatedOSRow.isUrgent),
-            dataFinalizacao: updatedOSRow.dataFinalizacao ? new Date(updatedOSRow.dataFinalizacao).toISOString() : undefined,
-            dataInicioProducao: newDataInicioProducaoHistoricoSQL ? newDataInicioProducaoHistoricoSQL.toISOString() : undefined, // May have been updated
-            tempoGastoProducaoSegundos: newTempoGastoProducaoSegundosSQL, // Reflects current accumulated
-            dataInicioProducaoAtual: newDataInicioProducaoAtualSQL ? newDataInicioProducaoAtualSQL.toISOString() : null, // Reflects it's running
-        };
+        newStatus = OSStatus.EM_PRODUCAO;
+        if (!newDataInicioProducaoHistoricoSQL) newDataInicioProducaoHistoricoSQL = now;
+      } else { // Already playing, no DB change, return current state
+          await connection.rollback();
+          // Re-fetch could be done here for consistency, or just map currentOSFromDB
+          const noChangeOSRow = currentOSFromDB; // Assuming no concurrent changes
+          let parsedChecklistNoChange: ChecklistItem[] = [];
+          if (noChangeOSRow.checklist_json) { try { const r = JSON.parse(noChangeOSRow.checklist_json); if (Array.isArray(r)) parsedChecklistNoChange = r.map((item,idx)=>({id:`db-item-${noChangeOSRow.id}-${idx}`,text:item.text||'',completed:item.completed||false})); } catch(e){}}
+           return {
+                id: osId, numero: noChangeOSRow.numero, cliente: noChangeOSRow.cliente_name, parceiro: noChangeOSRow.partner_name || undefined,
+                clientId: String(noChangeOSRow.cliente_id), partnerId: noChangeOSRow.parceiro_id ? String(noChangeOSRow.parceiro_id) : undefined,
+                createdByPartnerId: noChangeOSRow.created_by_partner_id ? String(noChangeOSRow.created_by_partner_id) : undefined,
+                createdByPartnerName: noChangeOSRow.creator_partner_name || undefined,
+                projeto: noChangeOSRow.projeto, tarefa: noChangeOSRow.tarefa, observacoes: noChangeOSRow.observacoes,
+                checklist: parsedChecklistNoChange, status: noChangeOSRow.status as OSStatus,
+                dataAbertura: new Date(noChangeOSRow.dataAbertura).toISOString(),
+                programadoPara: noChangeOSRow.programadoPara ? formatDateFns(parseISO(noChangeOSRow.programadoPara), 'yyyy-MM-dd') : undefined,
+                isUrgent: Boolean(noChangeOSRow.isUrgent),
+                dataFinalizacao: noChangeOSRow.dataFinalizacao ? new Date(noChangeOSRow.dataFinalizacao).toISOString() : undefined,
+                dataInicioProducao: newDataInicioProducaoHistoricoSQL ? newDataInicioProducaoHistoricoSQL.toISOString() : undefined,
+                tempoGastoProducaoSegundos: newTempoGastoProducaoSegundosSQL,
+                dataInicioProducaoAtual: newDataInicioProducaoAtualSQL ? newDataInicioProducaoAtualSQL.toISOString() : null,
+            };
       }
     } else if (action === 'pause') {
-      if (newDataInicioProducaoAtualSQL) { // Only pause if it was running
-        const secondsElapsed = differenceInSeconds(now, newDataInicioProducaoAtualSQL);
-        newTempoGastoProducaoSegundosSQL = (currentOSFromDB.tempoGastoProducaoSegundos || 0) + secondsElapsed;
+      if (newDataInicioProducaoAtualSQL) {
+        newTempoGastoProducaoSegundosSQL = (currentOSFromDB.tempoGastoProducaoSegundos || 0) + differenceInSeconds(now, newDataInicioProducaoAtualSQL);
         newDataInicioProducaoAtualSQL = null;
-        // When pausing, if the status was "Em Produção", revert to "Na Fila" or a more appropriate "paused" status if desired.
-        // For now, let's assume if it was 'Em Produção', and user pauses, it might go to 'Na Fila' or user can manually set.
-        // Let's revert to Na Fila if it was Em Produção.
-        if (newStatus === OSStatus.EM_PRODUCAO) {
-            newStatus = OSStatus.NA_FILA; // Or a new "Pausado" status if you add one
-            console.log(`[OSAction toggleOSProductionTimerInDB] Timer pausado para OS ${osId}. Status revertido para ${newStatus}.`);
-        } else {
-            console.log(`[OSAction toggleOSProductionTimerInDB] Timer pausado para OS ${osId}. Status ${newStatus} mantido.`);
-        }
-        console.log(`[OSAction toggleOSProductionTimerInDB] Segundos nesta sessão: ${secondsElapsed}. Total acumulado: ${newTempoGastoProducaoSegundosSQL}.`);
-      } else {
-        console.log(`[OSAction toggleOSProductionTimerInDB] Timer para OS ${osId} já estava pausado. Nenhuma ação tomada no DB, retornando estado atual.`);
-        await connection.rollback();
-        const updatedOSRow = currentOSRows[0];
-         let parsedChecklistTogglePauseAlready: ChecklistItem[] = [];
-        if (updatedOSRow.checklist_json) {
-            try {
-                const rawChecklist = JSON.parse(updatedOSRow.checklist_json);
-                 if (Array.isArray(rawChecklist)) {
-                    parsedChecklistTogglePauseAlready = rawChecklist.map((item, index) => ({
-                        id: `db-item-${updatedOSRow.id}-${index}`,
-                        text: item.text || '',
-                        completed: item.completed || false,
-                    }));
-                }
-            } catch (e) {/* ignore */}
-        }
-        return {
-            id: osId, numero: updatedOSRow.numero, cliente: updatedOSRow.cliente_name, parceiro: updatedOSRow.partner_name || undefined,
-            clientId: String(updatedOSRow.cliente_id), partnerId: updatedOSRow.parceiro_id ? String(updatedOSRow.parceiro_id) : undefined,
-            projeto: updatedOSRow.projeto, tarefa: updatedOSRow.tarefa, observacoes: updatedOSRow.observacoes,
-            checklist: parsedChecklistTogglePauseAlready,
-            status: updatedOSRow.status as OSStatus, // Return current status
-            dataAbertura: new Date(updatedOSRow.dataAbertura).toISOString(),
-            programadoPara: updatedOSRow.programadoPara ? formatDateFns(parseISO(updatedOSRow.programadoPara), 'yyyy-MM-dd') : undefined,
-            isUrgent: Boolean(updatedOSRow.isUrgent),
-            dataFinalizacao: updatedOSRow.dataFinalizacao ? new Date(updatedOSRow.dataFinalizacao).toISOString() : undefined,
+        if (newStatus === OSStatus.EM_PRODUCAO) newStatus = OSStatus.NA_FILA;
+      } else { // Already paused, no DB change
+         await connection.rollback();
+         const noChangeOSRow = currentOSFromDB;
+         let parsedChecklistNoChange: ChecklistItem[] = [];
+         if (noChangeOSRow.checklist_json) { try { const r = JSON.parse(noChangeOSRow.checklist_json); if (Array.isArray(r)) parsedChecklistNoChange = r.map((item,idx)=>({id:`db-item-${noChangeOSRow.id}-${idx}`,text:item.text||'',completed:item.completed||false})); } catch(e){}}
+         return {
+            id: osId, numero: noChangeOSRow.numero, cliente: noChangeOSRow.cliente_name, parceiro: noChangeOSRow.partner_name || undefined,
+            clientId: String(noChangeOSRow.cliente_id), partnerId: noChangeOSRow.parceiro_id ? String(noChangeOSRow.parceiro_id) : undefined,
+            createdByPartnerId: noChangeOSRow.created_by_partner_id ? String(noChangeOSRow.created_by_partner_id) : undefined,
+            createdByPartnerName: noChangeOSRow.creator_partner_name || undefined,
+            projeto: noChangeOSRow.projeto, tarefa: noChangeOSRow.tarefa, observacoes: noChangeOSRow.observacoes,
+            checklist: parsedChecklistNoChange, status: noChangeOSRow.status as OSStatus,
+            dataAbertura: new Date(noChangeOSRow.dataAbertura).toISOString(),
+            programadoPara: noChangeOSRow.programadoPara ? formatDateFns(parseISO(noChangeOSRow.programadoPara), 'yyyy-MM-dd') : undefined,
+            isUrgent: Boolean(noChangeOSRow.isUrgent),
+            dataFinalizacao: noChangeOSRow.dataFinalizacao ? new Date(noChangeOSRow.dataFinalizacao).toISOString() : undefined,
             dataInicioProducao: newDataInicioProducaoHistoricoSQL ? newDataInicioProducaoHistoricoSQL.toISOString() : undefined,
-            tempoGastoProducaoSegundos: newTempoGastoProducaoSegundosSQL, // Reflects current accumulated
-            dataInicioProducaoAtual: newDataInicioProducaoAtualSQL ? newDataInicioProducaoAtualSQL.toISOString() : null, // Reflects it's paused
-        };
+            tempoGastoProducaoSegundos: newTempoGastoProducaoSegundosSQL,
+            dataInicioProducaoAtual: newDataInicioProducaoAtualSQL ? newDataInicioProducaoAtualSQL.toISOString() : null,
+         };
       }
     }
 
-    const updateQuery = `
-      UPDATE os_table SET
-        status = ?, tempoGastoProducaoSegundos = ?, dataInicioProducaoAtual = ?,
-        dataInicioProducao = ?, updated_at = NOW()
-      WHERE id = ?`;
-    const values = [
-      newStatus, newTempoGastoProducaoSegundosSQL, newDataInicioProducaoAtualSQL,
-      newDataInicioProducaoHistoricoSQL, parseInt(osId, 10)
-    ];
-
-    console.log('[OSAction toggleOSProductionTimerInDB] Query de Update SQL:', updateQuery.trim().replace(/\s+/g, ' '));
-    console.log('[OSAction toggleOSProductionTimerInDB] Valores para Update:', values.map(v => v instanceof Date ? v.toISOString() : v));
+    const updateQuery = `UPDATE os_table SET status = ?, tempoGastoProducaoSegundos = ?, dataInicioProducaoAtual = ?, dataInicioProducao = ?, updated_at = NOW() WHERE id = ?`;
+    const values = [newStatus, newTempoGastoProducaoSegundosSQL, newDataInicioProducaoAtualSQL, newDataInicioProducaoHistoricoSQL, parseInt(osId, 10)];
     const [result] = await connection.execute<ResultSetHeader>(updateQuery, values);
-    console.log(`[OSAction toggleOSProductionTimerInDB] Resultado do update para OS ${osId}:`, result);
-
     await connection.commit();
-    console.log(`[OSAction toggleOSProductionTimerInDB] Transação commitada para OS ${osId}.`);
 
     if (result.affectedRows > 0 || result.changedRows > 0) {
       const [updatedOSRows] = await connection.query<RowDataPacket[]>(
-        `SELECT os.*, c.name as cliente_name, p.name as partner_name
-         FROM os_table os
-         JOIN clients c ON os.cliente_id = c.id
-         LEFT JOIN partners p ON os.parceiro_id = p.id
-         WHERE os.id = ?`,
-        [osId]
+        `SELECT os.*, c.name as cliente_name, exec_p.name as execution_partner_name, creator_p.name as creator_partner_name
+         FROM os_table os JOIN clients c ON os.cliente_id = c.id
+         LEFT JOIN partners exec_p ON os.parceiro_id = exec_p.id
+         LEFT JOIN partners creator_p ON os.created_by_partner_id = creator_p.id
+         WHERE os.id = ?`, [osId]
       );
-      if (updatedOSRows.length === 0) {
-        throw new Error('Falha ao buscar OS atualizada após toggle do timer.');
-      }
+      if (updatedOSRows.length === 0) throw new Error('Falha ao buscar OS atualizada pós-toggle.');
       const updatedOSRow = updatedOSRows[0];
-      let parsedChecklistToggleFinal: ChecklistItem[] = [];
-      if (updatedOSRow.checklist_json) {
-        try {
-          const rawChecklist = JSON.parse(updatedOSRow.checklist_json);
-          if (Array.isArray(rawChecklist)) {
-            parsedChecklistToggleFinal = rawChecklist.map((item, index) => ({
-              id: `db-item-${updatedOSRow.id}-${index}`,
-              text: item.text || '',
-              completed: item.completed || false,
-            }));
-          }
-        } catch (e) {/* ignore */ }
-      }
-
+      let parsedChecklistToggle: ChecklistItem[] = [];
+      if (updatedOSRow.checklist_json) { try { const r = JSON.parse(updatedOSRow.checklist_json); if (Array.isArray(r)) parsedChecklistToggle = r.map((item,idx)=>({id:`db-item-${updatedOSRow.id}-${idx}`,text:item.text||'',completed:item.completed||false})); } catch(e){}}
       const updatedOS: OS = {
-        id: osId,
-        numero: updatedOSRow.numero,
-        cliente: updatedOSRow.cliente_name,
-        parceiro: updatedOSRow.partner_name || undefined,
-        clientId: String(updatedOSRow.cliente_id),
-        partnerId: updatedOSRow.parceiro_id ? String(updatedOSRow.parceiro_id) : undefined,
-        projeto: updatedOSRow.projeto,
-        tarefa: updatedOSRow.tarefa,
-        observacoes: updatedOSRow.observacoes,
-        checklist: parsedChecklistToggleFinal,
-        status: newStatus, // Reflect updated status
+        id: osId, numero: updatedOSRow.numero, cliente: updatedOSRow.cliente_name, parceiro: updatedOSRow.execution_partner_name || undefined,
+        clientId: String(updatedOSRow.cliente_id), partnerId: updatedOSRow.parceiro_id ? String(updatedOSRow.parceiro_id) : undefined,
+        createdByPartnerId: updatedOSRow.created_by_partner_id ? String(updatedOSRow.created_by_partner_id) : undefined,
+        createdByPartnerName: updatedOSRow.creator_partner_name || undefined,
+        projeto: updatedOSRow.projeto, tarefa: updatedOSRow.tarefa, observacoes: updatedOSRow.observacoes,
+        checklist: parsedChecklistToggle, status: newStatus,
         dataAbertura: new Date(updatedOSRow.dataAbertura).toISOString(),
         programadoPara: updatedOSRow.programadoPara ? formatDateFns(parseISO(updatedOSRow.programadoPara), 'yyyy-MM-dd') : undefined,
         isUrgent: Boolean(updatedOSRow.isUrgent),
@@ -838,19 +693,15 @@ export async function toggleOSProductionTimerInDB(osId: string, action: 'play' |
         tempoGastoProducaoSegundos: newTempoGastoProducaoSegundosSQL,
         dataInicioProducaoAtual: newDataInicioProducaoAtualSQL ? newDataInicioProducaoAtualSQL.toISOString() : null,
       };
-      console.log(`[OSAction toggleOSProductionTimerInDB] OS atualizada retornada para o store:`, JSON.stringify(updatedOS, null, 2));
       return updatedOS;
     }
-    console.warn(`[OSAction toggleOSProductionTimerInDB] Nenhuma linha alterada para OS ${osId} ao tentar ${action} o timer. Retornando null após rollback.`);
-    await connection.rollback(); // Rollback if no changes were made
+    await connection.rollback();
     return null;
-
   } catch (error: any) {
-    console.error(`[OSAction toggleOSProductionTimerInDB] Erro ao alternar timer para OS ID ${osId}:`, error.message, error.stack, error.code, error.sqlMessage);
+    console.error(`[OSAction toggleTimerInDB] Erro OS ID ${osId}:`, error.message, error.stack);
     if (connection) await connection.rollback();
     return null;
   } finally {
     if (connection) connection.release();
   }
 }
-

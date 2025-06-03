@@ -13,20 +13,26 @@ import { findOrCreateClientByName, getAllClientsFromDB } from '@/lib/actions/cli
 import { findOrCreatePartnerByName, getAllPartnersFromDB } from '@/lib/actions/partner-actions';
 
 
+// Represents a partner entity as stored and managed within the app, including login details if applicable
 export interface Partner {
     id: string;
     name: string;
+    username?: string; // For login
+    email?: string;
+    contact_person?: string;
+    is_approved?: boolean; // For login approval
+    // other fields from DB as needed by admin UI for managing partners
 }
 
 interface OSState {
   osList: OS[];
-  partners: Partner[];
+  partners: Partner[]; // This list is for admin management & OS assignment
   clients: Client[];
   isStoreInitialized: boolean;
 
   initializeStore: () => Promise<void>;
 
-  addOS: (data: CreateOSData) => Promise<OS | null>;
+  addOS: (data: CreateOSData, createdByPartnerId?: string) => Promise<OS | null>; // Add createdByPartnerId
   updateOS: (updatedOS: OS) => Promise<OS | null>;
   updateOSStatus: (osId: string, newStatus: OSStatus) => Promise<OS | null>; 
   getOSById: (osId: string) => OS | undefined;
@@ -34,11 +40,12 @@ interface OSState {
   toggleUrgent: (osId: string) => Promise<void>;
   toggleProductionTimer: (osId: string, action: 'play' | 'pause') => Promise<OS | null>;
 
-  addPartner: (partnerData: { name: string }) => Promise<Partner | null>;
-  updatePartner: (updatedPartner: Partner) => Promise<void>; 
-  deletePartner: (partnerId: string) => Promise<void>; 
-  getPartnerById: (partnerId: string) => Partner | undefined;
-  getPartnerByName: (partnerName: string) => Partner | undefined;
+  // Methods for managing partner entities (CRUD for admins)
+  addPartnerEntity: (partnerData: Omit<Partner, 'id'>) => Promise<Partner | null>; // Renamed to avoid confusion
+  updatePartnerEntity: (updatedPartner: Partner) => Promise<Partner | null>; 
+  deletePartnerEntity: (partnerId: string) => Promise<boolean>; 
+  getPartnerEntityById: (partnerId: string) => Partner | undefined;
+  getPartnerEntityByName: (partnerName: string) => Partner | undefined;
 
   addClient: (clientData: { name: string }) => Promise<Client | null>;
   updateClient: (updatedClient: Client) => Promise<void>; 
@@ -65,18 +72,18 @@ export const useOSStore = create<OSState>()(
             const [osListFromDB, clientsFromDB, partnersFromDB] = await Promise.all([
                 getAllOSFromDB(),
                 getAllClientsFromDB(),
-                getAllPartnersFromDB()
+                getAllPartnersFromDB() // This now fetches partners with their new fields
             ]);
             
             const processedOSList = osListFromDB.map(os => ({
                 ...os,
-                checklist: os.checklist || [], // Ensure checklist is always an array
+                checklist: os.checklist || [], 
             }));
 
             set({
               osList: processedOSList || [], 
               clients: clientsFromDB || [],
-              partners: partnersFromDB || [],
+              partners: partnersFromDB || [], // Partners list updated with full details
               isStoreInitialized: true,
             });
             console.log('[Store initializeStore] Store inicializado com sucesso do DB:', {
@@ -86,20 +93,20 @@ export const useOSStore = create<OSState>()(
             });
         } catch (error) {
             console.error('[Store initializeStore] Falha ao inicializar store do DB:', error);
-            // Still mark as initialized to prevent repeated attempts, but with empty data
             set({ osList: [], clients: [], partners: [], isStoreInitialized: true }); 
         }
       },
 
-      addOS: async (data) => {
-        console.log('[Store addOS] Iniciando addOS com dados:', JSON.stringify(data, null, 2));
+      addOS: async (data, createdByPartnerId?: string) => {
+        console.log('[Store addOS] Iniciando addOS com dados:', JSON.stringify(data, null, 2), `Criado por Parceiro ID: ${createdByPartnerId}`);
         try {
-          const createdOS = await createOSInDB(data); 
+          // Pass createdByPartnerId to the DB action
+          const createdOS = await createOSInDB(data, createdByPartnerId); 
           if (createdOS) {
             console.log('[Store addOS] OS criada no DB:', JSON.stringify(createdOS, null, 2));
             const newOSWithDefaults = {
                 ...createdOS,
-                checklist: createdOS.checklist || [], // Ensure checklist is an array
+                checklist: createdOS.checklist || [], 
             };
             set((state) => ({
               osList: [...state.osList, newOSWithDefaults].sort((a, b) => { 
@@ -114,10 +121,13 @@ export const useOSStore = create<OSState>()(
                 console.log(`[Store addOS] Adicionando novo cliente ${newOSWithDefaults.cliente} (ID: ${newOSWithDefaults.clientId}) localmente.`);
                 set(state => ({ clients: [...state.clients, { id: newOSWithDefaults.clientId, name: newOSWithDefaults.cliente }].sort((a,b) => a.name.localeCompare(b.name)) }));
             }
+            // For the 'parceiro' field (execution partner), not the 'createdByPartnerId'
             if (newOSWithDefaults.partnerId && newOSWithDefaults.parceiro) {
-              const partnerExists = get().partners.some(p => p.id === newOSWithDefaults.partnerId);
-              if (!partnerExists) {
-                console.log(`[Store addOS] Adicionando novo parceiro ${newOSWithDefaults.parceiro} (ID: ${newOSWithDefaults.partnerId}) localmente.`);
+              const execPartnerExists = get().partners.some(p => p.id === newOSWithDefaults.partnerId);
+              if (!execPartnerExists) {
+                // This partner might not have full details like username if just created via OS assignment.
+                // This part is more about the partner *assigned to do the work*.
+                console.log(`[Store addOS] Adicionando novo parceiro de execução ${newOSWithDefaults.parceiro} (ID: ${newOSWithDefaults.partnerId}) localmente.`);
                 set(state => ({ partners: [...state.partners, { id: newOSWithDefaults.partnerId!, name: newOSWithDefaults.parceiro! }].sort((a,b) => a.name.localeCompare(b.name)) }));
               }
             }
@@ -140,7 +150,7 @@ export const useOSStore = create<OSState>()(
                 console.log('[Store updateOS] OS atualizada no DB retornada pela Action:', JSON.stringify(savedOS, null, 2));
                 const updatedOSWithDefaults = {
                     ...savedOS,
-                    checklist: savedOS.checklist || [], // Ensure checklist is an array
+                    checklist: savedOS.checklist || [], 
                 };
                 set((state) => ({
                     osList: state.osList.map((os) =>
@@ -156,7 +166,7 @@ export const useOSStore = create<OSState>()(
                     set(state => ({ clients: [...state.clients.filter(c => c.id !== updatedOSWithDefaults.clientId), { id: updatedOSWithDefaults.clientId, name: updatedOSWithDefaults.cliente }].sort((a,b) => a.name.localeCompare(b.name)) }));
                 }
                 if (updatedOSWithDefaults.partnerId && updatedOSWithDefaults.parceiro && !get().partners.some(p => p.id === updatedOSWithDefaults.partnerId && p.name === updatedOSWithDefaults.parceiro)) {
-                     console.log(`[Store updateOS] Parceiro ${updatedOSWithDefaults.parceiro} (ID: ${updatedOSWithDefaults.partnerId}) parece ser novo ou atualizado, adicionando/atualizando localmente.`);
+                     console.log(`[Store updateOS] Parceiro de execução ${updatedOSWithDefaults.parceiro} (ID: ${updatedOSWithDefaults.partnerId}) parece ser novo ou atualizado, adicionando/atualizando localmente.`);
                     set(state => ({ partners: [...state.partners.filter(p => p.id !== updatedOSWithDefaults.partnerId), { id: updatedOSWithDefaults.partnerId!, name: updatedOSWithDefaults.parceiro! }].sort((a,b) => a.name.localeCompare(b.name)) }));
                 }
                 console.log('[Store updateOS] Estado do store atualizado com OS modificada.');
@@ -249,14 +259,13 @@ export const useOSStore = create<OSState>()(
             projeto: `${osToDuplicate.projeto} (Cópia)`,
             tarefa: osToDuplicate.tarefa,
             observacoes: osToDuplicate.observacoes,
-            tempoTrabalhado: '', 
             status: OSStatus.NA_FILA, 
             programadoPara: undefined, 
             isUrgent: false, 
             checklistItems: osToDuplicate.checklist ? osToDuplicate.checklist.map(item => item.text) : undefined,
         };
         console.log('[Store duplicateOS] Dados para nova OS duplicada:', JSON.stringify(duplicatedOSData, null, 2));
-        return get().addOS(duplicatedOSData);
+        return get().addOS(duplicatedOSData); // createdByPartnerId will be undefined here, as admin is duplicating
       },
 
       toggleUrgent: async (osId: string) => {
@@ -292,44 +301,55 @@ export const useOSStore = create<OSState>()(
             console.error(`[Store toggleUrgent] OS ID ${osId} não encontrada.`);
         }
       },
-
-      addPartner: async (partnerData) => {
-        console.log('[Store addPartner] Adicionando parceiro:', partnerData.name);
+      
+      // Partner Entity Management - for admins to manage partner accounts/details
+      addPartnerEntity: async (partnerData) => {
+        console.log('[Store addPartnerEntity] Adicionando entidade parceiro:', partnerData.name);
+        // This would involve a new Server Action to create a partner with full details (username, password, etc.)
+        // For now, let's simulate findOrCreate and add locally if it has new fields
         try {
-            const newPartner = await findOrCreatePartnerByName(partnerData.name); 
+            // Assuming findOrCreatePartnerByName is updated or a new action `createPartnerEntityInDB` exists
+            // For this example, we'll use findOrCreate which might not set all fields.
+            const newPartner = await findOrCreatePartnerByName(partnerData.name); // This might need to be a more specific create action
             if (newPartner) {
-                const existing = get().partners.find(p => p.id === newPartner.id);
-                if (!existing) {
-                     set(state => ({ partners: [...state.partners, newPartner].sort((a,b) => a.name.localeCompare(b.name)) }));
-                     console.log('[Store addPartner] Novo parceiro adicionado ao store local:', newPartner);
-                } else {
-                    console.log('[Store addPartner] Parceiro já existia no store local (ou foi encontrado no DB):', newPartner);
-                }
-                return newPartner;
+                const completePartnerData: Partner = {
+                    ...newPartner, // Base from findOrCreate
+                    username: partnerData.username,
+                    email: partnerData.email,
+                    contact_person: partnerData.contact_person,
+                    is_approved: partnerData.is_approved ?? false,
+                };
+                set(state => ({ partners: [...state.partners.filter(p => p.id !== newPartner.id), completePartnerData].sort((a,b) => a.name.localeCompare(b.name)) }));
+                console.log('[Store addPartnerEntity] Entidade parceiro adicionada/atualizada localmente:', completePartnerData);
+                return completePartnerData;
             }
-            console.error('[Store addPartner] findOrCreatePartnerByName retornou null.');
             return null;
-        } catch (error: any) {
-            console.error("[Store addPartner] Erro ao adicionar parceiro:", error.message, error.stack);
+        } catch (error) {
+            console.error("[Store addPartnerEntity] Erro:", error);
             return null;
         }
       },
-      updatePartner: async (updatedPartner) => {
-        console.warn(`[Store updatePartner] ATENÇÃO: Atualização de parceiro no DB pendente para ID: ${updatedPartner.id}. Nome: ${updatedPartner.name}. Implementar Server Action.`);
+      updatePartnerEntity: async (updatedPartner) => {
+        console.warn(`[Store updatePartnerEntity] ATENÇÃO: Atualização de entidade parceiro no DB pendente para ID: ${updatedPartner.id}. Implementar Server Action.`);
+        // Here, you would call a server action: await updatePartnerEntityInDB(updatedPartner);
         set(state => ({
-            partners: state.partners.map(p => p.id === updatedPartner.id ? updatedPartner : p).sort((a,b) => a.name.localeCompare(b.name))
+            partners: state.partners.map(p => p.id === updatedPartner.id ? {...p, ...updatedPartner} : p).sort((a,b) => a.name.localeCompare(b.name))
         }));
-        console.log('[Store updatePartner] Parceiro atualizado localmente (sem persistência no DB).');
+        console.log('[Store updatePartnerEntity] Entidade parceiro atualizada localmente:', updatedPartner);
+        return updatedPartner; // Simulate successful update
       },
-      deletePartner: async (partnerId) => {
-        console.warn(`[Store deletePartner] ATENÇÃO: Deleção de parceiro no DB pendente para ID: ${partnerId}. Implementar Server Action.`);
+      deletePartnerEntity: async (partnerId) => {
+        console.warn(`[Store deletePartnerEntity] ATENÇÃO: Deleção de entidade parceiro no DB pendente para ID: ${partnerId}. Implementar Server Action.`);
+        // Here, you would call a server action: await deletePartnerEntityInDB(partnerId);
          set(state => ({
             partners: state.partners.filter(p => p.id !== partnerId)
         }));
-        console.log('[Store deletePartner] Parceiro deletado localmente (sem persistência no DB).');
+        console.log('[Store deletePartnerEntity] Entidade parceiro deletada localmente.');
+        return true; // Simulate successful delete
       },
-      getPartnerById: (partnerId) => get().partners.find(p => p.id === partnerId),
-      getPartnerByName: (partnerName) => get().partners.find(p => p.name.toLowerCase() === partnerName.toLowerCase()),
+      getPartnerEntityById: (partnerId) => get().partners.find(p => p.id === partnerId),
+      getPartnerEntityByName: (partnerName) => get().partners.find(p => p.name.toLowerCase() === partnerName.toLowerCase()),
+
 
       addClient: async (clientData) => {
         console.log('[Store addClient] Adicionando cliente:', clientData.name);
