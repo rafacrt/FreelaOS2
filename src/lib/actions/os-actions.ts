@@ -28,7 +28,7 @@ const mapDbRowToOS = (row: RowDataPacket): OS => {
       const rawChecklist = JSON.parse(row.checklist_json);
       if (Array.isArray(rawChecklist)) {
         parsedChecklist = rawChecklist.map((item, index) => ({
-          id: `db-item-${row.id}-${index}`,
+          id: `db-item-${row.id}-${index}`, // Ensure unique ID, might need adjustment if IDs are stored in JSON
           text: item.text || '',
           completed: item.completed || false,
         }));
@@ -44,7 +44,7 @@ const mapDbRowToOS = (row: RowDataPacket): OS => {
     dataAberturaISO = dataAberturaParsed.toISOString();
   } else {
     console.error(`[OSAction mapDbRowToOS] CRITICAL: Invalid dataAbertura for OS ID ${row.id}: "${row.dataAbertura}". Falling back to epoch.`);
-    dataAberturaISO = new Date(0).toISOString();
+    dataAberturaISO = new Date(0).toISOString(); // Fallback to epoch to prevent crash
   }
 
   let dataFinalizacaoISO: string | undefined = undefined;
@@ -53,12 +53,15 @@ const mapDbRowToOS = (row: RowDataPacket): OS => {
     if (isValid(parsed)) dataFinalizacaoISO = parsed.toISOString();
   }
 
+  // programadoPara is stored as YYYY-MM-DD string from DB
   let programadoParaFormatted: string | undefined = undefined;
   if (row.programadoPara && typeof row.programadoPara === 'string') {
-    // Assuming programadoPara is stored as YYYY-MM-DD from DB now
-    const parsed = parseISO(row.programadoPara);
-    if (isValid(parsed)) programadoParaFormatted = formatDateFns(parsed, 'yyyy-MM-dd');
+    const parsed = parseISO(row.programadoPara); // parseISO can handle 'YYYY-MM-DD'
+    if (isValid(parsed)) {
+      programadoParaFormatted = formatDateFns(parsed, 'yyyy-MM-dd');
+    }
   }
+
 
   let dataInicioProducaoISO: string | undefined = undefined;
   if (row.dataInicioProducao) {
@@ -66,21 +69,22 @@ const mapDbRowToOS = (row: RowDataPacket): OS => {
     if (isValid(parsed)) dataInicioProducaoISO = parsed.toISOString();
   }
 
-  let dataInicioProducaoAtualISO: string | null = null;
+  let dataInicioProducaoAtualISO: string | null = null; // Can be null
   if (row.dataInicioProducaoAtual) {
     const parsed = new Date(row.dataInicioProducaoAtual);
     if (isValid(parsed)) dataInicioProducaoAtualISO = parsed.toISOString();
   }
 
+
   return {
     id: String(row.id),
     numero: row.numero,
-    cliente: row.cliente_name,
-    parceiro: row.execution_partner_name || undefined,
-    clientId: String(row.cliente_id), // Corrected from cliente_id_val
-    partnerId: row.parceiro_id ? String(row.parceiro_id) : undefined, // Corrected from execution_partner_id_val
+    cliente: row.cliente_name, // From JOIN with clients table
+    parceiro: row.execution_partner_name || undefined, // From JOIN with partners table (for execution)
+    clientId: String(row.cliente_id),
+    partnerId: row.parceiro_id ? String(row.parceiro_id) : undefined,
     createdByPartnerId: row.created_by_partner_id ? String(row.created_by_partner_id) : undefined,
-    createdByPartnerName: row.creator_partner_name || undefined,
+    createdByPartnerName: row.creator_partner_name || undefined, // From JOIN with partners table (for creator)
     projeto: row.projeto,
     tarefa: row.tarefa,
     observacoes: row.observacoes,
@@ -97,7 +101,6 @@ const mapDbRowToOS = (row: RowDataPacket): OS => {
 };
 
 
-// Updated to accept createdByPartnerId
 export async function createOSInDB(data: CreateOSData, createdByPartnerId?: string): Promise<OS | null> {
   const connection = await db.getConnection();
   console.log('[OSAction createOSInDB] Iniciando com dados:', JSON.stringify(data, null, 2), `CreatedByPartnerID: ${createdByPartnerId}`);
@@ -113,8 +116,7 @@ export async function createOSInDB(data: CreateOSData, createdByPartnerId?: stri
     }
     console.log(`[OSAction createOSInDB] Cliente resolvido: ID ${client.id}, Nome ${client.name}`);
 
-    let executionPartnerId: string | null = null; // Partner responsible for execution
-    // let executionPartnerName: string | undefined = undefined; // Not needed for DB insert directly
+    let executionPartnerId: string | null = null;
     if (data.parceiro && data.parceiro.trim() !== '') {
       const execPartner = await findOrCreatePartnerByName(data.parceiro, connection);
       if (!execPartner || !execPartner.id) {
@@ -122,7 +124,6 @@ export async function createOSInDB(data: CreateOSData, createdByPartnerId?: stri
         throw new Error('Falha ao obter ID do parceiro de execução.');
       }
       executionPartnerId = execPartner.id;
-      // executionPartnerName = execPartner.name; // Not needed for DB insert
       console.log(`[OSAction createOSInDB] Parceiro de execução resolvido: ID ${executionPartnerId}`);
     }
 
@@ -130,9 +131,8 @@ export async function createOSInDB(data: CreateOSData, createdByPartnerId?: stri
     let programadoParaDate: string | null = null;
     if (data.programadoPara && data.programadoPara.trim() !== '') {
       try {
-        // Expect YYYY-MM-DD from form
         if (/^\d{4}-\d{2}-\d{2}$/.test(data.programadoPara)) {
-          const parsedDate = parseISO(data.programadoPara + "T00:00:00.000Z");
+          const parsedDate = parseISO(data.programadoPara + "T00:00:00.000Z"); // Treat as UTC date
           if (isValid(parsedDate)) {
             programadoParaDate = data.programadoPara; // Store as YYYY-MM-DD string
           }
@@ -156,15 +156,15 @@ export async function createOSInDB(data: CreateOSData, createdByPartnerId?: stri
     const osDataForDB = {
       numero: newOsNumero,
       cliente_id: parseInt(client.id, 10),
-      parceiro_id: executionPartnerId ? parseInt(executionPartnerId, 10) : null, // Execution partner
-      created_by_partner_id: createdByPartnerId ? parseInt(createdByPartnerId, 10) : null, // Creator partner
+      parceiro_id: executionPartnerId ? parseInt(executionPartnerId, 10) : null,
+      created_by_partner_id: createdByPartnerId ? parseInt(createdByPartnerId, 10) : null,
       projeto: data.projeto,
       tarefa: data.tarefa,
       observacoes: data.observacoes || '',
       checklist_json: checklistJsonForDB,
       status: data.status,
-      dataAbertura: now, // Store as DATETIME
-      programadoPara: programadoParaDate, // Store as DATE (YYYY-MM-DD string)
+      dataAbertura: now,
+      programadoPara: programadoParaDate,
       isUrgent: data.isUrgent || false,
       dataFinalizacao: null,
       dataInicioProducao: data.status === OSStatus.EM_PRODUCAO ? now : null,
@@ -194,6 +194,7 @@ export async function createOSInDB(data: CreateOSData, createdByPartnerId?: stri
     await connection.commit();
     console.log('[OSAction createOSInDB] OS criada e transação commitada. ID:', result.insertId);
 
+    // Fetch the newly created OS with all details for return
     const [createdOSRows] = await connection.query<RowDataPacket[]>(
       `SELECT
          os.id, os.numero, os.projeto, os.tarefa, os.observacoes, os.checklist_json, os.status,
@@ -264,15 +265,14 @@ export async function updateOSInDB(osData: OS): Promise<OS | null> {
     let newDataFinalizacaoSQL: Date | null = currentOSFromDB.dataFinalizacao ? new Date(currentOSFromDB.dataFinalizacao) : null;
     let newDataInicioProducaoHistoricoSQL: Date | null = currentOSFromDB.dataInicioProducao ? new Date(currentOSFromDB.dataInicioProducao) : null;
 
-    // Logic for status change and timer updates
     if (newStatus !== currentOSFromDB.status) {
       if (newStatus === OSStatus.EM_PRODUCAO) {
         if (!newDataInicioProducaoAtualSQL) {
           newDataInicioProducaoAtualSQL = now;
           if (!newDataInicioProducaoHistoricoSQL) newDataInicioProducaoHistoricoSQL = now;
         }
-      } else { // Moving out of EM_PRODUCAO or to another state
-        if (newDataInicioProducaoAtualSQL) { // If it was running
+      } else { 
+        if (newDataInicioProducaoAtualSQL) { 
           newTempoGastoProducaoSegundosSQL += differenceInSeconds(now, newDataInicioProducaoAtualSQL);
           newDataInicioProducaoAtualSQL = null;
         }
@@ -280,12 +280,12 @@ export async function updateOSInDB(osData: OS): Promise<OS | null> {
       if (newStatus === OSStatus.FINALIZADO && !newDataFinalizacaoSQL) {
         newDataFinalizacaoSQL = now;
       } else if (currentOSFromDB.status === OSStatus.FINALIZADO && newStatus !== OSStatus.FINALIZADO) {
-        newDataFinalizacaoSQL = null; // Re-opening
+        newDataFinalizacaoSQL = null; 
       }
     }
 
 
-    let programadoParaSQL: string | null = null; // Stored as YYYY-MM-DD string
+    let programadoParaSQL: string | null = null;
     if (osData.programadoPara && osData.programadoPara.trim() !== '') {
       if (/^\d{4}-\d{2}-\d{2}$/.test(osData.programadoPara)) {
         const parsedDate = parseISO(osData.programadoPara);
@@ -319,7 +319,7 @@ export async function updateOSInDB(osData: OS): Promise<OS | null> {
       newDataInicioProducaoAtualSQL, parseInt(osData.id, 10)
     ];
 
-    const [result] = await connection.execute<ResultSetHeader>(updateQuery, values);
+    await connection.execute<ResultSetHeader>(updateQuery, values);
     await connection.commit();
 
     const [updatedOSRows] = await connection.query<RowDataPacket[]>(
@@ -346,7 +346,7 @@ export async function updateOSInDB(osData: OS): Promise<OS | null> {
   } catch (error: any) {
     console.error(`[OSAction updateOSInDB] Erro ao atualizar OS ID ${osData.id}:`, error.message, error.stack);
     if (connection) await connection.rollback();
-    return null;
+    return null; // Indica falha
   } finally {
     if (connection) connection.release();
   }
@@ -410,8 +410,8 @@ export async function updateOSStatusInDB(osId: string, newStatus: OSStatus): Pro
         newDataInicioProducaoAtualSQL = now;
         if (!newDataInicioProducaoHistoricoSQL) newDataInicioProducaoHistoricoSQL = now;
       }
-    } else {
-      if (newDataInicioProducaoAtualSQL) {
+    } else { // Moving out of EM_PRODUCAO or to another state
+      if (newDataInicioProducaoAtualSQL) { // If it was running
         newTempoGastoProducaoSegundosSQL = (currentOSFromDB.tempoGastoProducaoSegundos || 0) + differenceInSeconds(now, newDataInicioProducaoAtualSQL);
         newDataInicioProducaoAtualSQL = null;
       }
@@ -420,6 +420,7 @@ export async function updateOSStatusInDB(osId: string, newStatus: OSStatus): Pro
     if (newStatus === OSStatus.FINALIZADO && !newDataFinalizacaoSQL) {
         newDataFinalizacaoSQL = now;
     } else if (currentOSFromDB.status === OSStatus.FINALIZADO && newStatus !== OSStatus.FINALIZADO) {
+      // Re-opening a finalized OS
       newDataFinalizacaoSQL = null;
     }
 
@@ -433,11 +434,10 @@ export async function updateOSStatusInDB(osId: string, newStatus: OSStatus): Pro
       newTempoGastoProducaoSegundosSQL, newDataInicioProducaoAtualSQL, parseInt(osId, 10)
     ];
 
-    const [result] = await connection.execute<ResultSetHeader>(sql, values);
+    await connection.execute<ResultSetHeader>(sql, values);
     await connection.commit();
 
-    if (result.affectedRows > 0 || result.changedRows > 0) {
-      const [updatedOSRows] = await connection.query<RowDataPacket[]>(
+    const [updatedOSRows] = await connection.query<RowDataPacket[]>(
         `SELECT
            os.id, os.numero, os.projeto, os.tarefa, os.observacoes, os.checklist_json, os.status,
            os.dataAbertura, os.dataFinalizacao, os.programadoPara, os.isUrgent,
@@ -451,12 +451,9 @@ export async function updateOSStatusInDB(osId: string, newStatus: OSStatus): Pro
          LEFT JOIN partners creator_p ON os.created_by_partner_id = creator_p.id
          WHERE os.id = ?`,
         [osId]
-      );
-      if (updatedOSRows.length === 0) throw new Error('Falha ao buscar OS atualizada.');
-      return mapDbRowToOS(updatedOSRows[0]);
-    }
-    await connection.rollback();
-    return null;
+    );
+    if (updatedOSRows.length === 0) throw new Error('Falha ao buscar OS atualizada após mudança de status.');
+    return mapDbRowToOS(updatedOSRows[0]);
 
   } catch (error: any) {
     console.error(`[OSAction updateOSStatusInDB] Erro OS ID ${osId} para ${newStatus}:`, error.message, error.stack);
@@ -472,6 +469,7 @@ export async function toggleOSProductionTimerInDB(osId: string, action: 'play' |
   console.log(`[OSAction toggleTimerInDB] OS ID: ${osId}, Ação: ${action}`);
   try {
     await connection.beginTransaction();
+    // Fetch all fields needed by mapDbRowToOS
     const [currentOSRows] = await connection.query<RowDataPacket[]>(
       `SELECT
          os.id, os.numero, os.projeto, os.tarefa, os.observacoes, os.checklist_json, os.status,
@@ -492,8 +490,10 @@ export async function toggleOSProductionTimerInDB(osId: string, action: 'play' |
     }
     const currentOSFromDB = currentOSRows[0];
 
+    // If trying to play a finalized OS, do nothing and return current state
     if (currentOSFromDB.status === OSStatus.FINALIZADO && action === 'play') {
-      await connection.rollback();
+      await connection.rollback(); // Release lock
+      console.warn(`[OSAction toggleTimerInDB] Tentativa de iniciar timer para OS ${osId} já finalizada.`);
       return mapDbRowToOS(currentOSFromDB);
     }
 
@@ -504,32 +504,34 @@ export async function toggleOSProductionTimerInDB(osId: string, action: 'play' |
     let newDataInicioProducaoHistoricoSQL: Date | null = currentOSFromDB.dataInicioProducao ? new Date(currentOSFromDB.dataInicioProducao) : null;
 
     if (action === 'play') {
-      if (!newDataInicioProducaoAtualSQL) {
+      if (!newDataInicioProducaoAtualSQL) { // Only play if not already playing
         newDataInicioProducaoAtualSQL = now;
-        newStatus = OSStatus.EM_PRODUCAO;
-        if (!newDataInicioProducaoHistoricoSQL) newDataInicioProducaoHistoricoSQL = now;
+        newStatus = OSStatus.EM_PRODUCAO; // Ensure status is 'Em Produção'
+        if (!newDataInicioProducaoHistoricoSQL) newDataInicioProducaoHistoricoSQL = now; // Set historical start if it's the very first play
       } else {
-          await connection.rollback();
-          return mapDbRowToOS(currentOSFromDB);
+          console.warn(`[OSAction toggleTimerInDB] Tentativa de iniciar timer para OS ${osId} que já está rodando.`);
+          await connection.rollback(); // Release lock
+          return mapDbRowToOS(currentOSFromDB); // Return current state
       }
     } else if (action === 'pause') {
-      if (newDataInicioProducaoAtualSQL) {
+      if (newDataInicioProducaoAtualSQL) { // Only pause if currently playing
         newTempoGastoProducaoSegundosSQL = (currentOSFromDB.tempoGastoProducaoSegundos || 0) + differenceInSeconds(now, newDataInicioProducaoAtualSQL);
         newDataInicioProducaoAtualSQL = null;
-        if (newStatus === OSStatus.EM_PRODUCAO) newStatus = OSStatus.NA_FILA;
+        if (newStatus === OSStatus.EM_PRODUCAO) newStatus = OSStatus.NA_FILA; // Default to 'Na Fila' when paused from 'Em Produção'
       } else {
-         await connection.rollback();
-         return mapDbRowToOS(currentOSFromDB);
+         console.warn(`[OSAction toggleTimerInDB] Tentativa de pausar timer para OS ${osId} que não está rodando.`);
+         await connection.rollback(); // Release lock
+         return mapDbRowToOS(currentOSFromDB); // Return current state
       }
     }
 
     const updateQuery = `UPDATE os_table SET status = ?, tempoGastoProducaoSegundos = ?, dataInicioProducaoAtual = ?, dataInicioProducao = ?, updated_at = NOW() WHERE id = ?`;
     const values = [newStatus, newTempoGastoProducaoSegundosSQL, newDataInicioProducaoAtualSQL, newDataInicioProducaoHistoricoSQL, parseInt(osId, 10)];
-    const [result] = await connection.execute<ResultSetHeader>(updateQuery, values);
+    await connection.execute<ResultSetHeader>(updateQuery, values);
     await connection.commit();
 
-    if (result.affectedRows > 0 || result.changedRows > 0) {
-      const [updatedOSRowsAgain] = await connection.query<RowDataPacket[]>(
+    // Re-fetch to get the fully updated OS object with all joins
+    const [updatedOSRowsAgain] = await connection.query<RowDataPacket[]>(
         `SELECT
            os.id, os.numero, os.projeto, os.tarefa, os.observacoes, os.checklist_json, os.status,
            os.dataAbertura, os.dataFinalizacao, os.programadoPara, os.isUrgent,
@@ -543,11 +545,9 @@ export async function toggleOSProductionTimerInDB(osId: string, action: 'play' |
          LEFT JOIN partners creator_p ON os.created_by_partner_id = creator_p.id
          WHERE os.id = ?`, [osId]
       );
-      if (updatedOSRowsAgain.length === 0) throw new Error('Falha ao buscar OS atualizada pós-toggle.');
-      return mapDbRowToOS(updatedOSRowsAgain[0]);
-    }
-    await connection.rollback();
-    return null;
+    if (updatedOSRowsAgain.length === 0) throw new Error('Falha ao buscar OS atualizada pós-toggle do timer.');
+    return mapDbRowToOS(updatedOSRowsAgain[0]);
+
   } catch (error: any) {
     console.error(`[OSAction toggleTimerInDB] Erro OS ID ${osId}:`, error.message, error.stack);
     if (connection) await connection.rollback();
