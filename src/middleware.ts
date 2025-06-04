@@ -5,11 +5,17 @@ import { getSessionFromToken } from '@/lib/auth-edge';
 import { AUTH_COOKIE_NAME } from '@/lib/constants'; 
 import type { SessionPayload } from '@/lib/types';
 
+// Explicitly set the runtime to Edge
+export const config = {
+  runtime: 'edge',
+  matcher: ['/((?!api|_next/static|_next/image|favicon.ico).*)'],
+};
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   console.log(`[Middleware] Processing request for path: ${pathname}`);
 
-  const publicPaths = ['/login', '/register', '/health', '/partner-login']; // Add partner login if it will be public
+  const publicPaths = ['/login', '/register', '/health', '/partner-login'];
 
   if (
     pathname.startsWith('/_next/') ||
@@ -65,7 +71,7 @@ export async function middleware(request: NextRequest) {
       if (session && session.sessionType === 'admin') {
         return NextResponse.redirect(new URL('/dashboard', request.url));
       }
-      const partnerLoginUrl = new URL('/partner-login', request.url); // Create this page later
+      const partnerLoginUrl = new URL('/partner-login', request.url);
       return NextResponse.redirect(partnerLoginUrl);
     }
     if (!session.isApproved) {
@@ -93,24 +99,13 @@ export async function middleware(request: NextRequest) {
     if (pathname === '/') { // If admin lands on root, send to admin dashboard
         return NextResponse.redirect(new URL('/dashboard', request.url));
     }
-    // If admin somehow lands on a non-admin/non-partner path they have access to, let them through
-    // Or, more strictly, redirect them to their dashboard if path is unknown.
-    // For now, let's assume if it's not a partner path, it's okay for admin.
   } else if (session.sessionType === 'partner') {
      if (pathname === '/') { // If partner lands on root, send to partner dashboard
         return NextResponse.redirect(new URL('/partner/dashboard', request.url));
     }
-    // If partner tries to access an admin path, they would have been caught above.
-    // Any other path might be an error or a public path they shouldn't be on while logged in.
-    // Redirect to partner dashboard as a safe default.
     return NextResponse.redirect(new URL('/partner/dashboard', request.url));
   }
-
 
   console.log(`[Middleware] Path ${pathname} did not match specific rules, allowing by default for session type ${session?.sessionType}.`);
   return NextResponse.next();
 }
-
-export const config = {
-  matcher: ['/((?!api|_next/static|_next/image|favicon.ico).*)'],
-};

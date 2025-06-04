@@ -2,29 +2,26 @@
 // src/lib/auth-edge.ts
 import type { User, PartnerSessionData, SessionPayload } from './types'; // Updated imports
 import { SignJWT, jwtVerify } from 'jose';
+import { env } from '@/env.mjs'; // Import env variables correctly
 
-console.log('[Auth-Edge] Module loaded. Attempting to read JWT_SECRET from process.env');
+console.log('[Auth-Edge] Module loaded.');
 
-if (typeof process === 'undefined' || typeof process.env === 'undefined') {
-  console.error('[Auth-Edge] CRITICAL: `process` or `process.env` is undefined in this environment. This is unexpected for Edge Runtime and will prevent JWT_SECRET from being read.');
-} else {
-  console.log('[Auth-Edge] `process.env` object keys (first 10 for brevity if many):', Object.keys(process.env).slice(0,10).join(', '));
-}
-
-const JWT_SECRET_KEY_STRING = process.env.JWT_SECRET;
 let key: Uint8Array | null = null; 
+const jwtSecretFromEnv = env.JWT_SECRET;
+const devLoginEnabled = env.DEV_LOGIN_ENABLED === "true";
+const nextPublicDevMode = env.NEXT_PUBLIC_DEV_MODE === "true";
 
-if (JWT_SECRET_KEY_STRING) {
-  console.log('[Auth-Edge] JWT_SECRET LIDO COM SUCESSO do ambiente. Length:', JWT_SECRET_KEY_STRING.length);
+if (jwtSecretFromEnv) {
+  console.log('[Auth-Edge] JWT_SECRET read successfully from env.mjs. Length:', jwtSecretFromEnv.length);
   try {
-    key = new TextEncoder().encode(JWT_SECRET_KEY_STRING);
+    key = new TextEncoder().encode(jwtSecretFromEnv);
     console.log('[Auth-Edge] JWT_SECRET_KEY successfully encoded for JWT operations.');
   } catch (error: any) {
-    console.error('[Auth-Edge] Failed to encode JWT_SECRET_KEY. Error:', error.message, error);
+    console.error('[Auth-Edge] Failed to encode JWT_SECRET_KEY from env.mjs. Error:', error.message, error);
   }
 } else {
   // Use fallback key if JWT_SECRET is not set AND (DEV_LOGIN_ENABLED is true OR NEXT_PUBLIC_DEV_MODE is true)
-  if (process.env.DEV_LOGIN_ENABLED === "true" || process.env.NEXT_PUBLIC_DEV_MODE === "true") {
+  if (devLoginEnabled || nextPublicDevMode) {
     console.warn(`
     **************************************************************************************
     ** [Auth-Edge] WARNING: JWT_SECRET environment variable is not set or is empty!     **
