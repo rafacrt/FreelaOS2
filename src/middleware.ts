@@ -1,13 +1,13 @@
 
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
-import { getSessionFromToken } from '@/lib/auth-edge'; 
-import { AUTH_COOKIE_NAME } from '@/lib/constants'; 
+import { getSessionFromToken } from '@/lib/auth-edge';
+import { AUTH_COOKIE_NAME } from '@/lib/constants';
 import type { SessionPayload } from '@/lib/types';
 
-// Explicitly set the runtime to Edge
+// Explicitly set the runtime to experimental-edge
 export const config = {
-  runtime: 'edge',
+  runtime: 'experimental-edge', // Alterado de 'edge' para 'experimental-edge'
   matcher: ['/((?!api|_next/static|_next/image|favicon.ico).*)'],
 };
 
@@ -20,7 +20,7 @@ export async function middleware(request: NextRequest) {
   if (
     pathname.startsWith('/_next/') ||
     pathname.startsWith('/api/') ||
-    pathname.includes('.') 
+    pathname.includes('.')
   ) {
     return NextResponse.next();
   }
@@ -85,14 +85,14 @@ export async function middleware(request: NextRequest) {
     console.log(`[Middleware] Partner session validated for ${session.username}, allowing access to ${pathname}`);
     return NextResponse.next();
   }
-  
+
   // Fallback for any other routes - if not public and no session, redirect to admin login.
   // This also handles the root path ('/') if not covered by other conditions.
   if (!session) {
     console.log(`[Middleware] No session for uncategorized path ${pathname}. Redirecting to /login.`);
     return NextResponse.redirect(new URL('/login', request.url));
   }
-  
+
   // If a session exists but doesn't match any specific route protection rules above,
   // decide where to send them based on session type.
   if (session.sessionType === 'admin') {
@@ -103,7 +103,11 @@ export async function middleware(request: NextRequest) {
      if (pathname === '/') { // If partner lands on root, send to partner dashboard
         return NextResponse.redirect(new URL('/partner/dashboard', request.url));
     }
-    return NextResponse.redirect(new URL('/partner/dashboard', request.url));
+    // For any other partner-accessed path that isn't explicitly /partner/*, redirect to their dashboard.
+    // This might be too aggressive if partners need to access other top-level public pages post-login.
+    // For now, this behavior is to ensure they stay within their designated area.
+    // Consider removing this if partners should access other general pages.
+    // return NextResponse.redirect(new URL('/partner/dashboard', request.url));
   }
 
   console.log(`[Middleware] Path ${pathname} did not match specific rules, allowing by default for session type ${session?.sessionType}.`);
