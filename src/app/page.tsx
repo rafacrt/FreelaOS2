@@ -1,13 +1,14 @@
 
 import { redirect } from 'next/navigation';
 import { cookies } from 'next/headers';
-import { getSessionFromToken, encryptPayload } from '@/lib/auth-edge'; 
+import { getSessionFromToken, encryptPayload } from '@/lib/auth-edge';
 import { AUTH_COOKIE_NAME, SESSION_MAX_AGE } from '@/lib/constants';
-import type { User, SessionPayload } from '@/lib/types';
+import type { SessionPayload } from '@/lib/types';
+import { env } from '@/env.mjs'; // Import env
 
 export default async function HomePage() {
-  const devLoginEnabled = process.env.DEV_LOGIN_ENABLED === "true";
-  const nextPublicDevMode = process.env.NEXT_PUBLIC_DEV_MODE === "true"; 
+  const devLoginEnabled = env.DEV_LOGIN_ENABLED; // Use from env.mjs
+  const nextPublicDevMode = env.NEXT_PUBLIC_DEV_MODE; // Use from env.mjs
 
   const cookieStore = cookies();
   const tokenValue = cookieStore.get(AUTH_COOKIE_NAME)?.value;
@@ -15,11 +16,10 @@ export default async function HomePage() {
 
   if (devLoginEnabled && nextPublicDevMode && !currentSession) {
     console.log('[HomePage] DEV_LOGIN_ENABLED and NEXT_PUBLIC_DEV_MODE are true, and no session. Auto-logging in as dev admin.');
-    
-    // Ensure this creates an admin session specifically
+
     const devAdminSession: SessionPayload = {
       sessionType: 'admin',
-      id: 'dev-admin-001', 
+      id: 'dev-admin-001',
       username: 'Dev Admin',
       isAdmin: true,
       isApproved: true,
@@ -28,13 +28,12 @@ export default async function HomePage() {
     const sessionPayloadToEncrypt = { ...devAdminSession, expires: expires.toISOString() };
 
     try {
-      // Cast to SessionPayload because TS might not correctly infer after spreading 'expires'
-      const token = await encryptPayload(sessionPayloadToEncrypt as SessionPayload); 
+      const token = await encryptPayload(sessionPayloadToEncrypt as SessionPayload);
       const cookieOptions = {
         name: AUTH_COOKIE_NAME,
         value: token,
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production', 
+        secure: process.env.NODE_ENV === 'production', // Standard process.env is fine here (Server Component)
         expires,
         path: '/',
         sameSite: 'lax' as 'lax' | 'strict' | 'none' | undefined,
@@ -54,9 +53,8 @@ export default async function HomePage() {
       redirect('/dashboard');
     } else if (currentSession.sessionType === 'partner') {
       console.log('[HomePage] Partner session found, redirecting to /partner/dashboard.');
-      redirect('/partner/dashboard'); // Create this page later
+      redirect('/partner/dashboard');
     } else {
-      // Should not happen if session validation is correct
       console.warn('[HomePage] Unknown session type found, redirecting to /login.');
       redirect('/login');
     }
