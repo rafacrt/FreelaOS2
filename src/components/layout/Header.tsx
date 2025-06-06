@@ -2,12 +2,12 @@
 'use client';
 
 import Link from 'next/link';
-import type { SessionPayload } from '@/lib/types'; // Use SessionPayload
+import type { SessionPayload, AuthActionState } from '@/lib/types'; // Use SessionPayload, import AuthActionState
 import { Moon, Sun, UserCircle, LogOut, LogIn, UserPlus, Briefcase } from 'lucide-react'; // Added Briefcase for Partner
 import { useTheme } from '@/hooks/useTheme';
 import { logoutAction } from '@/lib/actions/auth-actions';
-import { usePathname } from 'next/navigation';
-import { useActionState } from 'react'; 
+import { usePathname, useRouter } from 'next/navigation'; // Import useRouter
+import { useActionState, useEffect } from 'react'; // Import useEffect
 
 const FreelaOSLogo = () => (
   <svg width="28" height="28" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -19,17 +19,34 @@ const FreelaOSLogo = () => (
 );
 
 interface HeaderProps {
-  session: SessionPayload | null; // Updated to SessionPayload
+  session: SessionPayload | null;
 }
+
+const initialLogoutState: AuthActionState = {
+  message: null,
+  type: undefined,
+  redirect: undefined,
+};
 
 export default function Header({ session }: HeaderProps) {
   const { theme, toggleTheme } = useTheme();
   const pathname = usePathname();
-  const [logoutState, logoutFormAction] = useActionState(logoutAction, { message: null });
+  const router = useRouter(); // Initialize router
+  const [logoutState, logoutFormAction] = useActionState(logoutAction, initialLogoutState);
+
+  useEffect(() => {
+    if (logoutState?.type === 'success' && logoutState?.redirect) {
+      console.log(`[Header] Logout success. Redirecting to: ${logoutState.redirect}`);
+      router.push(logoutState.redirect);
+    } else if (logoutState?.type === 'error') {
+      console.error(`[Header] Logout error: ${logoutState.message}`);
+      // Você pode adicionar um toast de erro aqui, se desejar.
+    }
+  }, [logoutState, router]);
 
   const isLoginPage = pathname === '/login';
   const isRegisterPage = pathname === '/register';
-  const isPartnerLoginPage = pathname === '/partner-login'; // Assuming this will be the partner login page
+  const isPartnerLoginPage = pathname === '/partner-login';
   const showAuthButtons = !session && !isLoginPage && !isRegisterPage && !isPartnerLoginPage;
 
   let greeting = "Olá!";
@@ -43,12 +60,11 @@ export default function Header({ session }: HeaderProps) {
       isAdminBadge = session.isAdmin;
       homeLink = "/dashboard";
     } else if (session.sessionType === 'partner') {
-      greeting = `Olá, ${session.partnerName}`; // Use partnerName for display
-      isPartnerBadge = true; // Or some other identifier for partner
-      homeLink = "/partner/dashboard"; // Partner dashboard link
+      greeting = `Olá, ${session.partnerName}`;
+      isPartnerBadge = true;
+      homeLink = "/partner/dashboard";
     }
   }
-
 
   return (
     <header className="navbar navbar-expand-sm navbar-light bg-light border-bottom sticky-top shadow-sm" data-bs-theme={theme === 'dark' ? 'dark' : 'light'}>
@@ -90,14 +106,9 @@ export default function Header({ session }: HeaderProps) {
                     <Link href="/login" className="btn btn-sm btn-outline-primary d-flex align-items-center">
                         <LogIn size={16} className="me-1" /> Admin Login
                     </Link>
-                    {/* Link to partner login might also be useful here or on main login page */}
                     <Link href="/partner-login" className="btn btn-sm btn-outline-info d-flex align-items-center">
                         <LogIn size={16} className="me-1" /> Parceiro Login 
                     </Link>
-                    {/* Registration might be for admins or a separate one for partners */}
-                    {/* <Link href="/register" className="btn btn-sm btn-primary d-flex align-items-center">
-                         <UserPlus size={16} className="me-1" /> Registrar
-                    </Link> */}
                 </div>
             )
           )}
