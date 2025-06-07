@@ -41,13 +41,14 @@ export default function AuthenticatedLayout({ children }: AuthenticatedLayoutPro
           console.log('[AuthenticatedLayout] Session data from API:', sessionData);
           setSession(sessionData);
 
-          if (sessionData?.sessionType === 'admin' && !isStoreInitialized) {
-            console.log('[AuthenticatedLayout] Admin session, store not initialized, calling initializeStore.');
+          // Initialize store for any logged-in user if it's not already initialized
+          if (sessionData && !isStoreInitialized) {
+            console.log(`[AuthenticatedLayout] Session type ${sessionData.sessionType}, store not initialized, calling initializeStore.`);
             await initializeStore();
-          } else if (sessionData?.sessionType === 'admin' && isStoreInitialized) {
-            console.log('[AuthenticatedLayout] Admin session, store already initialized.');
-          } else if (sessionData?.sessionType === 'partner') {
-            console.log('[AuthenticatedLayout] Partner session. OS Store initialization for partners TBD.');
+          } else if (sessionData && isStoreInitialized) {
+            console.log(`[AuthenticatedLayout] Session type ${sessionData.sessionType}, store already initialized.`);
+          } else if (!sessionData) {
+            console.log('[AuthenticatedLayout] No session data, store initialization skipped if not already done.');
           }
         }
       } catch (e: any) {
@@ -61,7 +62,7 @@ export default function AuthenticatedLayout({ children }: AuthenticatedLayoutPro
     }
 
     checkSessionAndInitializeData();
-  }, [isStoreInitialized, initializeStore]);
+  }, [isStoreInitialized, initializeStore]); // initializeStore é estável, isStoreInitialized é a chave aqui
 
   const sessionContextValue = useMemo(() => session, [session]);
 
