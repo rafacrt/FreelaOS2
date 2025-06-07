@@ -7,14 +7,16 @@ import Link from 'next/link';
 import { ArrowLeft, Building, Users, PlusCircle, Edit, Trash2, ShieldCheck, ShieldOff } from 'lucide-react';
 import { useOSStore } from '@/store/os-store';
 import type { Client } from '@/lib/types';
-import type { Partner } from '@/store/os-store'; // Import Partner type
-import AddEditClientModal from '@/components/entities/AddEditClientModal';
-import AddEditPartnerModal from '@/components/entities/AddEditPartnerModal';
+import type { Partner } from '@/store/os-store';
+import dynamic from 'next/dynamic';
+
+// Dynamically import modals to ensure they are client-side only
+const AddEditClientModal = dynamic(() => import('@/components/entities/AddEditClientModal'), { ssr: false });
+const AddEditPartnerModal = dynamic(() => import('@/components/entities/AddEditPartnerModal'), { ssr: false });
 
 export default function EntitiesPage() {
   const partners = useOSStore((state) => state.partners);
   const clients = useOSStore((state) => state.clients);
-  const updateClientStore = useOSStore((state) => state.updateClient);
   const deleteClientStore = useOSStore((state) => state.deleteClient);
   const deletePartnerEntity = useOSStore((state) => state.deletePartnerEntity);
 
@@ -229,4 +231,3 @@ export default function EntitiesPage() {
     </AuthenticatedLayout>
   );
 }
-
