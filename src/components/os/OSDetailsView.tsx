@@ -6,8 +6,8 @@ import type { OS, ChecklistItem } from '@/lib/types';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
-    ArrowLeft, CalendarClock, CheckCircle2, FileText, Flag, Server, User as UserIconLucide,
-    Users, Briefcase, MessageSquare, Clock3, Save, Edit, Calendar as CalendarIcon, Printer,
+    ArrowLeft, CalendarClock, CheckCircle2, FileText, Flag, Server, User as UserIconLucide, UserCheck,
+    Users, Briefcase, MessageSquare, Clock3, Save, Edit, Calendar as CalendarIcon, Printer, HelpCircle, AlertOctagon, ThumbsUp, ThumbsDown,
     CheckSquare as CheckSquareIcon, Square, Play, Pause, RotateCcw, UploadCloud, Paperclip, AlertTriangle, Clock,
     PlusCircle, Trash2
 } from 'lucide-react';
@@ -17,15 +17,16 @@ import { useOSStore } from '@/store/os-store';
 import { OSStatus, ALL_OS_STATUSES } from '@/lib/types';
 import ChronometerDisplay from './ChronometerDisplay';
 
-// Helper to get background and text color classes based on status
 const getStatusHeaderClasses = (status: OSStatus, isEditing: boolean, isUrgentGlobal: boolean): string => {
-  if (isUrgentGlobal && !isEditing) return 'bg-danger-subtle text-danger-emphasis'; // Urgent overrides status color for header
+  if (isUrgentGlobal && !isEditing && status !== OSStatus.AGUARDANDO_APROVACAO && status !== OSStatus.RECUSADA) return 'bg-danger-subtle text-danger-emphasis'; 
   if (isEditing) return 'bg-light text-dark';
   switch (status) {
     case OSStatus.NA_FILA: return 'bg-secondary-subtle text-secondary-emphasis';
     case OSStatus.AGUARDANDO_CLIENTE: return 'bg-warning-subtle text-warning-emphasis';
     case OSStatus.EM_PRODUCAO: return 'bg-info-subtle text-info-emphasis';
     case OSStatus.AGUARDANDO_PARCEIRO: return 'bg-primary-subtle text-primary-emphasis';
+    case OSStatus.AGUARDANDO_APROVACAO: return 'bg-warning-subtle text-warning-emphasis border border-warning'; // Destaque para aguardando aprovação
+    case OSStatus.RECUSADA: return 'bg-danger-subtle text-danger-emphasis border border-danger'; // Destaque para recusada
     case OSStatus.FINALIZADO: return 'bg-success-subtle text-success-emphasis';
     default: return 'bg-light text-dark';
   }
@@ -37,6 +38,8 @@ const getStatusIcon = (status: OSStatus) => {
     case OSStatus.AGUARDANDO_CLIENTE: return <UserIconLucide size={16} className="me-2" />;
     case OSStatus.EM_PRODUCAO: return <Server size={16} className="me-2" />;
     case OSStatus.AGUARDANDO_PARCEIRO: return <Users size={16} className="me-2" />;
+    case OSStatus.AGUARDANDO_APROVACAO: return <HelpCircle size={16} className="me-2 text-warning" />;
+    case OSStatus.RECUSADA: return <AlertOctagon size={16} className="me-2 text-danger" />;
     case OSStatus.FINALIZADO: return <CheckCircle2 size={16} className="me-2" />;
     default: return <FileText size={16} className="me-2" />;
   }
@@ -52,9 +55,10 @@ interface DetailItemProps {
   className?: string;
   isEditingMode: boolean;
   viewMode: 'admin' | 'partner';
+  currentOsStatus?: OSStatus; // Pass current OS status to conditionally disable fields
 }
 
-const DetailItem = ({ label, value, icon, name, isEditableField, children, className, isEditingMode, viewMode }: DetailItemProps) => {
+const DetailItem = ({ label, value, icon, name, isEditableField, children, className, isEditingMode, viewMode, currentOsStatus }: DetailItemProps) => {
   let displayValue: string | React.ReactNode = value;
 
   if (name === 'programadoPara' && typeof value === 'string' && value) {
@@ -76,14 +80,15 @@ const DetailItem = ({ label, value, icon, name, isEditableField, children, class
   }
 
   const valueIsReactNode = React.isValidElement(displayValue);
-  const canEditThisField = isEditingMode && viewMode === 'admin' && isEditableField;
+  const isPendingOrRefused = currentOsStatus === OSStatus.AGUARDANDO_APROVACAO || currentOsStatus === OSStatus.RECUSADA;
+  const canEditThisField = isEditingMode && viewMode === 'admin' && isEditableField && !isPendingOrRefused;
 
   return (
     <div className={`row py-2 ${className || ''}`}>
       <dt className="col-sm-4 col-lg-3 text-muted d-flex align-items-center small fw-medium">{icon}{label}</dt>
       <dd className="col-sm-8 col-lg-9 mb-0">
         {canEditThisField ? (
-          children
+          React.cloneElement(children as React.ReactElement<any>, { disabled: (children as React.ReactElement<any>).props.disabled || isPendingOrRefused })
         ) : (
           valueIsReactNode ? displayValue : (
             <span className={`form-control-plaintext p-0 text-break small ${name === 'observacoes' || name === 'tarefa' || name === 'tempoTrabalhado' || name === 'checklist' ? 'text-pre-wrap' : ''}`}>
@@ -174,14 +179,8 @@ export default function OSDetailsView({ initialOs, viewMode }: OSDetailsViewProp
     checklist: initialOs.checklist ? [...initialOs.checklist.map(item => ({...item}))] : [],
   });
 
-  console.log("[OSDetailsView Render] initialOs:", initialOs);
-  console.log("[OSDetailsView Render] formData:", formData);
-
-
   useEffect(() => {
-    console.log("[OSDetailsView Effect] initialOs ID or isEditing changed. Current initialOs ID:", initialOs.id, "Current isEditing:", isEditing);
-    if (!isEditing || initialOs.id !== formData.id) { // Adicionado initialOs.id !== formData.id para resync se a OS mudar
-      console.log("[OSDetailsView Effect] Syncing formData with initialOs because not editing or OS ID changed.");
+    if (!isEditing || initialOs.id !== formData.id) { 
       setFormData({
         ...initialOs,
         programadoPara: formatProgramadoParaForInput(initialOs.programadoPara),
@@ -193,11 +192,9 @@ export default function OSDetailsView({ initialOs, viewMode }: OSDetailsViewProp
       setPastedImages([]);
       setEditableChecklist(initialOs.checklist ? initialOs.checklist.map(item => ({...item})) : [{id: `item-${Date.now()}`, text: '', completed: false}]);
     } else if (isEditing && initialOs.id === formData.id) {
-       console.log("[OSDetailsView Effect] Entering edit mode. Initializing editableChecklist from initialOs.");
        setEditableChecklist(initialOs.checklist ? initialOs.checklist.map(item => ({...item})) : [{id: `item-${Date.now()}`, text: '', completed: false}]);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialOs, isEditing, formatProgramadoParaForInput]);
+  }, [initialOs, isEditing, formatProgramadoParaForInput, formData.id]);
 
 
   const [clientInput, setClientInput] = useState(initialOs.cliente || '');
@@ -353,7 +350,7 @@ export default function OSDetailsView({ initialOs, viewMode }: OSDetailsViewProp
       id: initialOs.id,
       numero: initialOs.numero,
       dataAbertura: initialOs.dataAbertura,
-      status: formData.status,
+      status: formData.status, // Status será atualizado via updateOSStatus se necessário
       dataInicioProducao: formData.dataInicioProducao,
       dataInicioProducaoAtual: formData.dataInicioProducaoAtual,
       tempoGastoProducaoSegundos: formData.tempoGastoProducaoSegundos,
@@ -385,8 +382,20 @@ export default function OSDetailsView({ initialOs, viewMode }: OSDetailsViewProp
     setPastedImages([]);
   };
 
+  const handleApprovalAction = async (approved: boolean) => {
+    if (viewMode !== 'admin' || initialOs.status !== OSStatus.AGUARDANDO_APROVACAO) return;
+    setIsSaving(true);
+    const newStatus = approved ? OSStatus.NA_FILA : OSStatus.RECUSADA;
+    const success = await updateOSStatus(initialOs.id, newStatus);
+    setIsSaving(false);
+    if (!success) {
+      alert(`Falha ao ${approved ? 'aprovar' : 'recusar'} OS. Verifique os logs.`);
+    }
+    // A OS será atualizada no store e a view re-renderizará
+  };
+
   const handleFinalizeOS = async () => {
-    if (viewMode !== 'admin' || initialOs.status === OSStatus.FINALIZADO) return;
+    if (viewMode !== 'admin' || initialOs.status === OSStatus.FINALIZADO || initialOs.status === OSStatus.AGUARDANDO_APROVACAO || initialOs.status === OSStatus.RECUSADA) return;
     setIsSaving(true);
     const success = await updateOSStatus(initialOs.id, OSStatus.FINALIZADO);
     setIsSaving(false);
@@ -400,17 +409,17 @@ export default function OSDetailsView({ initialOs, viewMode }: OSDetailsViewProp
   const handleReopenOS = async () => {
     if (viewMode !== 'admin' || initialOs.status !== OSStatus.FINALIZADO) return;
     setIsSaving(true);
-    const success = await updateOSStatus(initialOs.id, OSStatus.NA_FILA);
+    const success = await updateOSStatus(initialOs.id, OSStatus.NA_FILA); // Reabre para "Na Fila"
     setIsSaving(false);
     if (success) {
-      router.push('/dashboard');
+      // router.push('/dashboard'); // Não precisa redirecionar, apenas atualiza a OS
     } else {
       alert('Falha ao reabrir OS. Verifique logs.');
     }
   };
 
   const handleToggleTimer = async (action: 'play' | 'pause') => {
-    if (viewMode !== 'admin') return;
+    if (viewMode !== 'admin' || initialOs.status === OSStatus.AGUARDANDO_APROVACAO || initialOs.status === OSStatus.RECUSADA || initialOs.status === OSStatus.FINALIZADO) return;
     setIsSaving(true);
     await toggleProductionTimer(initialOs.id, action);
     setIsSaving(false);
@@ -448,7 +457,9 @@ export default function OSDetailsView({ initialOs, viewMode }: OSDetailsViewProp
 
   const isTimerCurrentlyRunning = initialOs.status === OSStatus.EM_PRODUCAO && !!initialOs.dataInicioProducaoAtual;
   const isFinalized = initialOs.status === OSStatus.FINALIZADO;
-  const canAdminEdit = viewMode === 'admin' && !isFinalized;
+  const isAwaitingApproval = initialOs.status === OSStatus.AGUARDANDO_APROVACAO;
+  const isRefused = initialOs.status === OSStatus.RECUSADA;
+  const canAdminEditFields = viewMode === 'admin' && !isFinalized && !isAwaitingApproval && !isRefused;
 
 
   return (
@@ -469,13 +480,23 @@ export default function OSDetailsView({ initialOs, viewMode }: OSDetailsViewProp
               </button>
             </>
           )}
-          {viewMode === 'admin' && !isEditing && !isFinalized && (
+          {viewMode === 'admin' && !isEditing && canAdminEditFields && (
               <button className="btn btn-primary btn-sm" onClick={() => setIsEditing(true)}>
                 <Edit size={16} className="me-1" />
                 Editar OS
               </button>
           )}
-          {viewMode === 'admin' && !isEditing && !isFinalized && (
+           {viewMode === 'admin' && !isEditing && isAwaitingApproval && (
+            <>
+              <button className="btn btn-success btn-sm" onClick={() => handleApprovalAction(true)} disabled={isSaving}>
+                <ThumbsUp size={16} className="me-1" /> Aprovar OS
+              </button>
+              <button className="btn btn-danger btn-sm" onClick={() => handleApprovalAction(false)} disabled={isSaving}>
+                <ThumbsDown size={16} className="me-1" /> Recusar OS
+              </button>
+            </>
+          )}
+          {viewMode === 'admin' && !isEditing && !isFinalized && !isAwaitingApproval && !isRefused &&(
             <button
               className="btn btn-info btn-sm"
               onClick={handleFinalizeOS}
@@ -485,8 +506,8 @@ export default function OSDetailsView({ initialOs, viewMode }: OSDetailsViewProp
               <CheckSquareIcon size={16} className="me-1" /> Finalizar OS
             </button>
           )}
-          {viewMode === 'admin' && !isEditing && isFinalized && (
-            <button className="btn btn-warning btn-sm" onClick={handleReopenOS} disabled={isSaving} title="Re-abrir Ordem de Serviço">
+          {viewMode === 'admin' && !isEditing && (isFinalized || isRefused) && (
+            <button className="btn btn-warning btn-sm" onClick={handleReopenOS} disabled={isSaving} title="Re-abrir Ordem de Serviço (para Na Fila)">
               <RotateCcw size={16} className="me-1" /> Re-abrir OS
             </button>
           )}
@@ -509,6 +530,7 @@ export default function OSDetailsView({ initialOs, viewMode }: OSDetailsViewProp
                 placeholder="Nome do Projeto"
                 style={{ fontSize: '1.25rem' }}
                 required
+                disabled={!canAdminEditFields && isEditing}
               />
             ) : (
               <h1 className="card-title h4 mb-1 fw-bold">{initialOs.projeto}</h1>
@@ -532,6 +554,7 @@ export default function OSDetailsView({ initialOs, viewMode }: OSDetailsViewProp
                       name="isUrgent"
                       checked={formData.isUrgent}
                       onChange={handleFormInputChange}
+                      disabled={!canAdminEditFields && isEditing}
                     />
                     <label className="form-check-label small" htmlFor="isUrgentSwitchHeader">
                       Urgente
@@ -541,7 +564,7 @@ export default function OSDetailsView({ initialOs, viewMode }: OSDetailsViewProp
         </div>
         <div className="card-body p-4">
 
-          {viewMode === 'admin' && initialOs.status !== OSStatus.FINALIZADO && (
+          {viewMode === 'admin' && initialOs.status !== OSStatus.FINALIZADO && initialOs.status !== OSStatus.AGUARDANDO_APROVACAO && initialOs.status !== OSStatus.RECUSADA && (
             <div className="card bg-light-subtle p-2 mb-3 shadow-sm small">
               <h6 className="card-title text-primary mb-2 d-flex align-items-center">
                   <Clock3 size={18} className="me-2" /> Detalhes do Cronômetro
@@ -588,6 +611,7 @@ export default function OSDetailsView({ initialOs, viewMode }: OSDetailsViewProp
                   value={isEditing && viewMode === 'admin' ? clientInput : initialOs.cliente}
                   isEditingMode={isEditing}
                   viewMode={viewMode}
+                  currentOsStatus={initialOs.status}
                 >
                   <div className="position-relative">
                     <input
@@ -601,7 +625,7 @@ export default function OSDetailsView({ initialOs, viewMode }: OSDetailsViewProp
                       onBlur={() => setTimeout(() => setShowClientSuggestions(false), 150)}
                       autoComplete="off"
                       placeholder="Digite ou selecione um cliente"
-                      disabled={!canAdminEdit}
+                      disabled={!canAdminEditFields && isEditing}
                       required
                     />
                     {isEditing && viewMode === 'admin' && showClientSuggestions && filteredClients.length > 0 && (
@@ -625,6 +649,7 @@ export default function OSDetailsView({ initialOs, viewMode }: OSDetailsViewProp
                   value={isEditing && viewMode === 'admin' ? partnerInput : initialOs.parceiro}
                   isEditingMode={isEditing}
                   viewMode={viewMode}
+                  currentOsStatus={initialOs.status}
                 >
                   <div className="position-relative">
                     <input
@@ -638,7 +663,7 @@ export default function OSDetailsView({ initialOs, viewMode }: OSDetailsViewProp
                       onBlur={() => setTimeout(() => setShowPartnerSuggestions(false), 150)}
                       autoComplete="off"
                       placeholder="Digite ou selecione um parceiro (opcional)"
-                      disabled={!canAdminEdit}
+                      disabled={!canAdminEditFields && isEditing}
                     />
                     {isEditing && viewMode === 'admin' && showPartnerSuggestions && filteredPartners.length > 0 && (
                       <div ref={partnerSuggestionsRef} className="list-group position-absolute w-100 mt-1" style={{ zIndex: 10, maxHeight: '150px', overflowY: 'auto', boxShadow: '0 .5rem 1rem rgba(0,0,0,.15)' }}>
@@ -661,9 +686,9 @@ export default function OSDetailsView({ initialOs, viewMode }: OSDetailsViewProp
                         isEditableField={false}
                         isEditingMode={isEditing}
                         viewMode={viewMode}
+                        currentOsStatus={initialOs.status}
                     />
                 )}
-
 
                 <DetailItem
                   label="Status"
@@ -673,16 +698,17 @@ export default function OSDetailsView({ initialOs, viewMode }: OSDetailsViewProp
                   isEditableField={true}
                   isEditingMode={isEditing}
                   viewMode={viewMode}
+                  currentOsStatus={initialOs.status}
                 >
                   <select
                     className="form-select form-select-sm"
                     name="status"
                     value={formData.status}
                     onChange={handleFormInputChange}
-                    disabled={!canAdminEdit || isFinalized}
+                    disabled={!canAdminEditFields && isEditing || isFinalized || isAwaitingApproval || isRefused}
                   >
-                    {ALL_OS_STATUSES.map(s => (
-                      <option key={s} value={s} disabled={isFinalized && s !== OSStatus.FINALIZADO}>
+                    {ALL_OS_STATUSES.filter(s => s !== OSStatus.AGUARDANDO_APROVACAO && s !== OSStatus.RECUSADA || s === initialOs.status).map(s => (
+                      <option key={s} value={s} disabled={(isFinalized && s !== OSStatus.FINALIZADO) || (isAwaitingApproval && s !== OSStatus.AGUARDANDO_APROVACAO) || (isRefused && s !== OSStatus.RECUSADA)}>
                         {s}
                       </option>
                     ))}
@@ -697,6 +723,7 @@ export default function OSDetailsView({ initialOs, viewMode }: OSDetailsViewProp
                   isEditableField={false}
                   isEditingMode={isEditing}
                   viewMode={viewMode}
+                  currentOsStatus={initialOs.status}
                 />
 
                 <DetailItem
@@ -707,6 +734,7 @@ export default function OSDetailsView({ initialOs, viewMode }: OSDetailsViewProp
                   isEditableField={true}
                   isEditingMode={isEditing}
                   viewMode={viewMode}
+                  currentOsStatus={initialOs.status}
                 >
                   <input
                     type="date"
@@ -714,19 +742,20 @@ export default function OSDetailsView({ initialOs, viewMode }: OSDetailsViewProp
                     name="programadoPara"
                     value={formData.programadoPara || ''}
                     onChange={handleFormInputChange}
-                    disabled={!canAdminEdit}
+                    disabled={!canAdminEditFields && isEditing}
                   />
                 </DetailItem>
 
-                {isFinalized && initialOs.dataFinalizacao && (
+                {(isFinalized || isRefused) && initialOs.dataFinalizacao && (
                   <DetailItem
-                    label="Data de Finalização"
+                    label="Data de Finalização/Recusa"
                     value={initialOs.dataFinalizacao}
                     icon={<CheckCircle2 size={16} className="me-2 text-success" />}
                     name="dataFinalizacao"
                     isEditableField={false}
                     isEditingMode={isEditing}
                     viewMode={viewMode}
+                    currentOsStatus={initialOs.status}
                   />
                 )}
                  <DetailItem
@@ -737,6 +766,7 @@ export default function OSDetailsView({ initialOs, viewMode }: OSDetailsViewProp
                   isEditableField={true}
                   isEditingMode={isEditing}
                   viewMode={viewMode}
+                  currentOsStatus={initialOs.status}
                 >
                   <div className="form-check form-switch">
                     <input
@@ -747,7 +777,7 @@ export default function OSDetailsView({ initialOs, viewMode }: OSDetailsViewProp
                       name="isUrgent"
                       checked={formData.isUrgent}
                       onChange={handleFormInputChange}
-                      disabled={!canAdminEdit}
+                      disabled={!canAdminEditFields && isEditing}
                     />
                     <label className="form-check-label small visually-hidden" htmlFor="isUrgentSwitch">
                       {formData.isUrgent ? "Sim" : "Não"}
@@ -769,19 +799,20 @@ export default function OSDetailsView({ initialOs, viewMode }: OSDetailsViewProp
                             osStatus={initialOs.status}
                         />
                     }
+                    currentOsStatus={initialOs.status}
                     />
               </dl>
             </div>
 
             <div className="col-md-6">
               <dl className="mb-0">
-                {viewMode === 'admin' && (
+                {viewMode === 'admin' && !isFinalized && !isAwaitingApproval && !isRefused && (
                   <div className="row py-2 border-bottom mb-2">
                     <dt className="col-sm-4 col-lg-3 text-muted d-flex align-items-center small fw-medium">
                        Controle Timer
                     </dt>
                     <dd className="col-sm-8 col-lg-9 mb-0 d-flex align-items-center">
-                      {!isEditing && !isFinalized && (
+                      {!isEditing && (
                         <div className="ms-auto d-flex gap-2 no-print">
                           {isTimerCurrentlyRunning ? (
                             <button
@@ -804,8 +835,8 @@ export default function OSDetailsView({ initialOs, viewMode }: OSDetailsViewProp
                           )}
                         </div>
                       )}
-                      {(isEditing || isFinalized) && (
-                          <span className="text-muted fst-italic small">Controles do timer desabilitados {isEditing ? 'enquanto edita.' : 'pois a OS está finalizada.'}</span>
+                      {isEditing && (
+                          <span className="text-muted fst-italic small">Controles do timer desabilitados enquanto edita.</span>
                       )}
                     </dd>
                   </div>
@@ -819,6 +850,7 @@ export default function OSDetailsView({ initialOs, viewMode }: OSDetailsViewProp
                   isEditableField={true}
                   isEditingMode={isEditing}
                   viewMode={viewMode}
+                  currentOsStatus={initialOs.status}
                 >
                   <textarea
                     className="form-control form-control-sm"
@@ -826,7 +858,7 @@ export default function OSDetailsView({ initialOs, viewMode }: OSDetailsViewProp
                     rows={3}
                     value={formData.tarefa || ''}
                     onChange={handleFormInputChange}
-                    disabled={!canAdminEdit}
+                    disabled={!canAdminEditFields && isEditing}
                     required={isEditing && viewMode === 'admin'}
                   />
                 </DetailItem>
@@ -836,7 +868,7 @@ export default function OSDetailsView({ initialOs, viewMode }: OSDetailsViewProp
                         <CheckSquareIcon size={16} className="me-2 text-primary" />Checklist
                     </dt>
                     <dd className="col-sm-8 col-lg-9 mb-0">
-                        {isEditing && viewMode === 'admin' ? (
+                        {isEditing && viewMode === 'admin' && canAdminEditFields ? (
                             <div>
                                 {editableChecklist.map((item, index) => (
                                     <div key={item.id} className="input-group input-group-sm mb-1">
@@ -901,6 +933,7 @@ export default function OSDetailsView({ initialOs, viewMode }: OSDetailsViewProp
                   isEditableField={true}
                   isEditingMode={isEditing}
                   viewMode={viewMode}
+                  currentOsStatus={initialOs.status}
                 >
                   <textarea
                     className="form-control form-control-sm"
@@ -908,10 +941,10 @@ export default function OSDetailsView({ initialOs, viewMode }: OSDetailsViewProp
                     rows={isEditing && viewMode === 'admin' ? 3 : 4}
                     value={formData.observacoes || ''}
                     onChange={handleFormInputChange}
-                    onPaste={isEditing && viewMode === 'admin' ? handlePasteInObservacoes : undefined}
-                    disabled={!canAdminEdit}
+                    onPaste={isEditing && viewMode === 'admin' && canAdminEditFields ? handlePasteInObservacoes : undefined}
+                    disabled={!canAdminEditFields && isEditing}
                   />
-                  {isEditing && viewMode === 'admin' && (
+                  {isEditing && viewMode === 'admin' && canAdminEditFields && (
                     <div className="mt-2">
                       <input
                         type="file"

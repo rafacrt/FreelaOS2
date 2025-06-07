@@ -4,7 +4,7 @@
 import Link from 'next/link';
 import type { OS } from '@/lib/types';
 import { OSStatus, ALL_OS_STATUSES } from '@/lib/types';
-import { CalendarClock, Flag, Copy, AlertTriangle, CheckCircle2, Server, Users, FileText, User as UserIcon, Briefcase, Calendar as CalendarIcon, CheckSquare, Play, Pause, Clock, UserCheck } from 'lucide-react';
+import { CalendarClock, Flag, Copy, AlertTriangle, CheckCircle2, Server, Users, FileText, User as UserIcon, Briefcase, Calendar as CalendarIcon, CheckSquare, Play, Pause, Clock, UserCheck, HelpCircle, AlertOctagon, ThumbsUp, ThumbsDown } from 'lucide-react';
 import { format, parseISO, isValid } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useOSStore } from '@/store/os-store';
@@ -15,12 +15,11 @@ import ChronometerDisplay from '@/components/os/ChronometerDisplay';
 
 interface OSCardProps {
   os: OS;
-  viewMode?: 'admin' | 'partner'; // Default to 'admin' if not provided
+  viewMode?: 'admin' | 'partner'; 
 }
 
-// Updated getStatusClass to include background and ensure text contrast
 const getStatusClass = (status: OSStatus, isUrgent: boolean, theme: 'light' | 'dark'): string => {
-  if (isUrgent) {
+  if (isUrgent && status !== OSStatus.AGUARDANDO_APROVACAO && status !== OSStatus.RECUSADA) {
     return 'border-danger bg-danger-subtle text-danger-emphasis';
   }
   switch (status) {
@@ -28,13 +27,15 @@ const getStatusClass = (status: OSStatus, isUrgent: boolean, theme: 'light' | 'd
     case OSStatus.AGUARDANDO_CLIENTE: return 'border-warning bg-warning-subtle text-warning-emphasis';
     case OSStatus.EM_PRODUCAO: return `border-info bg-info-subtle text-info-emphasis`;
     case OSStatus.AGUARDANDO_PARCEIRO: return `border-primary bg-primary-subtle text-primary-emphasis`;
+    case OSStatus.AGUARDANDO_APROVACAO: return 'border-warning bg-warning-subtle text-warning-emphasis';
+    case OSStatus.RECUSADA: return 'border-danger bg-danger-subtle text-danger-emphasis';
     case OSStatus.FINALIZADO: return 'border-success bg-success-subtle text-success-emphasis';
     default: return 'border-light bg-light text-dark';
   }
 };
 
 const getStatusSelectClasses = (status: OSStatus, isUrgent: boolean, theme: 'light' | 'dark'): string => {
-  if (isUrgent) {
+  if (isUrgent && status !== OSStatus.AGUARDANDO_APROVACAO && status !== OSStatus.RECUSADA) {
     return 'border-danger text-danger-emphasis bg-danger-subtle';
   }
    switch (status) {
@@ -42,6 +43,8 @@ const getStatusSelectClasses = (status: OSStatus, isUrgent: boolean, theme: 'lig
     case OSStatus.AGUARDANDO_CLIENTE: return 'border-warning text-warning-emphasis bg-body';
     case OSStatus.EM_PRODUCAO: return `border-info text-info-emphasis bg-body`;
     case OSStatus.AGUARDANDO_PARCEIRO: return `border-primary text-primary-emphasis bg-body`;
+    case OSStatus.AGUARDANDO_APROVACAO: return 'border-warning text-warning-emphasis bg-body';
+    case OSStatus.RECUSADA: return 'border-danger text-danger-emphasis bg-body';
     case OSStatus.FINALIZADO: return 'border-success text-success-emphasis bg-body';
     default: return 'border-light text-dark bg-body';
   }
@@ -53,6 +56,8 @@ const getStatusIcon = (status: OSStatus) => {
     case OSStatus.AGUARDANDO_CLIENTE: return <UserIcon size={14} className="me-1" />;
     case OSStatus.EM_PRODUCAO: return <Server size={14} className="me-1" />;
     case OSStatus.AGUARDANDO_PARCEIRO: return <Users size={14} className="me-1" />;
+    case OSStatus.AGUARDANDO_APROVACAO: return <HelpCircle size={14} className="me-1 text-warning" />;
+    case OSStatus.RECUSADA: return <AlertOctagon size={14} className="me-1 text-danger" />;
     case OSStatus.FINALIZADO: return <CheckCircle2 size={14} className="me-1" />;
     default: return <FileText size={14} className="me-1" />;
   }
@@ -82,6 +87,16 @@ export default function OSCard({ os, viewMode = 'admin' }: OSCardProps) {
       setIsUpdating(false);
     }
   };
+  
+  const handleApprovalAction = async (e: React.MouseEvent, approved: boolean) => {
+    e.preventDefault(); e.stopPropagation();
+    if (os.status !== OSStatus.AGUARDANDO_APROVACAO) return;
+    setIsUpdating(true);
+    const newStatus = approved ? OSStatus.NA_FILA : OSStatus.RECUSADA;
+    await updateOSStatus(os.id, newStatus);
+    setIsUpdating(false);
+  };
+
 
   const handleToggleUrgent = async (e: React.MouseEvent) => {
     e.preventDefault(); e.stopPropagation();
@@ -99,7 +114,7 @@ export default function OSCard({ os, viewMode = 'admin' }: OSCardProps) {
 
   const handleFinalizeOS = async (e: React.MouseEvent) => {
     e.preventDefault(); e.stopPropagation();
-    if (os.status !== OSStatus.FINALIZADO) {
+    if (os.status !== OSStatus.FINALIZADO && os.status !== OSStatus.AGUARDANDO_APROVACAO && os.status !== OSStatus.RECUSADA) {
       setIsUpdating(true);
       try {
         await updateOSStatus(os.id, OSStatus.FINALIZADO);
@@ -113,6 +128,7 @@ export default function OSCard({ os, viewMode = 'admin' }: OSCardProps) {
 
   const handleToggleTimer = async (e: React.MouseEvent, action: 'play' | 'pause') => {
     e.preventDefault(); e.stopPropagation();
+    if (os.status === OSStatus.AGUARDANDO_APROVACAO || os.status === OSStatus.RECUSADA || os.status === OSStatus.FINALIZADO) return;
     setIsUpdating(true);
     await toggleProductionTimer(os.id, action);
     setIsUpdating(false);
@@ -141,15 +157,25 @@ export default function OSCard({ os, viewMode = 'admin' }: OSCardProps) {
 
   const isTimerRunning = !!os.dataInicioProducaoAtual;
   const isFinalized = os.status === OSStatus.FINALIZADO;
+  const isAwaitingApproval = os.status === OSStatus.AGUARDANDO_APROVACAO;
+  const isRefused = os.status === OSStatus.RECUSADA;
 
-  const osNumeroColorClass = os.isUrgent ? 'text-danger-emphasis' : 'text-primary';
+  const osNumeroColorClass = (os.isUrgent && !isAwaitingApproval && !isRefused) ? 'text-danger-emphasis' : 'text-primary';
+  const headerBgClass = () => {
+    if (os.isUrgent && !isAwaitingApproval && !isRefused) return 'bg-danger-subtle';
+    if (isAwaitingApproval) return 'bg-warning-subtle';
+    if (isRefused) return 'bg-danger-subtle';
+    if (os.status === OSStatus.EM_PRODUCAO) return 'bg-info-subtle';
+    if (os.status === OSStatus.AGUARDANDO_PARCEIRO) return 'bg-primary-subtle';
+    return 'bg-light';
+  };
 
 
   return (
     <Link href={`/os/${os.id}`} passHref legacyBehavior>
         <a className={`text-decoration-none d-block h-100 ${hoverEffectClass}`}>
             <div className={cardClasses}>
-                <div className={`card-header p-2 pb-1 d-flex justify-content-between align-items-center ${os.isUrgent ? 'bg-danger-subtle' : (os.status === OSStatus.EM_PRODUCAO ? 'bg-info-subtle' : (os.status === OSStatus.AGUARDANDO_PARCEIRO ? 'bg-primary-subtle' : 'bg-light'))}`}>
+                <div className={`card-header p-2 pb-1 d-flex justify-content-between align-items-center ${headerBgClass()}`}>
                     <div className="d-flex flex-column">
                         <span className={`fw-bold small font-monospace ${osNumeroColorClass}`}>OS: {os.numero}</span>
                         {os.createdByPartnerName && (
@@ -158,12 +184,12 @@ export default function OSCard({ os, viewMode = 'admin' }: OSCardProps) {
                             </span>
                         )}
                     </div>
-                    {viewMode === 'admin' && os.isUrgent && (
+                    {viewMode === 'admin' && os.isUrgent && !isAwaitingApproval && !isRefused && (
                         <span className={`badge bg-danger text-white rounded-pill px-2 py-1 small d-flex align-items-center ms-auto`} style={{fontSize: '0.7em'}}>
                             <AlertTriangle size={12} className="me-1" /> URGENTE
                         </span>
                     )}
-                     {viewMode === 'partner' && os.isUrgent && ( // Parceiro pode ver se é urgente
+                     {viewMode === 'partner' && os.isUrgent && !isAwaitingApproval && !isRefused && ( 
                         <span className={`badge bg-danger-subtle text-danger-emphasis rounded-pill px-2 py-1 small d-flex align-items-center ms-auto`} style={{fontSize: '0.7em'}}>
                             <AlertTriangle size={12} className="me-1" /> URGENTE
                         </span>
@@ -174,13 +200,13 @@ export default function OSCard({ os, viewMode = 'admin' }: OSCardProps) {
                         <UserIcon size={14} className="me-1 text-muted align-middle" />
                         <span className="fw-medium small text-break">{truncateText(os.cliente, 30)}</span>
                     </div>
-                    {os.parceiro && viewMode === 'admin' && ( // Parceiro de execução só visível para admin no card
+                    {os.parceiro && viewMode === 'admin' && ( 
                         <div className="mb-1" title={`Parceiro de Execução: ${os.parceiro}`}>
                             <Users size={14} className="me-1 text-muted align-middle" />
                             <span className="text-muted small text-break">{truncateText(os.parceiro, 30)}</span>
                         </div>
                     )}
-                    <div className="mb-2" title={`Projeto: ${os.projeto}`}> {/* Exibir nome do projeto em vez da tarefa */}
+                    <div className="mb-2" title={`Projeto: ${os.projeto}`}> 
                         <Briefcase size={14} className="me-1 text-muted align-middle" />
                         <span className="small text-muted text-break">{truncateText(os.projeto, 40)}</span>
                     </div>
@@ -210,7 +236,7 @@ export default function OSCard({ os, viewMode = 'admin' }: OSCardProps) {
                         </div>
                     </div>
                     
-                    {viewMode === 'admin' && (
+                    {viewMode === 'admin' ? (
                         <div className="mb-2">
                             <select
                                 className={`form-select form-select-sm ${statusSelectClasses}`}
@@ -219,18 +245,18 @@ export default function OSCard({ os, viewMode = 'admin' }: OSCardProps) {
                                 onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
                                 aria-label="Mudar status da OS"
                                 style={{ fontSize: '0.75rem' }}
-                                disabled={isUpdating || isFinalized}
+                                disabled={isUpdating || isFinalized || isAwaitingApproval || isRefused}
                             >
-                                {ALL_OS_STATUSES.map(s => (
-                                <option key={s} value={s} disabled={isFinalized && s !== OSStatus.FINALIZADO}>
-                                    {/* O ícone dentro do option não funciona bem em todos os browsers, remover daqui */}
+                                {ALL_OS_STATUSES
+                                  .filter(s => s !== OSStatus.AGUARDANDO_APROVACAO && s !== OSStatus.RECUSADA || s === os.status) // Só mostra Aguardando/Recusada se for o status atual
+                                  .map(s => (
+                                <option key={s} value={s} disabled={(isFinalized && s !== OSStatus.FINALIZADO) || ((isAwaitingApproval || isRefused) && s !== os.status)}>
                                     {s}
                                 </option>
                                 ))}
                             </select>
                         </div>
-                    )}
-                    {viewMode === 'partner' && ( // Parceiro apenas visualiza o status
+                    ) : ( 
                          <div className="mb-2">
                             <div className={`form-control form-control-sm text-center disabled ${statusSelectClasses}`} style={{ fontSize: '0.75rem' }}>
                                 {getStatusIcon(os.status)} {os.status}
@@ -239,9 +265,31 @@ export default function OSCard({ os, viewMode = 'admin' }: OSCardProps) {
                     )}
                 </div>
                  {viewMode === 'admin' && (
-                    <div className={`card-footer p-2 border-top ${theme === 'dark' ? 'bg-dark-subtle' : (os.isUrgent ? 'bg-danger-subtle' : 'bg-light-subtle')}`}>
+                    <div className={`card-footer p-2 border-top ${theme === 'dark' ? 'bg-dark-subtle' : headerBgClass()}`}>
                         <div className="d-flex flex-column gap-1">
-                            {!isFinalized && (
+                            {isAwaitingApproval && (
+                                <div className="d-flex gap-1 mb-1">
+                                    <button
+                                        className="btn btn-success btn-sm flex-grow-1 d-flex align-items-center justify-content-center"
+                                        onClick={(e) => handleApprovalAction(e, true)}
+                                        disabled={isUpdating}
+                                        style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem' }}
+                                        title="Aprovar OS"
+                                    >
+                                        <ThumbsUp size={14} className="me-1" /> Aprovar
+                                    </button>
+                                    <button
+                                        className="btn btn-danger btn-sm flex-grow-1 d-flex align-items-center justify-content-center"
+                                        onClick={(e) => handleApprovalAction(e, false)}
+                                        disabled={isUpdating}
+                                        style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem' }}
+                                        title="Recusar OS"
+                                    >
+                                        <ThumbsDown size={14} className="me-1" /> Recusar
+                                    </button>
+                                </div>
+                            )}
+                            {!isFinalized && !isAwaitingApproval && !isRefused &&(
                                 <button
                                     className="btn btn-info btn-sm w-100 d-flex align-items-center justify-content-center"
                                     onClick={handleFinalizeOS}
@@ -252,7 +300,7 @@ export default function OSCard({ os, viewMode = 'admin' }: OSCardProps) {
                                     <CheckSquare size={14} className="me-1" /> Finalizar OS
                                 </button>
                             )}
-                            {!isFinalized && (
+                            {!isFinalized && !isAwaitingApproval && !isRefused && (
                                 <div className="d-flex gap-1 mb-1">
                                     {isTimerRunning ? (
                                         <button
@@ -279,10 +327,10 @@ export default function OSCard({ os, viewMode = 'admin' }: OSCardProps) {
                             )}
                             <div className="d-flex gap-1">
                                 <button
-                                    className={`btn ${os.isUrgent ? 'btn-danger' : 'btn-outline-danger'} btn-sm flex-grow-1 d-flex align-items-center justify-content-center`}
+                                    className={`btn ${os.isUrgent && !isAwaitingApproval && !isRefused ? 'btn-danger' : 'btn-outline-danger'} btn-sm flex-grow-1 d-flex align-items-center justify-content-center`}
                                     onClick={handleToggleUrgent}
                                     style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem' }}
-                                    disabled={isUpdating}
+                                    disabled={isUpdating || isAwaitingApproval || isRefused}
                                     title={os.isUrgent ? "Desmarcar como Urgente" : "Marcar como Urgente"}
                                 >
                                     <Flag size={14} className="me-1" /> {os.isUrgent ? "Desm. Urgente" : "Marcar Urgente"}

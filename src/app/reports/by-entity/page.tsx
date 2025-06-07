@@ -16,9 +16,10 @@ type ReportOSStatusFilter = 'all' | 'active' | 'completed' | OSStatus;
 type SortKey = 'dataAbertura' | 'numero' | 'cliente' | 'projeto' | 'status' | 'programadoPara' | 'dataFinalizacao';
 type SortDirection = 'asc' | 'desc';
 
+// Use ALL_OS_STATUSES from types.ts for consistency
 const statusOptions: { value: ReportOSStatusFilter; label: string }[] = [
   { value: 'all', label: 'Todas as OS' },
-  { value: 'active', label: 'OS Ativas (Não Finalizadas)' },
+  { value: 'active', label: 'OS Ativas (Não Finalizadas/Recusadas/Aguardando Aprovação)' },
   { value: 'completed', label: 'OS Finalizadas' },
   ...ALL_OS_STATUSES.map(status => ({ value: status, label: status })),
 ];
@@ -47,26 +48,26 @@ export default function ReportByEntityPage() {
   const filteredAndSortedOS = useMemo(() => {
     let tempOSList = [...osList];
 
-    // Filter by Client
     if (selectedClientId !== 'all') {
       tempOSList = tempOSList.filter(os => os.clientId === selectedClientId);
     }
 
-    // Filter by Partner
     if (selectedPartnerId !== 'all') {
       tempOSList = tempOSList.filter(os => os.partnerId === selectedPartnerId);
     }
 
-    // Filter by Status
     if (selectedStatusFilter === 'active') {
-      tempOSList = tempOSList.filter(os => os.status !== OSStatus.FINALIZADO);
+      tempOSList = tempOSList.filter(os => 
+        os.status !== OSStatus.FINALIZADO && 
+        os.status !== OSStatus.RECUSADA &&
+        os.status !== OSStatus.AGUARDANDO_APROVACAO
+      );
     } else if (selectedStatusFilter === 'completed') {
       tempOSList = tempOSList.filter(os => os.status === OSStatus.FINALIZADO);
     } else if (selectedStatusFilter !== 'all') {
       tempOSList = tempOSList.filter(os => os.status === selectedStatusFilter);
     }
     
-    // Filter by Search Term (Número OS or Projeto)
     if (searchTerm.trim() !== '') {
         const lowerSearchTerm = searchTerm.toLowerCase();
         tempOSList = tempOSList.filter(os =>
@@ -75,8 +76,6 @@ export default function ReportByEntityPage() {
         );
     }
 
-
-    // Sort
     tempOSList.sort((a, b) => {
       let compareResult = 0;
       const valA = getSortValue(a, sortBy);
@@ -115,13 +114,12 @@ export default function ReportByEntityPage() {
   const formatDate = (dateString?: string) => {
     if (!dateString) return '-';
     try {
-      // Handle YYYY-MM-DD for programadoPara or full ISO for others
       const date = /^\d{4}-\d{2}-\d{2}$/.test(dateString) ? parseISO(dateString + 'T00:00:00Z') : parseISO(dateString);
       if (isValid(date)) {
         return format(date, dateString.length === 10 ? 'dd/MM/yyyy' : 'dd/MM/yyyy HH:mm', { locale: ptBR });
       }
     } catch (e) { /* fall through */ }
-    return dateString; // fallback to original string if parsing fails
+    return dateString; 
   };
 
 
@@ -149,7 +147,6 @@ export default function ReportByEntityPage() {
         </Link>
       </div>
 
-      {/* Filters Card */}
       <div className="card shadow-sm mb-4">
         <div className="card-header bg-light">
           <Filter size={16} className="me-1" /> Filtros do Relatório
@@ -212,7 +209,6 @@ export default function ReportByEntityPage() {
         </div>
       </div>
 
-      {/* Results Card */}
       <div className="card shadow-sm">
         <div className="card-header bg-light d-flex justify-content-between align-items-center">
           <span><List size={16} className="me-1" /> Resultados</span>
@@ -249,7 +245,7 @@ export default function ReportByEntityPage() {
                       <td>{os.cliente}</td>
                       <td>{os.parceiro || <span className="text-muted fst-italic">N/A</span>}</td>
                       <td>{os.projeto}</td>
-                      <td><span className={`badge bg-opacity-25 ${getStatusBadgeClass(os.status)} text-dark`}>{os.status}</span></td>
+                      <td><span className={`badge ${getStatusBadgeClass(os.status)}`}>{os.status}</span></td>
                       <td>{formatDate(os.dataAbertura)}</td>
                       <td>{formatDate(os.programadoPara)}</td>
                       <td>{formatDate(os.dataFinalizacao)}</td>
@@ -268,19 +264,19 @@ export default function ReportByEntityPage() {
   );
 }
 
-// Helper to get sort value
 function getSortValue<T, K extends keyof T>(obj: T | null | undefined, key: K): T[K] | null {
     return obj ? obj[key] : null;
 }
 
-// Helper to get Bootstrap badge class based on OS status
 const getStatusBadgeClass = (status: OSStatus): string => {
   switch (status) {
-    case OSStatus.NA_FILA: return 'bg-secondary-subtle border border-secondary-subtle';
-    case OSStatus.AGUARDANDO_CLIENTE: return 'bg-warning-subtle border border-warning-subtle';
-    case OSStatus.EM_PRODUCAO: return 'bg-info-subtle border border-info-subtle';
-    case OSStatus.AGUARDANDO_PARCEIRO: return 'bg-primary-subtle border border-primary-subtle';
-    case OSStatus.FINALIZADO: return 'bg-success-subtle border border-success-subtle';
-    default: return 'bg-light border border-light-subtle';
+    case OSStatus.NA_FILA: return 'bg-secondary-subtle text-secondary-emphasis';
+    case OSStatus.AGUARDANDO_CLIENTE: return 'bg-warning-subtle text-warning-emphasis';
+    case OSStatus.EM_PRODUCAO: return 'bg-info-subtle text-info-emphasis';
+    case OSStatus.AGUARDANDO_PARCEIRO: return 'bg-primary-subtle text-primary-emphasis';
+    case OSStatus.AGUARDANDO_APROVACAO: return 'bg-warning-subtle text-warning-emphasis';
+    case OSStatus.RECUSADA: return 'bg-danger-subtle text-danger-emphasis';
+    case OSStatus.FINALIZADO: return 'bg-success-subtle text-success-emphasis';
+    default: return 'bg-light text-dark';
   }
 };

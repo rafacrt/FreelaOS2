@@ -56,7 +56,6 @@ interface OSState {
   getPartnerEntityById: (partnerId: string) => Partner | undefined;
   getPartnerEntityByName: (partnerName: string) => Partner | undefined;
 
-  // Updated client action signatures
   addClient: (clientData: { name: string; sourcePartnerId?: string | null }) => Promise<Client | null>;
   updateClient: (updatedClient: Client) => Promise<Client | null>; 
   deleteClient: (clientId: string) => Promise<boolean>; 
@@ -81,18 +80,20 @@ export const useOSStore = create<OSState>()(
         try {
             const [osListFromDB, clientsFromDB, partnersFromDB] = await Promise.all([
                 getAllOSFromDB(),
-                getAllClientsFromDB(), // Fetches clients with sourcePartnerId and sourcePartnerName
+                getAllClientsFromDB(), 
                 getAllPartnersFromDB()
             ]);
             
             const processedOSList = osListFromDB.map(os => ({
                 ...os,
                 checklist: os.checklist || [], 
+                // Ensure createdByPartnerName is populated from the DB query
+                createdByPartnerName: os.createdByPartnerName || undefined,
             }));
 
             set({
               osList: processedOSList || [], 
-              clients: clientsFromDB || [], // Clients now include source partner info
+              clients: clientsFromDB || [], 
               partners: partnersFromDB || [],
               isStoreInitialized: true,
             });
@@ -121,18 +122,18 @@ export const useOSStore = create<OSState>()(
               osList: [...state.osList, newOSWithDefaults].sort((a, b) => { 
                 if (a.isUrgent && !b.isUrgent) return -1;
                 if (!a.isUrgent && b.isUrgent) return 1;
+                 if (a.status === OSStatus.AGUARDANDO_APROVACAO && b.status !== OSStatus.AGUARDANDO_APROVACAO) return -1;
+                 if (a.status !== OSStatus.AGUARDANDO_APROVACAO && b.status === OSStatus.AGUARDANDO_APROVACAO) return 1;
                 return new Date(b.dataAbertura).getTime() - new Date(a.dataAbertura).getTime();
               }),
             }));
 
-            // Client might have been created or found by findOrCreateClientByName in createOSInDB
-            // We need to ensure the local client list is up-to-date
-            const clientFromDB = await get().getClientById(newOSWithDefaults.clientId); // Check if we already have this client (possibly with updated source partner)
+            const clientFromDB = await get().getClientById(newOSWithDefaults.clientId); 
             if (clientFromDB) {
-                const clientInOS = { // Reconstruct client object as expected from OS creation
+                const clientInOS = { 
                     id: newOSWithDefaults.clientId, 
                     name: newOSWithDefaults.cliente,
-                    sourcePartnerId: clientFromDB.sourcePartnerId, // Use potentially updated source from DB
+                    sourcePartnerId: clientFromDB.sourcePartnerId, 
                     sourcePartnerName: clientFromDB.sourcePartnerName
                 };
                 if (!get().clients.some(c => c.id === clientInOS.id && c.name === clientInOS.name && c.sourcePartnerId === clientInOS.sourcePartnerId)) {
@@ -140,7 +141,6 @@ export const useOSStore = create<OSState>()(
                      set(state => ({ clients: [...state.clients.filter(c => c.id !== clientInOS.id), clientInOS].sort((a,b) => a.name.localeCompare(b.name)) }));
                 }
             }
-
 
             if (newOSWithDefaults.partnerId && newOSWithDefaults.parceiro) {
               const execPartnerExists = get().partners.some(p => p.id === newOSWithDefaults.partnerId);
@@ -182,10 +182,11 @@ export const useOSStore = create<OSState>()(
                     ).sort((a, b) => {
                         if (a.isUrgent && !b.isUrgent) return -1;
                         if (!a.isUrgent && b.isUrgent) return 1;
+                        if (a.status === OSStatus.AGUARDANDO_APROVACAO && b.status !== OSStatus.AGUARDANDO_APROVACAO) return -1;
+                        if (a.status !== OSStatus.AGUARDANDO_APROVACAO && b.status === OSStatus.AGUARDANDO_APROVACAO) return 1;
                         return new Date(b.dataAbertura).getTime() - new Date(a.dataAbertura).getTime();
                     }),
                 }));
-                // Ensure client is up-to-date in local store
                 const clientFromDB = await get().getClientById(updatedOSWithDefaults.clientId);
                  if (clientFromDB) {
                     const clientInOS = { 
@@ -240,6 +241,8 @@ export const useOSStore = create<OSState>()(
               ).sort((a, b) => {
                 if (a.isUrgent && !b.isUrgent) return -1;
                 if (!a.isUrgent && b.isUrgent) return 1;
+                if (a.status === OSStatus.AGUARDANDO_APROVACAO && b.status !== OSStatus.AGUARDANDO_APROVACAO) return -1;
+                if (a.status !== OSStatus.AGUARDANDO_APROVACAO && b.status === OSStatus.AGUARDANDO_APROVACAO) return 1;
                 return new Date(b.dataAbertura).getTime() - new Date(a.dataAbertura).getTime();
               }),
             }));
@@ -270,6 +273,8 @@ export const useOSStore = create<OSState>()(
                     ).sort((a, b) => { 
                         if (a.isUrgent && !b.isUrgent) return -1;
                         if (!a.isUrgent && b.isUrgent) return 1;
+                        if (a.status === OSStatus.AGUARDANDO_APROVACAO && b.status !== OSStatus.AGUARDANDO_APROVACAO) return -1;
+                        if (a.status !== OSStatus.AGUARDANDO_APROVACAO && b.status === OSStatus.AGUARDANDO_APROVACAO) return 1;
                         return new Date(b.dataAbertura).getTime() - new Date(a.dataAbertura).getTime();
                     }),
                 }));
@@ -298,7 +303,7 @@ export const useOSStore = create<OSState>()(
             return null;
         }
         const duplicatedOSData: CreateOSData = {
-            cliente: osToDuplicate.cliente, // Nome do cliente
+            cliente: osToDuplicate.cliente, 
             parceiro: osToDuplicate.parceiro,
             projeto: `${osToDuplicate.projeto} (Cópia)`,
             tarefa: osToDuplicate.tarefa,
@@ -307,10 +312,10 @@ export const useOSStore = create<OSState>()(
             programadoPara: undefined, 
             isUrgent: false, 
             checklistItems: osToDuplicate.checklist ? osToDuplicate.checklist.map(item => item.text) : undefined,
-            // sourcePartnerId do cliente original não é diretamente passado aqui, findOrCreateClientByName em createOSInDB cuidará disso.
         };
         console.log('[Store duplicateOS] Dados para nova OS duplicada:', JSON.stringify(duplicatedOSData, null, 2));
-        return get().addOS(duplicatedOSData);
+        // Se a OS original foi criada por um parceiro, a duplicada também deve ser marcada assim
+        return get().addOS(duplicatedOSData, osToDuplicate.createdByPartnerId);
       },
 
       toggleUrgent: async (osId: string) => {
@@ -335,6 +340,8 @@ export const useOSStore = create<OSState>()(
                   ).sort((a, b) => {
                     if (a.isUrgent && !b.isUrgent) return -1;
                     if (!a.isUrgent && b.isUrgent) return 1;
+                    if (a.status === OSStatus.AGUARDANDO_APROVACAO && b.status !== OSStatus.AGUARDANDO_APROVACAO) return -1;
+                    if (a.status !== OSStatus.AGUARDANDO_APROVACAO && b.status === OSStatus.AGUARDANDO_APROVACAO) return 1;
                     return new Date(b.dataAbertura).getTime() - new Date(a.dataAbertura).getTime();
                   }),
                 }));
@@ -382,7 +389,6 @@ export const useOSStore = create<OSState>()(
             if (success) {
                 set(state => ({
                     partners: state.partners.filter(p => p.id !== partnerId),
-                    // Also update clients in local store that might have had this partner as source
                     clients: state.clients.map(c => c.sourcePartnerId === partnerId ? {...c, sourcePartnerId: null, sourcePartnerName: null} : c)
                 }));
                 console.log(`[Store deletePartnerEntity] Parceiro ID: ${partnerId} excluído do store local e clientes desassociados.`);
@@ -428,7 +434,6 @@ export const useOSStore = create<OSState>()(
                 set(state => ({
                     clients: state.clients.map(c => c.id === updatedClientFromDB.id ? updatedClientFromDB : c).sort((a,b) => a.name.localeCompare(b.name))
                 }));
-                // Atualizar o nome do cliente nas OSs, se necessário (sourcePartnerName já vem do updatedClientFromDB)
                 set(state => ({
                     osList: state.osList.map(os => 
                         os.clientId === updatedClientFromDB.id ? { ...os, cliente: updatedClientFromDB.name } : os
@@ -452,9 +457,6 @@ export const useOSStore = create<OSState>()(
                 set(state => ({
                     clients: state.clients.filter(c => c.id !== clientId)
                 }));
-                // OSs não precisam ser atualizadas aqui pois a FK no DB lida com isso (ON DELETE SET NULL para cliente_id em OS não é comum, geralmente impede)
-                // Se a exclusão no DB for permitida, a OS pode ficar órfã de cliente_id, o que não é ideal.
-                // A action deleteClientFromDB já impede a exclusão se houver OSs vinculadas.
                 console.log(`[Store deleteClient] Cliente ID: ${clientId} excluído do store local.`);
                 return true;
             }

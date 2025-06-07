@@ -4,6 +4,8 @@ export enum OSStatus {
   AGUARDANDO_CLIENTE = "Aguardando Cliente",
   EM_PRODUCAO = "Em Produção",
   AGUARDANDO_PARCEIRO = "Aguardando Parceiro",
+  AGUARDANDO_APROVACAO = "Aguardando Aprovação", // Novo status
+  RECUSADA = "Recusada",                         // Novo status
   FINALIZADO = "Finalizado",
 }
 
@@ -12,6 +14,8 @@ export const ALL_OS_STATUSES: OSStatus[] = [
   OSStatus.AGUARDANDO_CLIENTE,
   OSStatus.EM_PRODUCAO,
   OSStatus.AGUARDANDO_PARCEIRO,
+  OSStatus.AGUARDANDO_APROVACAO,
+  OSStatus.RECUSADA,
   OSStatus.FINALIZADO,
 ];
 
@@ -73,7 +77,7 @@ export interface CreateOSData {
   projeto: string;
   tarefa: string;
   observacoes: string;
-  status: OSStatus;
+  status: OSStatus; // Pode ser pré-definido, como AGUARDANDO_APROVACAO
   programadoPara?: string; // YYYY-MM-DD
   isUrgent: boolean;
   checklistItems?: string[]; // Array of checklist item texts for creation

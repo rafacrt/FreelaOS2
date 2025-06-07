@@ -52,23 +52,22 @@ export default function PartnerCreateOSPage() {
       projeto: projeto.trim(),
       tarefa: tarefa.trim(),
       observacoes: `OS criada pelo parceiro: ${session.partnerName} (ID: ${session.id}).`,
-      status: OSStatus.NA_FILA, // OSs de parceiros entram "Na Fila" por padrão
+      status: OSStatus.AGUARDANDO_APROVACAO, // OSs de parceiros entram "Aguardando Aprovação"
       programadoPara: undefined,
-      isUrgent: false, // Parceiros não marcam como urgente por padrão
+      isUrgent: false, 
       checklistItems: [],
     };
 
     try {
       const createdOS = await addOS(osData, session.id); // Passa o ID do parceiro criador
       if (createdOS) {
-        setSuccessMessage(`OS Nº ${createdOS.numero} criada com sucesso! Redirecionando...`);
-        // Limpar formulário
+        setSuccessMessage(`OS Nº ${createdOS.numero} enviada para aprovação! Redirecionando...`);
         setCliente('');
         setProjeto('');
         setTarefa('');
         setTimeout(() => {
           router.push('/partner/dashboard');
-        }, 2000);
+        }, 2500);
       } else {
         setError('Falha ao criar a Ordem de Serviço. Tente novamente.');
       }
@@ -164,7 +163,7 @@ export default function PartnerCreateOSPage() {
           </form>
         </div>
         <div className="card-footer text-muted small">
-          Após o envio, a OS será encaminhada para o administrador.
+          Após o envio, a OS será encaminhada para aprovação do administrador.
         </div>
       </div>
     </AuthenticatedLayout>
