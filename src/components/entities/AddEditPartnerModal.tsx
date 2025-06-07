@@ -5,24 +5,26 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
-import type { Partner } from '@/store/os-store'; // Import Partner type from store
+import type { Partner } from '@/store/os-store';
 import { useOSStore } from '@/store/os-store';
 
+// Schema inicial, será expandido
 const partnerSchema = z.object({
   name: z.string().min(1, { message: 'Nome do parceiro é obrigatório.' }),
+  // Campos adicionais (username, email, password, etc.) serão adicionados depois
 });
 
 type PartnerFormValues = z.infer<typeof partnerSchema>;
 
 interface AddEditPartnerModalProps {
-  partner?: Partner | null; // Partner to edit, or null/undefined to add
+  partner?: Partner | null;
   isOpen: boolean;
   onClose: () => void;
 }
 
 export default function AddEditPartnerModal({ partner, isOpen, onClose }: AddEditPartnerModalProps) {
-  const addPartner = useOSStore((state) => state.addPartner);
-  const updatePartner = useOSStore((state) => state.updatePartner);
+  const addPartner = useOSStore((state) => state.addPartnerEntity);
+  const updatePartner = useOSStore((state) => state.updatePartnerEntity);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const modalRef = useRef<HTMLDivElement>(null);
   const [bootstrapModal, setBootstrapModal] = useState<any>(null);
@@ -35,56 +37,48 @@ export default function AddEditPartnerModal({ partner, isOpen, onClose }: AddEdi
     mode: 'onChange',
   });
 
-  // Reset form when partner prop changes or modal opens/closes
   useEffect(() => {
     if (isOpen) {
       form.reset({ name: partner?.name || '' });
     } else {
-      form.reset({ name: '' }); // Clear form on close
+      form.reset({ name: '' });
     }
-  }, [partner, isOpen, form.reset]); // form.reset added
+  }, [partner, isOpen, form.reset]);
 
-  // Initialize and manage Bootstrap modal instance
   useEffect(() => {
     if (typeof window !== 'undefined' && modalRef.current) {
-      import('bootstrap/js/dist/modal').then((ModalModule) => {
-        const Modal = ModalModule.default;
-        if (modalRef.current) {
-          const modalInstance = new Modal(modalRef.current);
-          setBootstrapModal(modalInstance);
+      const ModalModule = require('bootstrap/js/dist/modal');
+      const Modal = ModalModule.default;
+      if (modalRef.current) {
+        const modalInstance = new Modal(modalRef.current);
+        setBootstrapModal(modalInstance);
 
-          // Handle external close events (like backdrop click or ESC key)
-          const handleHide = () => {
-             if (isOpen) { // Only call onClose if the modal was supposed to be open
-                onClose();
-             }
-          };
-          modalRef.current.addEventListener('hidden.bs.modal', handleHide);
+        const handleHide = () => {
+           if (isOpen) {
+              onClose();
+           }
+        };
+        modalRef.current.addEventListener('hidden.bs.modal', handleHide);
 
-          // Cleanup listener on unmount
-          return () => {
-            if (modalRef.current) {
-                modalRef.current.removeEventListener('hidden.bs.modal', handleHide);
-            }
-            // Attempt to dispose only if instance exists and hasn't been disposed
-             if (modalInstance && (modalInstance as any)._isShown) {
-                try {
-                    modalInstance.dispose();
-                } catch (e) {
-                     console.warn("Error disposing Bootstrap modal:", e);
-                }
-             }
-          };
-        }
-      }).catch(err => console.error("Failed to load Bootstrap modal:", err));
+        return () => {
+          if (modalRef.current) {
+              modalRef.current.removeEventListener('hidden.bs.modal', handleHide);
+          }
+           if (modalInstance && (modalInstance as any)._isShown) {
+              try {
+                  modalInstance.dispose();
+              } catch (e) {
+                   console.warn("Error disposing Bootstrap modal:", e);
+              }
+           }
+        };
+      }
     }
-     // Ensure modal is disposed if component unmounts while modal is initializing or open
      return () => {
        if (bootstrapModal && typeof bootstrapModal.dispose === 'function') {
             try {
-                 // Check if it's shown before disposing to avoid errors if already hidden/disposed
                 if ((bootstrapModal as any)._isShown) {
-                     bootstrapModal.hide(); // Hide first to trigger events if needed
+                     bootstrapModal.hide();
                 }
                  bootstrapModal.dispose();
             } catch (error) {
@@ -92,17 +86,17 @@ export default function AddEditPartnerModal({ partner, isOpen, onClose }: AddEdi
             }
         }
      };
-  }, []); // Run only once on mount
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); 
 
-  // Show/hide modal based on isOpen prop
   useEffect(() => {
     if (bootstrapModal) {
       if (isOpen) {
-        if (!(bootstrapModal as any)._isShown) { // Avoid showing if already shown
+        if (!(bootstrapModal as any)._isShown) {
              bootstrapModal.show();
         }
       } else {
-         if ((bootstrapModal as any)._isShown) { // Avoid hiding if already hidden
+         if ((bootstrapModal as any)._isShown) {
              bootstrapModal.hide();
          }
       }
@@ -113,63 +107,77 @@ export default function AddEditPartnerModal({ partner, isOpen, onClose }: AddEdi
     setIsSubmitting(true);
     try {
       if (partner) {
-        // Update existing partner
-        updatePartner({ ...partner, name: values.name });
-        console.log(`Parceiro "${values.name}" atualizado.`);
+        // Atualizar parceiro - expandir quando actions estiverem prontas
+        await updatePartner({ ...partner, name: values.name });
+        console.log(`Parceiro "${values.name}" (ID: ${partner.id}) atualizado localmente.`);
       } else {
-        // Add new partner
-        const newPartner = addPartner({ name: values.name });
-        console.log(`Parceiro "${newPartner.name}" adicionado.`);
+        // Adicionar novo parceiro - expandir para incluir todos os campos
+        const newPartnerData: Omit<Partner, 'id'> = { // Tipagem para os dados de criação
+            name: values.name,
+            // Valores padrão ou vazios para outros campos que serão adicionados ao form
+            username: undefined, 
+            email: undefined,
+            contact_person: undefined,
+            is_approved: false, // Default para não aprovado
+        };
+        await addPartner(newPartnerData);
+        console.log(`Parceiro "${values.name}" adicionado localmente.`);
       }
-      onClose(); // Close modal on success
+      onClose();
     } catch (error) {
-      console.error('Failed to save partner:', error);
-      alert('Falha ao salvar parceiro. Por favor, tente novamente.'); // Basic feedback
+      console.error('Falha ao salvar parceiro:', error);
+      alert('Falha ao salvar parceiro. Por favor, tente novamente.');
     } finally {
       setIsSubmitting(false);
     }
   };
-
+  
   const handleActualClose = () => {
-     form.reset({ name: '' }); // Explicitly reset form state
-     onClose(); // Call the passed onClose handler
+     form.reset({ name: '' });
+     onClose();
   };
-
 
   return (
     <div
       className="modal fade"
-      id="partnerModal" // Unique ID for partner modal
+      id="partnerModal"
       tabIndex={-1}
       aria-labelledby="partnerModalLabel"
-      aria-hidden={!isOpen} // Controlled by isOpen state
+      aria-hidden={!isOpen}
       ref={modalRef}
     >
-      <div className="modal-dialog modal-dialog-centered">
+      <div className="modal-dialog modal-dialog-centered modal-lg"> {/* modal-lg para mais espaço */}
         <div className="modal-content">
           <form onSubmit={form.handleSubmit(onSubmit)} noValidate>
             <div className="modal-header">
               <h5 className="modal-title" id="partnerModalLabel">
                 {partner ? 'Editar Parceiro' : 'Adicionar Novo Parceiro'}
               </h5>
-              {/* Use the onClose passed from the parent */}
               <button type="button" className="btn-close" aria-label="Close" onClick={handleActualClose}></button>
             </div>
             <div className="modal-body">
+              {/* Nome do Parceiro */}
               <div className="mb-3">
                 <label htmlFor="partnerName" className="form-label">Nome do Parceiro *</label>
                 <input
                   type="text"
                   id="partnerName"
                   className={`form-control ${form.formState.errors.name ? 'is-invalid' : ''}`}
-                  placeholder="Ex: Agência Criativa Inc."
+                  placeholder="Ex: Agência Criativa Ltda."
                   {...form.register('name')}
                 />
                 {form.formState.errors.name && (
                   <div className="invalid-feedback">{form.formState.errors.name.message}</div>
                 )}
               </div>
-              {/* Add more partner fields here if needed in the future */}
+
+              {/* MAIS CAMPOS SERÃO ADICIONADOS AQUI NA PRÓXIMA ETAPA */}
+              {/* Username, Email, Senha (para criação), Contato, Aprovação */}
+              
+              <p className="text-muted small">
+                Detalhes adicionais como informações de login e contato serão configuráveis aqui em breve.
+              </p>
+
             </div>
             <div className="modal-footer">
               <button type="button" className="btn btn-outline-secondary" onClick={handleActualClose} disabled={isSubmitting}>

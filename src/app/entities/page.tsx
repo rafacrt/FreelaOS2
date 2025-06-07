@@ -4,19 +4,18 @@
 import React, { useEffect, useState } from 'react';
 import AuthenticatedLayout from '@/components/layout/AuthenticatedLayout';
 import Link from 'next/link';
-import { ArrowLeft, Building, Users, PlusCircle, Edit, Trash2 } from 'lucide-react';
+import { ArrowLeft, Building, Users, PlusCircle, Edit, Trash2, ShieldCheck, ShieldOff } from 'lucide-react';
 import { useOSStore } from '@/store/os-store';
 import type { Client } from '@/lib/types';
 import type { Partner } from '@/store/os-store'; // Import Partner type
 import AddEditClientModal from '@/components/entities/AddEditClientModal';
-import AddEditPartnerModal from '@/components/entities/AddEditPartnerModal'; // Import the partner modal
+import AddEditPartnerModal from '@/components/entities/AddEditPartnerModal';
 
 export default function EntitiesPage() {
-  // Get managed partners list from the store
   const partners = useOSStore((state) => state.partners);
   const clients = useOSStore((state) => state.clients);
   const deleteClient = useOSStore((state) => state.deleteClient);
-  const deletePartner = useOSStore((state) => state.deletePartner); // Get delete action for partners
+  const deletePartner = useOSStore((state) => state.deletePartnerEntity); // Updated to use new store action name
 
   const [isHydrated, setIsHydrated] = useState(false);
 
@@ -29,10 +28,9 @@ export default function EntitiesPage() {
   const [selectedPartner, setSelectedPartner] = useState<Partner | null>(null);
 
   useEffect(() => {
-    // Simulate loading delay for demonstration
     const timer = setTimeout(() => {
         setIsHydrated(true);
-    }, 300); // 0.3 second delay
+    }, 300);
     return () => clearTimeout(timer);
   }, []);
 
@@ -75,23 +73,14 @@ export default function EntitiesPage() {
   };
 
   const handleDeletePartner = (partner: Partner) => {
-     // Check if partner is used in any OS before deleting (optional but recommended)
-     // const osUsingPartner = osList.filter(os => os.parceiro === partner.name);
-     // if (osUsingPartner.length > 0) {
-     //    alert(`Não é possível excluir o parceiro "${partner.name}" pois ele está vinculado a ${osUsingPartner.length} Ordem(ns) de Serviço.`);
-     //    return;
-     // }
-
     if (window.confirm(`Tem certeza que deseja excluir o parceiro "${partner.name}"? Esta ação não pode ser desfeita.`)) {
       deletePartner(partner.id);
     }
   };
 
-  // Loading state
   if (!isHydrated) {
      return (
        <AuthenticatedLayout>
-         {/* Improved Loading Spinner */}
          <div className="d-flex flex-column justify-content-center align-items-center text-center" style={{ minHeight: '400px' }}>
            <div className="spinner-border text-primary mb-3" role="status" style={{ width: '3rem', height: '3rem' }}>
              <span className="visually-hidden">Carregando Entidades...</span>
@@ -102,10 +91,8 @@ export default function EntitiesPage() {
      );
    }
 
-
   return (
     <AuthenticatedLayout>
-      {/* Add transition wrapper */}
       <div className="transition-opacity">
           <div className="d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom">
             <h1 className="h3 mb-0">Entidades</h1>
@@ -115,7 +102,7 @@ export default function EntitiesPage() {
           </div>
 
           <div className="row">
-            {/* Partners Column (Now Editable) */}
+            {/* Partners Column */}
             <div className="col-md-6">
               <div className="card shadow-sm mb-4 transition-all">
                 <div className="card-header d-flex justify-content-between align-items-center">
@@ -123,7 +110,6 @@ export default function EntitiesPage() {
                     <Users size={18} className="me-2 text-primary" />
                     <h2 className="h5 mb-0 card-title">Parceiros</h2>
                   </div>
-                   {/* Add Partner button */}
                    <button className="btn btn-sm btn-primary" onClick={openAddPartnerModal}>
                      <PlusCircle size={16} className="me-1" /> Adicionar Parceiro
                    </button>
@@ -131,17 +117,28 @@ export default function EntitiesPage() {
                 <div className="card-body">
                   {partners.length > 0 ? (
                       <ul className="list-group list-group-flush">
-                        {partners.map((partner) => (
-                          <li key={partner.id} className="list-group-item d-flex justify-content-between align-items-center">
-                            <span>{partner.name}</span>
-                            {/* Partner Action Buttons */}
-                            <div className="btn-group btn-group-sm" role="group" aria-label="Ações do Parceiro">
-                                <button className="btn btn-outline-secondary" onClick={() => openEditPartnerModal(partner)} title="Editar Parceiro">
-                                    <Edit size={14} />
-                                </button>
-                                <button className="btn btn-outline-danger" onClick={() => handleDeletePartner(partner)} title="Excluir Parceiro">
-                                    <Trash2 size={14} />
-                                </button>
+                        {partners.sort((a, b) => a.name.localeCompare(b.name)).map((partner) => (
+                          <li key={partner.id} className="list-group-item">
+                            <div className="d-flex justify-content-between align-items-center mb-1">
+                                <span className="fw-medium">{partner.name}</span>
+                                <div className="btn-group btn-group-sm" role="group" aria-label="Ações do Parceiro">
+                                    <button className="btn btn-outline-secondary" onClick={() => openEditPartnerModal(partner)} title="Editar Parceiro">
+                                        <Edit size={14} />
+                                    </button>
+                                    <button className="btn btn-outline-danger" onClick={() => handleDeletePartner(partner)} title="Excluir Parceiro">
+                                        <Trash2 size={14} />
+                                    </button>
+                                </div>
+                            </div>
+                            <div className="small text-muted">
+                                {partner.username && <div>Usuário: {partner.username}</div>}
+                                {partner.email && <div>Email: {partner.email}</div>}
+                                {partner.contact_person && <div>Contato: {partner.contact_person}</div>}
+                                <div>
+                                    Status Login: {partner.is_approved ? 
+                                        <span className="badge bg-success-subtle text-success-emphasis rounded-pill ms-1"><ShieldCheck size={12} className="me-1"/>Aprovado</span> : 
+                                        <span className="badge bg-danger-subtle text-danger-emphasis rounded-pill ms-1"><ShieldOff size={12} className="me-1"/>Não Aprovado</span>}
+                                </div>
                             </div>
                           </li>
                         ))}
@@ -152,12 +149,12 @@ export default function EntitiesPage() {
                   }
                 </div>
                 <div className="card-footer text-muted small">
-                  Gerencie seus parceiros cadastrados.
+                  Gerencie os parceiros que podem criar e/ou executar OS.
                 </div>
               </div>
             </div>
 
-            {/* Clients Column (Editable) */}
+            {/* Clients Column */}
             <div className="col-md-6">
               <div className="card shadow-sm mb-4 transition-all">
                 <div className="card-header d-flex justify-content-between align-items-center">
@@ -172,7 +169,7 @@ export default function EntitiesPage() {
                 <div className="card-body">
                   {clients.length > 0 ? (
                       <ul className="list-group list-group-flush">
-                        {clients.map((client) => (
+                        {clients.sort((a, b) => a.name.localeCompare(b.name)).map((client) => (
                           <li key={client.id} className="list-group-item d-flex justify-content-between align-items-center">
                             <span>{client.name}</span>
                              <div className="btn-group btn-group-sm" role="group" aria-label="Ações do Cliente">
@@ -199,8 +196,6 @@ export default function EntitiesPage() {
           </div>
       </div>
 
-
-      {/* Client Add/Edit Modal */}
       {isHydrated && (
          <AddEditClientModal
             client={selectedClient}
@@ -209,7 +204,6 @@ export default function EntitiesPage() {
         />
       )}
 
-       {/* Partner Add/Edit Modal */}
        {isHydrated && (
          <AddEditPartnerModal
             partner={selectedPartner}
