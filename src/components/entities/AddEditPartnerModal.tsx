@@ -10,7 +10,7 @@ import { useOSStore } from '@/store/os-store';
 import type { CreatePartnerData, UpdatePartnerDetailsData } from '@/lib/actions/partner-actions';
 import { AlertCircle } from 'lucide-react';
 
-const强PasswordSchema = z.string()
+const strongPasswordSchema = z.string()
   .min(6, { message: "Senha deve ter no mínimo 6 caracteres." })
   // .regex(/[a-z]/, { message: "Senha deve conter ao menos uma letra minúscula." })
   // .regex(/[A-Z]/, { message: "Senha deve conter ao menos uma letra maiúscula." })
@@ -22,8 +22,8 @@ const createPartnerSchema = z.object({
   name: z.string().min(1, { message: 'Nome do parceiro é obrigatório.' }),
   username: z.string().min(3, { message: 'Nome de usuário é obrigatório (mín. 3 caracteres).' }).regex(/^[a-zA-Z0-9_]+$/, { message: 'Nome de usuário pode conter apenas letras, números e underscore (_).' }),
   email: z.string().email({ message: 'Email inválido.' }).optional().or(z.literal('')),
-  password: 强PasswordSchema,
-  confirmPassword: 强PasswordSchema,
+  password: strongPasswordSchema,
+  confirmPassword: strongPasswordSchema,
   contact_person: z.string().optional(),
   is_approved: z.boolean().default(false),
 }).refine(data => data.password === data.confirmPassword, {
