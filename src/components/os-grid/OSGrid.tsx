@@ -6,16 +6,15 @@ import type { OS } from '@/lib/types';
 import { OSStatus } from '@/lib/types';
 import { useOSStore } from '@/store/os-store';
 import OSCard from './OSCard';
-import DashboardControls, { type SortKey } from '@/components/dashboard/DashboardControls'; // Import SortKey
+import DashboardControls, { type SortKey } from '@/components/dashboard/DashboardControls';
 import { parseISO, isSameDay } from 'date-fns';
 
 export default function OSGrid() {
   const osList = useOSStore((state) => state.osList);
   const [isHydrated, setIsHydrated] = useState(false);
 
-  // Filter, Sort, Search State
   const [filterStatus, setFilterStatus] = useState<OSStatus | 'all'>('all');
-  const [sortBy, setSortBy] = useState<SortKey>('dataAberturaAsc'); // Padrão para Mais Antigo
+  const [sortBy, setSortBy] = useState<SortKey>('dataAberturaAsc');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
 
@@ -26,12 +25,11 @@ export default function OSGrid() {
   const filteredAndSortedOS = useMemo(() => {
     let tempOSList = [...osList];
 
-    // 1. Filter by Selected Date (programadoPara)
     if (selectedDate) {
       tempOSList = tempOSList.filter(os => {
         if (os.programadoPara) {
           try {
-            const programadoDate = parseISO(os.programadoPara.split('T')[0]); // Considerar apenas a data
+            const programadoDate = parseISO(os.programadoPara.split('T')[0]);
             return isSameDay(programadoDate, selectedDate);
           } catch (e){
             console.warn(`Invalid programadoPara date format for OS ${os.numero}: ${os.programadoPara}`, e);
@@ -42,30 +40,25 @@ export default function OSGrid() {
       });
     }
 
-    // 2. Filter by Search Term
     if (searchTerm.trim() !== '') {
       const lowerSearchTerm = searchTerm.toLowerCase();
       tempOSList = tempOSList.filter(os =>
         os.cliente.toLowerCase().includes(lowerSearchTerm) ||
         os.projeto.toLowerCase().includes(lowerSearchTerm) ||
-        os.numero.includes(searchTerm) || // Número é case-sensitive
+        os.numero.includes(searchTerm) ||
         (os.parceiro && os.parceiro.toLowerCase().includes(lowerSearchTerm)) ||
         os.tarefa.toLowerCase().includes(lowerSearchTerm)
       );
     }
 
-    // 3. Filter by Status
     if (filterStatus === OSStatus.FINALIZADO) {
       tempOSList = tempOSList.filter(os => os.status === OSStatus.FINALIZADO);
-    } else if (filterStatus === 'all') { // "all" means all *active* (non-finalized) OS
+    } else if (filterStatus === 'all') {
       tempOSList = tempOSList.filter(os => os.status !== OSStatus.FINALIZADO);
     } else {
-      // Specific active status selected
       tempOSList = tempOSList.filter(os => os.status === filterStatus);
     }
 
-    // 4. Sort Logic
-    // Helper function to get sortable value
     const getSortableValue = (os: OS, key: SortKey) => {
         switch (key) {
             case 'dataAberturaDesc':
@@ -82,7 +75,6 @@ export default function OSGrid() {
         }
     };
     
-    // Separate OSs that are "Aguardando Cliente" or "Aguardando Parceiro" only if not showing "Finalizado"
     if (filterStatus !== OSStatus.FINALIZADO) {
         const awaitingStatus = [OSStatus.AGUARDANDO_CLIENTE, OSStatus.AGUARDANDO_PARCEIRO];
         
@@ -90,11 +82,9 @@ export default function OSGrid() {
         const secondaryOS = tempOSList.filter(os => awaitingStatus.includes(os.status));
 
         const sortFn = (a: OS, b: OS) => {
-            // Primary sort: Urgency (Urgente first)
             if (a.isUrgent && !b.isUrgent) return -1;
             if (!a.isUrgent && b.isUrgent) return 1;
 
-            // Secondary sort: Selected key
             const valA = getSortableValue(a, sortBy);
             const valB = getSortableValue(b, sortBy);
 
@@ -112,13 +102,13 @@ export default function OSGrid() {
         
         tempOSList = [...primaryOS, ...secondaryOS];
 
-    } else { // For Finalized OS, simpler sort (urgency less relevant)
+    } else {
         tempOSList.sort((a, b) => {
-            const valA = getSortableValue(a, sortBy === 'dataAberturaAsc' || sortBy === 'dataAberturaDesc' ? sortBy : 'dataAberturaDesc'); // Default to desc for finalized if other sort
+            const valA = getSortableValue(a, sortBy === 'dataAberturaAsc' || sortBy === 'dataAberturaDesc' ? sortBy : 'dataAberturaDesc');
             const valB = getSortableValue(b, sortBy === 'dataAberturaAsc' || sortBy === 'dataAberturaDesc' ? sortBy : 'dataAberturaDesc');
             
             if (a.dataFinalizacao && b.dataFinalizacao && sortBy !== 'dataAberturaAsc' && sortBy !== 'dataAberturaDesc' && sortBy !== 'numero' && sortBy !== 'cliente' && sortBy !== 'projeto') {
-                 return parseISO(b.dataFinalizacao).getTime() - parseISO(a.dataFinalizacao).getTime(); // Default: newest finalized first
+                 return parseISO(b.dataFinalizacao).getTime() - parseISO(a.dataFinalizacao).getTime();
             }
 
             if (typeof valA === 'number' && typeof valB === 'number') {
@@ -130,7 +120,6 @@ export default function OSGrid() {
             return 0;
         });
     }
-
 
     return tempOSList;
   }, [osList, filterStatus, sortBy, searchTerm, selectedDate]);
@@ -193,7 +182,7 @@ export default function OSGrid() {
                 setFilterStatus('all');
                 setSearchTerm('');
                 setSelectedDate(undefined);
-                setSortBy('dataAberturaAsc'); // Reset sort to default
+                setSortBy('dataAberturaAsc');
               }}
             >
               Limpar Todos os Filtros
@@ -204,7 +193,8 @@ export default function OSGrid() {
         <div className="row row-cols-1 row-cols-sm-2 row-cols-md-3 row-cols-xl-4 g-3 pb-4 flex-grow-1 os-grid-container">
           {filteredAndSortedOS.map((os) => (
             <div className="col os-grid-item" key={os.id}>
-              <OSCard os={os} />
+              {/* Admins see OSCard with full controls (default viewMode) */}
+              <OSCard os={os} viewMode="admin" />
             </div>
           ))}
         </div>

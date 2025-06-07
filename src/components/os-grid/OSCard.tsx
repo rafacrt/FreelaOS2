@@ -4,7 +4,7 @@
 import Link from 'next/link';
 import type { OS } from '@/lib/types';
 import { OSStatus, ALL_OS_STATUSES } from '@/lib/types';
-import { CalendarClock, Flag, Copy, AlertTriangle, CheckCircle2, Server, Users, FileText, User as UserIcon, Briefcase, Calendar as CalendarIcon, CheckSquare, Play, Pause, Clock, UserCheck } from 'lucide-react'; // Added UserCheck
+import { CalendarClock, Flag, Copy, AlertTriangle, CheckCircle2, Server, Users, FileText, User as UserIcon, Briefcase, Calendar as CalendarIcon, CheckSquare, Play, Pause, Clock, UserCheck } from 'lucide-react';
 import { format, parseISO, isValid } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useOSStore } from '@/store/os-store';
@@ -15,12 +15,12 @@ import ChronometerDisplay from '@/components/os/ChronometerDisplay';
 
 interface OSCardProps {
   os: OS;
+  viewMode?: 'admin' | 'partner'; // Default to 'admin' if not provided
 }
 
 // Updated getStatusClass to include background and ensure text contrast
 const getStatusClass = (status: OSStatus, isUrgent: boolean, theme: 'light' | 'dark'): string => {
   if (isUrgent) {
-    // Using Bootstrap's standard classes for danger, which have good contrast
     return 'border-danger bg-danger-subtle text-danger-emphasis';
   }
   switch (status) {
@@ -29,7 +29,7 @@ const getStatusClass = (status: OSStatus, isUrgent: boolean, theme: 'light' | 'd
     case OSStatus.EM_PRODUCAO: return `border-info bg-info-subtle text-info-emphasis`;
     case OSStatus.AGUARDANDO_PARCEIRO: return `border-primary bg-primary-subtle text-primary-emphasis`;
     case OSStatus.FINALIZADO: return 'border-success bg-success-subtle text-success-emphasis';
-    default: return 'border-light bg-light text-dark'; // Fallback, text-dark for light bg
+    default: return 'border-light bg-light text-dark';
   }
 };
 
@@ -38,7 +38,7 @@ const getStatusSelectClasses = (status: OSStatus, isUrgent: boolean, theme: 'lig
     return 'border-danger text-danger-emphasis bg-danger-subtle';
   }
    switch (status) {
-    case OSStatus.NA_FILA: return 'border-secondary text-secondary-emphasis bg-body'; // Use bg-body for select on subtle bg
+    case OSStatus.NA_FILA: return 'border-secondary text-secondary-emphasis bg-body';
     case OSStatus.AGUARDANDO_CLIENTE: return 'border-warning text-warning-emphasis bg-body';
     case OSStatus.EM_PRODUCAO: return `border-info text-info-emphasis bg-body`;
     case OSStatus.AGUARDANDO_PARCEIRO: return `border-primary text-primary-emphasis bg-body`;
@@ -58,7 +58,7 @@ const getStatusIcon = (status: OSStatus) => {
   }
 };
 
-export default function OSCard({ os }: OSCardProps) {
+export default function OSCard({ os, viewMode = 'admin' }: OSCardProps) {
   const { updateOSStatus, toggleUrgent, duplicateOS, toggleProductionTimer } = useOSStore();
   const { theme } = useTheme();
   const [isUpdating, setIsUpdating] = useState(false);
@@ -158,8 +158,13 @@ export default function OSCard({ os }: OSCardProps) {
                             </span>
                         )}
                     </div>
-                    {os.isUrgent && (
+                    {viewMode === 'admin' && os.isUrgent && (
                         <span className={`badge bg-danger text-white rounded-pill px-2 py-1 small d-flex align-items-center ms-auto`} style={{fontSize: '0.7em'}}>
+                            <AlertTriangle size={12} className="me-1" /> URGENTE
+                        </span>
+                    )}
+                     {viewMode === 'partner' && os.isUrgent && ( // Parceiro pode ver se é urgente
+                        <span className={`badge bg-danger-subtle text-danger-emphasis rounded-pill px-2 py-1 small d-flex align-items-center ms-auto`} style={{fontSize: '0.7em'}}>
                             <AlertTriangle size={12} className="me-1" /> URGENTE
                         </span>
                     )}
@@ -169,15 +174,15 @@ export default function OSCard({ os }: OSCardProps) {
                         <UserIcon size={14} className="me-1 text-muted align-middle" />
                         <span className="fw-medium small text-break">{truncateText(os.cliente, 30)}</span>
                     </div>
-                    {os.parceiro && (
+                    {os.parceiro && viewMode === 'admin' && ( // Parceiro de execução só visível para admin no card
                         <div className="mb-1" title={`Parceiro de Execução: ${os.parceiro}`}>
                             <Users size={14} className="me-1 text-muted align-middle" />
                             <span className="text-muted small text-break">{truncateText(os.parceiro, 30)}</span>
                         </div>
                     )}
-                    <div className="mb-2" title={`Tarefa: ${os.tarefa}`}>
+                    <div className="mb-2" title={`Projeto: ${os.projeto}`}> {/* Exibir nome do projeto em vez da tarefa */}
                         <Briefcase size={14} className="me-1 text-muted align-middle" />
-                        <span className="small text-muted fst-italic text-break">{truncateText(os.tarefa, 40)}</span>
+                        <span className="small text-muted text-break">{truncateText(os.projeto, 40)}</span>
                     </div>
 
                     <div className="mt-auto pt-1 border-top">
@@ -204,85 +209,97 @@ export default function OSCard({ os }: OSCardProps) {
                             />
                         </div>
                     </div>
-
-                    <div className="mb-2">
-                         <select
-                            className={`form-select form-select-sm ${statusSelectClasses}`}
-                            value={os.status}
-                            onChange={handleStatusChange}
-                            onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
-                            aria-label="Mudar status da OS"
-                            style={{ fontSize: '0.75rem' }}
-                            disabled={isUpdating || isFinalized}
-                        >
-                            {ALL_OS_STATUSES.map(s => (
-                            <option key={s} value={s} disabled={isFinalized && s !== OSStatus.FINALIZADO}>
-                                {getStatusIcon(s)} {s}
-                            </option>
-                            ))}
-                        </select>
-                    </div>
-                </div>
-                 <div className={`card-footer p-2 border-top ${theme === 'dark' ? 'bg-dark-subtle' : (os.isUrgent ? 'bg-danger-subtle' : 'bg-light-subtle')}`}>
-                    <div className="d-flex flex-column gap-1">
-                        {!isFinalized && (
-                             <button
-                                className="btn btn-info btn-sm w-100 d-flex align-items-center justify-content-center"
-                                onClick={handleFinalizeOS}
-                                style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem' }}
-                                disabled={isUpdating || isTimerRunning} // Impede finalizar se timer rodando
-                                title={isTimerRunning ? "Pause o timer para finalizar" : "Finalizar Ordem de Serviço"}
+                    
+                    {viewMode === 'admin' && (
+                        <div className="mb-2">
+                            <select
+                                className={`form-select form-select-sm ${statusSelectClasses}`}
+                                value={os.status}
+                                onChange={handleStatusChange}
+                                onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                                aria-label="Mudar status da OS"
+                                style={{ fontSize: '0.75rem' }}
+                                disabled={isUpdating || isFinalized}
                             >
-                                <CheckSquare size={14} className="me-1" /> Finalizar OS
-                            </button>
-                        )}
-                        {!isFinalized && (
-                             <div className="d-flex gap-1 mb-1">
-                                {isTimerRunning ? (
-                                    <button
-                                        className="btn btn-warning btn-sm flex-grow-1 d-flex align-items-center justify-content-center"
-                                        onClick={(e) => handleToggleTimer(e, 'pause')}
-                                        disabled={isUpdating}
-                                        style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem' }}
-                                        title="Pausar cronômetro de produção"
-                                    >
-                                        <Pause size={14} className="me-1" /> Pausar
-                                    </button>
-                                ) : (
-                                    <button
-                                        className="btn btn-success btn-sm flex-grow-1 d-flex align-items-center justify-content-center"
-                                        onClick={(e) => handleToggleTimer(e, 'play')}
-                                        disabled={isUpdating}
-                                        style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem' }}
-                                        title="Iniciar cronômetro de produção (define status para Em Produção)"
-                                    >
-                                        <Play size={14} className="me-1" /> Iniciar
-                                    </button>
-                                )}
+                                {ALL_OS_STATUSES.map(s => (
+                                <option key={s} value={s} disabled={isFinalized && s !== OSStatus.FINALIZADO}>
+                                    {/* O ícone dentro do option não funciona bem em todos os browsers, remover daqui */}
+                                    {s}
+                                </option>
+                                ))}
+                            </select>
+                        </div>
+                    )}
+                    {viewMode === 'partner' && ( // Parceiro apenas visualiza o status
+                         <div className="mb-2">
+                            <div className={`form-control form-control-sm text-center disabled ${statusSelectClasses}`} style={{ fontSize: '0.75rem' }}>
+                                {getStatusIcon(os.status)} {os.status}
                             </div>
-                        )}
-                        <div className="d-flex gap-1">
-                            <button
-                                className={`btn ${os.isUrgent ? 'btn-danger' : 'btn-outline-danger'} btn-sm flex-grow-1 d-flex align-items-center justify-content-center`}
-                                onClick={handleToggleUrgent}
-                                style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem' }}
-                                disabled={isUpdating}
-                                title={os.isUrgent ? "Desmarcar como Urgente" : "Marcar como Urgente"}
-                            >
-                                <Flag size={14} className="me-1" /> {os.isUrgent ? "Desm. Urgente" : "Marcar Urgente"}
-                            </button>
-                            <button
-                                className="btn btn-outline-secondary btn-sm flex-grow-1 d-flex align-items-center justify-content-center"
-                                onClick={handleDuplicateOS}
-                                style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem' }}
-                                disabled={isUpdating}
-                                title="Duplicar Ordem de Serviço"
-                            >
-                                <Copy size={14} className="me-1" /> Duplicar
-                            </button>
+                        </div>
+                    )}
+                </div>
+                 {viewMode === 'admin' && (
+                    <div className={`card-footer p-2 border-top ${theme === 'dark' ? 'bg-dark-subtle' : (os.isUrgent ? 'bg-danger-subtle' : 'bg-light-subtle')}`}>
+                        <div className="d-flex flex-column gap-1">
+                            {!isFinalized && (
+                                <button
+                                    className="btn btn-info btn-sm w-100 d-flex align-items-center justify-content-center"
+                                    onClick={handleFinalizeOS}
+                                    style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem' }}
+                                    disabled={isUpdating || isTimerRunning}
+                                    title={isTimerRunning ? "Pause o timer para finalizar" : "Finalizar Ordem de Serviço"}
+                                >
+                                    <CheckSquare size={14} className="me-1" /> Finalizar OS
+                                </button>
+                            )}
+                            {!isFinalized && (
+                                <div className="d-flex gap-1 mb-1">
+                                    {isTimerRunning ? (
+                                        <button
+                                            className="btn btn-warning btn-sm flex-grow-1 d-flex align-items-center justify-content-center"
+                                            onClick={(e) => handleToggleTimer(e, 'pause')}
+                                            disabled={isUpdating}
+                                            style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem' }}
+                                            title="Pausar cronômetro de produção"
+                                        >
+                                            <Pause size={14} className="me-1" /> Pausar
+                                        </button>
+                                    ) : (
+                                        <button
+                                            className="btn btn-success btn-sm flex-grow-1 d-flex align-items-center justify-content-center"
+                                            onClick={(e) => handleToggleTimer(e, 'play')}
+                                            disabled={isUpdating}
+                                            style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem' }}
+                                            title="Iniciar cronômetro de produção (define status para Em Produção)"
+                                        >
+                                            <Play size={14} className="me-1" /> Iniciar
+                                        </button>
+                                    )}
+                                </div>
+                            )}
+                            <div className="d-flex gap-1">
+                                <button
+                                    className={`btn ${os.isUrgent ? 'btn-danger' : 'btn-outline-danger'} btn-sm flex-grow-1 d-flex align-items-center justify-content-center`}
+                                    onClick={handleToggleUrgent}
+                                    style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem' }}
+                                    disabled={isUpdating}
+                                    title={os.isUrgent ? "Desmarcar como Urgente" : "Marcar como Urgente"}
+                                >
+                                    <Flag size={14} className="me-1" /> {os.isUrgent ? "Desm. Urgente" : "Marcar Urgente"}
+                                </button>
+                                <button
+                                    className="btn btn-outline-secondary btn-sm flex-grow-1 d-flex align-items-center justify-content-center"
+                                    onClick={handleDuplicateOS}
+                                    style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem' }}
+                                    disabled={isUpdating}
+                                    title="Duplicar Ordem de Serviço"
+                                >
+                                    <Copy size={14} className="me-1" /> Duplicar
+                                </button>
+                            </div>
                         </div>
                     </div>
-                </div>
+                 )}
             </div>
         </a>
     </Link>
