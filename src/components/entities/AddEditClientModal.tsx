@@ -6,24 +6,29 @@ import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import type { Client } from '@/lib/types';
+import type { Partner } from '@/store/os-store';
 import { useOSStore } from '@/store/os-store';
 import { AlertCircle } from 'lucide-react';
 
 const clientSchema = z.object({
   name: z.string().min(1, { message: 'Nome do cliente é obrigatório.' }),
+  sourcePartnerId: z.string().nullable().optional(), // Pode ser string (ID do parceiro) ou null/undefined
 });
 
 type ClientFormValues = z.infer<typeof clientSchema>;
 
 interface AddEditClientModalProps {
-  client?: Client | null; // Client to edit, or null/undefined to add
+  client?: Client | null;
   isOpen: boolean;
   onClose: () => void;
 }
 
 export default function AddEditClientModal({ client, isOpen, onClose }: AddEditClientModalProps) {
-  const addClientStore = useOSStore((state) => state.addClient);
-  const updateClientStore = useOSStore((state) => state.updateClient);
+  const { addClient, updateClient, partners } = useOSStore((state) => ({
+    addClient: state.addClient,
+    updateClient: state.updateClient,
+    partners: state.partners,
+  }));
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
   const modalRef = useRef<HTMLDivElement>(null);
@@ -33,12 +38,16 @@ export default function AddEditClientModal({ client, isOpen, onClose }: AddEditC
     resolver: zodResolver(clientSchema),
     defaultValues: {
       name: '',
+      sourcePartnerId: null,
     },
     mode: 'onChange',
   });
 
   const resetFormAndErrors = () => {
-    form.reset({ name: client?.name || '' });
+    form.reset({ 
+        name: client?.name || '',
+        sourcePartnerId: client?.sourcePartnerId || null,
+    });
     setServerError(null);
   };
 
@@ -47,58 +56,43 @@ export default function AddEditClientModal({ client, isOpen, onClose }: AddEditC
       resetFormAndErrors();
        if (client) {
          form.setValue('name', client.name);
+         form.setValue('sourcePartnerId', client.sourcePartnerId || null);
        }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [client, isOpen]);
+  }, [client, isOpen]); // Removido form.setValue daqui para evitar re-renders excessivos. Reset deve cobrir.
 
   useEffect(() => {
     if (typeof window !== 'undefined' && modalRef.current) {
       import('bootstrap/js/dist/modal').then((ModalModule) => {
         const Modal = ModalModule.default;
-        if (modalRef.current) {
-          const modalInstance = new Modal(modalRef.current);
-          setBootstrapModal(modalInstance);
-
-          const handleHide = () => {
-             if (isOpen) { 
-                onClose();
-             }
-          };
-          modalRef.current.addEventListener('hidden.bs.modal', handleHide);
-
-          return () => {
-            if (modalRef.current) {
-                modalRef.current.removeEventListener('hidden.bs.modal', handleHide);
-            }
-             if (modalInstance && typeof modalInstance.dispose === 'function') { // Check if dispose exists
-                try {
-                    if ((modalInstance as any)._isShown) { // Check if shown before hiding
-                         modalInstance.hide();
-                    }
-                     modalInstance.dispose();
-                } catch (e) {
-                     console.warn("Error disposing Bootstrap modal:", e);
-                }
-             }
-          };
+        let modalInstance = Modal.getInstance(modalRef.current);
+        if (!modalInstance) {
+            modalInstance = new Modal(modalRef.current);
         }
+        setBootstrapModal(modalInstance);
+
+        const currentModalNode = modalRef.current;
+        const handleHide = () => {
+           if (isOpen) { 
+              onClose();
+           }
+        };
+        
+        if (currentModalNode && !(currentModalNode as any)._eventListenerAttached) {
+            currentModalNode.addEventListener('hidden.bs.modal', handleHide);
+            (currentModalNode as any)._eventListenerAttached = true;
+        }
+        
+        return () => {
+          if (currentModalNode && (currentModalNode as any)._eventListenerAttached) {
+              currentModalNode.removeEventListener('hidden.bs.modal', handleHide);
+              (currentModalNode as any)._eventListenerAttached = false;
+          }
+        };
       }).catch(err => console.error("Failed to load Bootstrap modal:", err));
     }
-     return () => {
-       if (bootstrapModal && typeof bootstrapModal.dispose === 'function') {
-            try {
-                if ((bootstrapModal as any)._isShown) {
-                     bootstrapModal.hide();
-                }
-                 bootstrapModal.dispose();
-            } catch (error) {
-                console.warn("Error disposing Bootstrap modal on cleanup:", error);
-            }
-        }
-     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen]); // Re-initialize if isOpen changes, to handle dynamic import on modal opening
+  }, [isOpen, onClose]);
 
   useEffect(() => {
     if (bootstrapModal) {
@@ -114,15 +108,37 @@ export default function AddEditClientModal({ client, isOpen, onClose }: AddEditC
     }
   }, [isOpen, bootstrapModal]);
 
+  useEffect(() => {
+    return () => {
+      if (bootstrapModal && typeof bootstrapModal.dispose === 'function') {
+        try {
+            if ((bootstrapModal as any)._isShown) {
+                bootstrapModal.hide();
+            }
+            bootstrapModal.dispose();
+        } catch (error) {
+            console.warn("Error disposing Bootstrap modal on component unmount:", error);
+        }
+      }
+    };
+  }, [bootstrapModal]);
+
   const onSubmit = async (values: ClientFormValues) => {
     setIsSubmitting(true);
     setServerError(null);
     try {
       if (client) {
-        await updateClientStore({ ...client, name: values.name });
+        await updateClient({ 
+            ...client, 
+            name: values.name, 
+            sourcePartnerId: values.sourcePartnerId || null 
+        });
         console.log(`Cliente "${values.name}" atualizado.`);
       } else {
-        await addClientStore({ name: values.name });
+        await addClient({ 
+            name: values.name, 
+            sourcePartnerId: values.sourcePartnerId || null 
+        });
         console.log(`Cliente "${values.name}" adicionado.`);
       }
       onClose(); 
@@ -137,7 +153,6 @@ export default function AddEditClientModal({ client, isOpen, onClose }: AddEditC
   const handleActualClose = () => {
      onClose(); 
   };
-
 
   return (
     <div
@@ -177,12 +192,31 @@ export default function AddEditClientModal({ client, isOpen, onClose }: AddEditC
                   <div className="invalid-feedback">{form.formState.errors.name.message}</div>
                 )}
               </div>
+              <div className="mb-3">
+                <label htmlFor="sourcePartnerId" className="form-label">Parceiro de Origem (Opcional)</label>
+                <select
+                  id="sourcePartnerId"
+                  className={`form-select ${form.formState.errors.sourcePartnerId ? 'is-invalid' : ''}`}
+                  {...form.register('sourcePartnerId')}
+                  defaultValue={client?.sourcePartnerId || ""} // Ensure default value is string or empty string
+                >
+                  <option value="">Nenhum</option>
+                  {partners.sort((a,b) => a.name.localeCompare(b.name)).map(p => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
+                {form.formState.errors.sourcePartnerId && (
+                  <div className="invalid-feedback">{form.formState.errors.sourcePartnerId.message}</div>
+                )}
+              </div>
             </div>
             <div className="modal-footer">
               <button type="button" className="btn btn-outline-secondary" onClick={handleActualClose} disabled={isSubmitting}>
                 Cancelar
               </button>
-              <button type="submit" className="btn btn-primary" disabled={!form.formState.isValid || isSubmitting}>
+              <button type="submit" className="btn btn-primary" disabled={!form.formState.isDirty || !form.formState.isValid || isSubmitting}>
                 {isSubmitting ? (
                   <>
                     <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
@@ -197,6 +231,3 @@ export default function AddEditClientModal({ client, isOpen, onClose }: AddEditC
     </div>
   );
 }
-
-
-    

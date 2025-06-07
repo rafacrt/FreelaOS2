@@ -83,6 +83,8 @@ export interface CreateOSData {
 export interface Client {
     id: string;
     name: string;
+    sourcePartnerId?: string | null; // ID do parceiro que originou este cliente
+    sourcePartnerName?: string | null; // Nome do parceiro de origem (para exibição)
 }
 
 export type AuthActionState = {

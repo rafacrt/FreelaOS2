@@ -7,10 +7,11 @@ import type { ResultSetHeader, RowDataPacket, PoolConnection } from 'mysql2/prom
 
 /**
  * Finds a client by name or creates a new one if not found.
+ * Can optionally associate a source partner.
  * Returns the client object (either existing or newly created).
  * Accepts an optional existing connection to participate in a transaction.
  */
-export async function findOrCreateClientByName(clientName: string, existingConnection?: PoolConnection): Promise<Client> {
+export async function findOrCreateClientByName(clientName: string, sourcePartnerId?: string | null, existingConnection?: PoolConnection): Promise<Client> {
   if (!clientName || clientName.trim() === '') {
     throw new Error('Client name cannot be empty.');
   }
@@ -18,43 +19,73 @@ export async function findOrCreateClientByName(clientName: string, existingConne
   const connection = existingConnection || await db.getConnection();
   try {
     const trimmedClientName = clientName.trim();
-    console.log(`[ClientAction] Attempting to find client: "${trimmedClientName}" using ${existingConnection ? 'existing' : 'new'} connection.`);
+    console.log(`[ClientAction] Attempting to find client: "${trimmedClientName}" with sourcePartnerId: ${sourcePartnerId} using ${existingConnection ? 'existing' : 'new'} connection.`);
+    
     // Check if client exists
     const [existingClients] = await connection.query<RowDataPacket[]>(
-      'SELECT id, name FROM clients WHERE name = ?',
+      `SELECT c.id, c.name, c.source_partner_id, p.name as source_partner_name 
+       FROM clients c
+       LEFT JOIN partners p ON c.source_partner_id = p.id
+       WHERE c.name = ?`,
       [trimmedClientName]
     );
 
     if (existingClients.length > 0) {
       const existingClient = existingClients[0];
-      console.log(`[ClientAction] Found existing client: ID ${existingClient.id}, Name ${existingClient.name}`);
-      return { id: String(existingClient.id), name: existingClient.name };
+      // If found, and sourcePartnerId is provided, update it if different
+      if (sourcePartnerId !== undefined && String(existingClient.source_partner_id || '') !== String(sourcePartnerId || '')) {
+         console.log(`[ClientAction] Updating source_partner_id for existing client ID ${existingClient.id} from "${existingClient.source_partner_id}" to "${sourcePartnerId}".`);
+         await connection.execute('UPDATE clients SET source_partner_id = ? WHERE id = ?', [sourcePartnerId || null, existingClient.id]);
+         existingClient.source_partner_id = sourcePartnerId || null;
+         // Re-fetch partner name if source partner changed
+         if (sourcePartnerId) {
+            const [partnerNameResult] = await connection.query<RowDataPacket[]>('SELECT name FROM partners WHERE id = ?', [sourcePartnerId]);
+            existingClient.source_partner_name = partnerNameResult[0]?.name || null;
+         } else {
+            existingClient.source_partner_name = null;
+         }
+      }
+      console.log(`[ClientAction] Found/Updated existing client: ID ${existingClient.id}, Name ${existingClient.name}, SourcePartnerID ${existingClient.source_partner_id}`);
+      return { 
+          id: String(existingClient.id), 
+          name: existingClient.name, 
+          sourcePartnerId: existingClient.source_partner_id ? String(existingClient.source_partner_id) : null,
+          sourcePartnerName: existingClient.source_partner_name || null 
+        };
     }
 
     // Client does not exist, create new
-    console.log(`[ClientAction] Client "${trimmedClientName}" not found, creating new.`);
+    console.log(`[ClientAction] Client "${trimmedClientName}" not found, creating new with sourcePartnerId: ${sourcePartnerId}.`);
     const [result] = await connection.execute<ResultSetHeader>(
-      'INSERT INTO clients (name) VALUES (?)',
-      [trimmedClientName]
+      'INSERT INTO clients (name, source_partner_id) VALUES (?, ?)',
+      [trimmedClientName, sourcePartnerId || null]
     );
 
     if (result.insertId && result.insertId > 0) {
-      console.log(`[ClientAction] Successfully created client: ID ${result.insertId}, Name ${trimmedClientName}`);
-      return { id: String(result.insertId), name: trimmedClientName };
+      let newClientSourcePartnerName: string | null = null;
+      if (sourcePartnerId) {
+        const [partnerNameResult] = await connection.query<RowDataPacket[]>('SELECT name FROM partners WHERE id = ?', [sourcePartnerId]);
+        newClientSourcePartnerName = partnerNameResult[0]?.name || null;
+      }
+      console.log(`[ClientAction] Successfully created client: ID ${result.insertId}, Name ${trimmedClientName}, SourcePartnerID ${sourcePartnerId}`);
+      return { 
+          id: String(result.insertId), 
+          name: trimmedClientName, 
+          sourcePartnerId: sourcePartnerId ? String(sourcePartnerId) : null,
+          sourcePartnerName: newClientSourcePartnerName
+        };
     } else {
-      console.error('[ClientAction] Failed to create client: insertId is 0 or not returned. This often means the `id` column is not AUTO_INCREMENT or a DB constraint failed.', result);
-      throw new Error('Failed to create client: No valid insertId returned. Check if `id` column is AUTO_INCREMENT and for other DB constraints.');
+      console.error('[ClientAction] Failed to create client: insertId is 0 or not returned.', result);
+      throw new Error('Failed to create client: No valid insertId returned.');
     }
   } catch (error: any) {
     console.error('[ClientAction] Original DB error in findOrCreateClientByName:', error);
-    // Avoid re-throwing if it's the custom error we just threw
     if (error.message.includes('No valid insertId returned')) {
         throw error;
     }
     console.error(`[ClientAction] Failed to find or create client "${clientName}". Details: ${error.message}`);
     throw new Error(`Failed to find or create client "${clientName}".`);
   } finally {
-    // Only release the connection if we acquired it in this function
     if (!existingConnection && connection) {
       connection.release();
     }
@@ -62,15 +93,25 @@ export async function findOrCreateClientByName(clientName: string, existingConne
 }
 
 /**
- * Fetches all clients from the database.
+ * Fetches all clients from the database, including their source partner's name.
  */
 export async function getAllClientsFromDB(): Promise<Client[]> {
   const connection = await db.getConnection();
   try {
-    console.log('[ClientAction] Fetching all clients from DB.');
-    const [rows] = await connection.query<RowDataPacket[]>('SELECT id, name FROM clients ORDER BY name ASC');
+    console.log('[ClientAction] Fetching all clients from DB with source partner info.');
+    const [rows] = await connection.query<RowDataPacket[]>(`
+      SELECT c.id, c.name, c.source_partner_id, p.name as source_partner_name
+      FROM clients c
+      LEFT JOIN partners p ON c.source_partner_id = p.id
+      ORDER BY c.name ASC
+    `);
     console.log(`[ClientAction] Found ${rows.length} clients.`);
-    return rows.map(row => ({ id: String(row.id), name: row.name }));
+    return rows.map(row => ({ 
+        id: String(row.id), 
+        name: row.name,
+        sourcePartnerId: row.source_partner_id ? String(row.source_partner_id) : null,
+        sourcePartnerName: row.source_partner_name || null,
+    }));
   } catch (error: any) {
     console.error('[ClientAction] Original DB error in getAllClientsFromDB:', error);
     console.error(`[ClientAction] Failed to fetch clients. Details: ${error.message}`);
@@ -81,38 +122,65 @@ export async function getAllClientsFromDB(): Promise<Client[]> {
 }
 
 /**
- * Updates an existing client's name in the database.
+ * Updates an existing client's name and/or source partner in the database.
  */
 export async function updateClientInDB(client: Client): Promise<Client | null> {
-  if (!client.id || !client.name || client.name.trim() === '') {
+  const { id, name, sourcePartnerId } = client;
+  if (!id || !name || name.trim() === '') {
     throw new Error('Client ID and a valid name are required for update.');
   }
   const connection = await db.getConnection();
   try {
-    console.log(`[ClientAction updateClientInDB] Updating client ID: ${client.id} to name: "${client.name.trim()}"`);
+    console.log(`[ClientAction updateClientInDB] Updating client ID: ${id} to name: "${name.trim()}", sourcePartnerId: "${sourcePartnerId}"`);
+    
+    // Check for duplicate name if name is being changed
+    const [existingClient] = await connection.query<RowDataPacket[]>('SELECT name FROM clients WHERE id = ?', [id]);
+    if (existingClient.length === 0) {
+        throw new Error(`Cliente com ID ${id} não encontrado.`);
+    }
+    if (existingClient[0].name !== name.trim()) {
+        const [duplicateNameCheck] = await connection.query<RowDataPacket[]>('SELECT id FROM clients WHERE name = ? AND id != ?', [name.trim(), id]);
+        if (duplicateNameCheck.length > 0) {
+            throw new Error(`Já existe um cliente com o nome "${name.trim()}".`);
+        }
+    }
+    
     const [result] = await connection.execute<ResultSetHeader>(
-      'UPDATE clients SET name = ? WHERE id = ?',
-      [client.name.trim(), client.id]
+      'UPDATE clients SET name = ?, source_partner_id = ? WHERE id = ?',
+      [name.trim(), sourcePartnerId || null, id]
     );
 
     if (result.affectedRows > 0) {
-      console.log(`[ClientAction updateClientInDB] Client ID: ${client.id} updated successfully.`);
-      return { id: client.id, name: client.name.trim() };
+      console.log(`[ClientAction updateClientInDB] Client ID: ${id} updated successfully.`);
+      let updatedSourcePartnerName: string | null = null;
+      if (sourcePartnerId) {
+          const [partnerRow] = await connection.query<RowDataPacket[]>('SELECT name FROM partners WHERE id = ?', [sourcePartnerId]);
+          updatedSourcePartnerName = partnerRow[0]?.name || null;
+      }
+      return { id: id, name: name.trim(), sourcePartnerId: sourcePartnerId || null, sourcePartnerName: updatedSourcePartnerName };
     } else {
-      console.warn(`[ClientAction updateClientInDB] No client found with ID: ${client.id} to update, or name was the same.`);
-      // Fetch the client to ensure we return the current state if no rows were affected because the name was identical
-      const [currentClients] = await connection.query<RowDataPacket[]>('SELECT id, name FROM clients WHERE id = ?', [client.id]);
+      console.warn(`[ClientAction updateClientInDB] No client found with ID: ${id} to update, or data was the same.`);
+      const [currentClients] = await connection.query<RowDataPacket[]>(
+        `SELECT c.id, c.name, c.source_partner_id, p.name as source_partner_name 
+         FROM clients c LEFT JOIN partners p ON c.source_partner_id = p.id 
+         WHERE c.id = ?`, [id]);
       if (currentClients.length > 0) {
-        return { id: String(currentClients[0].id), name: currentClients[0].name };
+        const currentRow = currentClients[0];
+        return { 
+            id: String(currentRow.id), 
+            name: currentRow.name,
+            sourcePartnerId: currentRow.source_partner_id ? String(currentRow.source_partner_id) : null,
+            sourcePartnerName: currentRow.source_partner_name || null,
+        };
       }
       return null; // Client not found
     }
   } catch (error: any) {
-    console.error(`[ClientAction updateClientInDB] Error updating client ID ${client.id}:`, error);
-    if (error.code === 'ER_DUP_ENTRY') {
-        throw new Error(`Já existe um cliente com o nome "${client.name.trim()}".`);
+    console.error(`[ClientAction updateClientInDB] Error updating client ID ${id}:`, error);
+    if (error.code === 'ER_DUP_ENTRY' || error.message.includes('Já existe um cliente com o nome')) {
+        throw error; // Re-throw specific errors
     }
-    throw new Error(`Failed to update client "${client.name.trim()}".`);
+    throw new Error(`Failed to update client "${name.trim()}".`);
   } finally {
     if (connection) connection.release();
   }

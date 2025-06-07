@@ -56,7 +56,8 @@ interface OSState {
   getPartnerEntityById: (partnerId: string) => Partner | undefined;
   getPartnerEntityByName: (partnerName: string) => Partner | undefined;
 
-  addClient: (clientData: { name: string }) => Promise<Client | null>;
+  // Updated client action signatures
+  addClient: (clientData: { name: string; sourcePartnerId?: string | null }) => Promise<Client | null>;
   updateClient: (updatedClient: Client) => Promise<Client | null>; 
   deleteClient: (clientId: string) => Promise<boolean>; 
   getClientById: (clientId: string) => Client | undefined;
@@ -80,7 +81,7 @@ export const useOSStore = create<OSState>()(
         try {
             const [osListFromDB, clientsFromDB, partnersFromDB] = await Promise.all([
                 getAllOSFromDB(),
-                getAllClientsFromDB(),
+                getAllClientsFromDB(), // Fetches clients with sourcePartnerId and sourcePartnerName
                 getAllPartnersFromDB()
             ]);
             
@@ -91,7 +92,7 @@ export const useOSStore = create<OSState>()(
 
             set({
               osList: processedOSList || [], 
-              clients: clientsFromDB || [],
+              clients: clientsFromDB || [], // Clients now include source partner info
               partners: partnersFromDB || [],
               isStoreInitialized: true,
             });
@@ -124,11 +125,23 @@ export const useOSStore = create<OSState>()(
               }),
             }));
 
-            const clientExists = get().clients.some(c => c.id === newOSWithDefaults.clientId);
-            if (!clientExists && newOSWithDefaults.clientId && newOSWithDefaults.cliente) {
-                console.log(`[Store addOS] Adicionando novo cliente ${newOSWithDefaults.cliente} (ID: ${newOSWithDefaults.clientId}) localmente.`);
-                set(state => ({ clients: [...state.clients, { id: newOSWithDefaults.clientId, name: newOSWithDefaults.cliente }].sort((a,b) => a.name.localeCompare(b.name)) }));
+            // Client might have been created or found by findOrCreateClientByName in createOSInDB
+            // We need to ensure the local client list is up-to-date
+            const clientFromDB = await get().getClientById(newOSWithDefaults.clientId); // Check if we already have this client (possibly with updated source partner)
+            if (clientFromDB) {
+                const clientInOS = { // Reconstruct client object as expected from OS creation
+                    id: newOSWithDefaults.clientId, 
+                    name: newOSWithDefaults.cliente,
+                    sourcePartnerId: clientFromDB.sourcePartnerId, // Use potentially updated source from DB
+                    sourcePartnerName: clientFromDB.sourcePartnerName
+                };
+                if (!get().clients.some(c => c.id === clientInOS.id && c.name === clientInOS.name && c.sourcePartnerId === clientInOS.sourcePartnerId)) {
+                     console.log(`[Store addOS] Cliente ID ${clientInOS.id} atualizado/adicionado localmente após criação de OS.`);
+                     set(state => ({ clients: [...state.clients.filter(c => c.id !== clientInOS.id), clientInOS].sort((a,b) => a.name.localeCompare(b.name)) }));
+                }
             }
+
+
             if (newOSWithDefaults.partnerId && newOSWithDefaults.parceiro) {
               const execPartnerExists = get().partners.some(p => p.id === newOSWithDefaults.partnerId);
               if (!execPartnerExists) {
@@ -136,7 +149,6 @@ export const useOSStore = create<OSState>()(
                 const newPartnerEntry: Partner = { 
                     id: newOSWithDefaults.partnerId, 
                     name: newOSWithDefaults.parceiro, 
-                    // Se o parceiro foi criado via findOrCreatePartnerByName, pode não ter username ou is_approved ainda
                     username: get().partners.find(p => p.id === newOSWithDefaults.partnerId)?.username || `parceiro_${newOSWithDefaults.partnerId}`, 
                     is_approved: get().partners.find(p => p.id === newOSWithDefaults.partnerId)?.is_approved || false 
                 };
@@ -173,10 +185,21 @@ export const useOSStore = create<OSState>()(
                         return new Date(b.dataAbertura).getTime() - new Date(a.dataAbertura).getTime();
                     }),
                 }));
-                 if (updatedOSWithDefaults.clientId && updatedOSWithDefaults.cliente && !get().clients.some(c => c.id === updatedOSWithDefaults.clientId && c.name === updatedOSWithDefaults.cliente)) {
-                    console.log(`[Store updateOS] Cliente ${updatedOSWithDefaults.cliente} (ID: ${updatedOSWithDefaults.clientId}) parece ser novo ou atualizado, adicionando/atualizando localmente.`);
-                    set(state => ({ clients: [...state.clients.filter(c => c.id !== updatedOSWithDefaults.clientId), { id: updatedOSWithDefaults.clientId, name: updatedOSWithDefaults.cliente }].sort((a,b) => a.name.localeCompare(b.name)) }));
+                // Ensure client is up-to-date in local store
+                const clientFromDB = await get().getClientById(updatedOSWithDefaults.clientId);
+                 if (clientFromDB) {
+                    const clientInOS = { 
+                        id: updatedOSWithDefaults.clientId, 
+                        name: updatedOSWithDefaults.cliente,
+                        sourcePartnerId: clientFromDB.sourcePartnerId,
+                        sourcePartnerName: clientFromDB.sourcePartnerName
+                    };
+                    if (!get().clients.some(c => c.id === clientInOS.id && c.name === clientInOS.name && c.sourcePartnerId === clientInOS.sourcePartnerId)) {
+                        console.log(`[Store updateOS] Cliente ID ${clientInOS.id} (associado à OS) atualizado/adicionado localmente.`);
+                        set(state => ({ clients: [...state.clients.filter(c => c.id !== clientInOS.id), clientInOS].sort((a,b) => a.name.localeCompare(b.name)) }));
+                    }
                 }
+
                 if (updatedOSWithDefaults.partnerId && updatedOSWithDefaults.parceiro) {
                     const partnerInStore = get().partners.find(p => p.id === updatedOSWithDefaults.partnerId);
                     if (!partnerInStore || partnerInStore.name !== updatedOSWithDefaults.parceiro) {
@@ -275,7 +298,7 @@ export const useOSStore = create<OSState>()(
             return null;
         }
         const duplicatedOSData: CreateOSData = {
-            cliente: osToDuplicate.cliente,
+            cliente: osToDuplicate.cliente, // Nome do cliente
             parceiro: osToDuplicate.parceiro,
             projeto: `${osToDuplicate.projeto} (Cópia)`,
             tarefa: osToDuplicate.tarefa,
@@ -284,6 +307,7 @@ export const useOSStore = create<OSState>()(
             programadoPara: undefined, 
             isUrgent: false, 
             checklistItems: osToDuplicate.checklist ? osToDuplicate.checklist.map(item => item.text) : undefined,
+            // sourcePartnerId do cliente original não é diretamente passado aqui, findOrCreateClientByName em createOSInDB cuidará disso.
         };
         console.log('[Store duplicateOS] Dados para nova OS duplicada:', JSON.stringify(duplicatedOSData, null, 2));
         return get().addOS(duplicatedOSData);
@@ -357,9 +381,11 @@ export const useOSStore = create<OSState>()(
             const success = await deletePartnerByIdAction(partnerId);
             if (success) {
                 set(state => ({
-                    partners: state.partners.filter(p => p.id !== partnerId)
+                    partners: state.partners.filter(p => p.id !== partnerId),
+                    // Also update clients in local store that might have had this partner as source
+                    clients: state.clients.map(c => c.sourcePartnerId === partnerId ? {...c, sourcePartnerId: null, sourcePartnerName: null} : c)
                 }));
-                console.log(`[Store deletePartnerEntity] Parceiro ID: ${partnerId} excluído do store local.`);
+                console.log(`[Store deletePartnerEntity] Parceiro ID: ${partnerId} excluído do store local e clientes desassociados.`);
                 return true;
             }
             console.warn(`[Store deletePartnerEntity] Falha ao excluir parceiro ID: ${partnerId} no DB (ação retornou false).`);
@@ -373,23 +399,17 @@ export const useOSStore = create<OSState>()(
       getPartnerEntityByName: (partnerName) => get().partners.find(p => p.name.toLowerCase() === partnerName.toLowerCase()),
 
       addClient: async (clientData) => {
-        console.log('[Store addClient] Adicionando cliente:', clientData.name);
+        const { name, sourcePartnerId } = clientData;
+        console.log(`[Store addClient] Adicionando cliente: "${name}" com sourcePartnerId: ${sourcePartnerId}`);
         try {
-            const newOrExistingClient = await findOrCreateClientByName(clientData.name); 
+            const newOrExistingClient = await findOrCreateClientByName(name, sourcePartnerId); 
             if (newOrExistingClient) {
                 const existingInStore = get().clients.find(c => c.id === newOrExistingClient.id);
-                if (!existingInStore) { 
-                    set(state => ({ clients: [...state.clients, newOrExistingClient].sort((a,b) => a.name.localeCompare(b.name)) }));
-                    console.log('[Store addClient] Novo cliente adicionado ao store local:', newOrExistingClient);
+                if (!existingInStore || existingInStore.name !== newOrExistingClient.name || existingInStore.sourcePartnerId !== newOrExistingClient.sourcePartnerId) { 
+                    set(state => ({ clients: [...state.clients.filter(c => c.id !== newOrExistingClient.id), newOrExistingClient].sort((a,b) => a.name.localeCompare(b.name)) }));
+                    console.log('[Store addClient] Cliente adicionado/atualizado no store local:', newOrExistingClient);
                 } else {
-                    if (existingInStore.name !== newOrExistingClient.name) {
-                         set(state => ({
-                            clients: state.clients.map(c => c.id === newOrExistingClient.id ? newOrExistingClient : c).sort((a,b) => a.name.localeCompare(b.name))
-                        }));
-                         console.log('[Store addClient] Nome do cliente existente atualizado no store local:', newOrExistingClient);
-                    } else {
-                        console.log('[Store addClient] Cliente já existia no store local e no DB:', newOrExistingClient);
-                    }
+                    console.log('[Store addClient] Cliente já existia no store local e no DB (sem alterações):', newOrExistingClient);
                 }
                 return newOrExistingClient;
             }
@@ -401,13 +421,14 @@ export const useOSStore = create<OSState>()(
         }
       },
       updateClient: async (updatedClientData) => {
-        console.log(`[Store updateClient] Atualizando cliente ID: ${updatedClientData.id} para Nome: "${updatedClientData.name}"`);
+        console.log(`[Store updateClient] Atualizando cliente ID: ${updatedClientData.id} para Nome: "${updatedClientData.name}", SourcePartnerId: ${updatedClientData.sourcePartnerId}`);
         try {
             const updatedClientFromDB = await updateClientInDB(updatedClientData);
             if (updatedClientFromDB) {
                 set(state => ({
                     clients: state.clients.map(c => c.id === updatedClientFromDB.id ? updatedClientFromDB : c).sort((a,b) => a.name.localeCompare(b.name))
                 }));
+                // Atualizar o nome do cliente nas OSs, se necessário (sourcePartnerName já vem do updatedClientFromDB)
                 set(state => ({
                     osList: state.osList.map(os => 
                         os.clientId === updatedClientFromDB.id ? { ...os, cliente: updatedClientFromDB.name } : os
@@ -431,6 +452,9 @@ export const useOSStore = create<OSState>()(
                 set(state => ({
                     clients: state.clients.filter(c => c.id !== clientId)
                 }));
+                // OSs não precisam ser atualizadas aqui pois a FK no DB lida com isso (ON DELETE SET NULL para cliente_id em OS não é comum, geralmente impede)
+                // Se a exclusão no DB for permitida, a OS pode ficar órfã de cliente_id, o que não é ideal.
+                // A action deleteClientFromDB já impede a exclusão se houver OSs vinculadas.
                 console.log(`[Store deleteClient] Cliente ID: ${clientId} excluído do store local.`);
                 return true;
             }
@@ -445,4 +469,3 @@ export const useOSStore = create<OSState>()(
       getClientByName: (clientName) => get().clients.find(c => c.name.toLowerCase() === clientName.toLowerCase()),
     })
 );
-      
