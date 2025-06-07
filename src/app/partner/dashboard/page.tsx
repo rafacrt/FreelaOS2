@@ -1,48 +1,65 @@
 
 'use client';
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useSession } from '@/hooks/useSession';
 import { useOSStore } from '@/store/os-store';
 import OSCard from '@/components/os-grid/OSCard';
-import AuthenticatedLayout from '@/components/layout/AuthenticatedLayout'; // Manter para o wrapper principal
+// AuthenticatedLayout não é importado aqui diretamente.
 import { PlusCircle, ListChecks } from 'lucide-react';
 
 export default function PartnerDashboardPage() {
-  const session = useSession(); // Pode ser null inicialmente
+  const session = useSession();
   const osList = useOSStore((state) => state.osList);
-  const isStoreInitialized = useOSStore((state) => state.isStoreInitialized); // Para saber se os dados já carregaram
+  const isStoreInitialized = useOSStore((state) => state.isStoreInitialized);
+  const [isClient, setIsClient] = useState(false); // Para evitar hydration mismatch em logs e renderização condicional
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
+  useEffect(() => {
+    if (isClient) {
+      console.log('[PartnerDashboardPage] Status Update. Session:', session, 'isStoreInitialized:', isStoreInitialized);
+    }
+  }, [session, isStoreInitialized, isClient]);
+
 
   const partnerOSList = useMemo(() => {
-    if (!session || session.sessionType !== 'partner') {
+    if (!session || session.sessionType !== 'partner' || !isStoreInitialized) {
+      if (isClient) console.log('[PartnerDashboardPage] partnerOSList memo: returning empty array. Conditions not met.');
       return [];
     }
-    // Garante que osList e session.id existam antes de filtrar
+    if (isClient) console.log(`[PartnerDashboardPage] partnerOSList memo: Filtering for partner ID ${session.id}. osList length: ${osList.length}`);
     return osList.filter(os => os.createdByPartnerId && os.createdByPartnerId === session.id)
                  .sort((a, b) => new Date(b.dataAbertura).getTime() - new Date(a.dataAbertura).getTime());
-  }, [osList, session]);
+  }, [osList, session, isStoreInitialized, isClient]);
 
-  // Se a sessão ainda está carregando (AuthenticatedLayout cuida do spinner global)
-  // ou se o store ainda não foi inicializado (osList pode estar vazia)
-  if (!session && !isStoreInitialized) {
-    // AuthenticatedLayout já mostra um spinner global.
-    // Podemos mostrar um placeholder específico se desejado, ou null para esperar o layout pai.
-    // No entanto, se o middleware falhar e a sessão for realmente nula, o AuthenticatedLayout deve lidar com isso.
-    // A lógica abaixo é um fallback caso a página seja acessada diretamente e o middleware não tenha atuado.
+  // Se ainda não estamos no cliente, não renderize nada ou um placeholder mínimo
+  if (!isClient) {
+    return null; // Ou um placeholder muito básico se preferir, mas null evita flashes
+  }
+
+  // Spinner primário: esperando sessão ou store, SÓ SE JÁ ESTIVER NO CLIENTE
+  if (!session || !isStoreInitialized) {
+    console.log('[PartnerDashboardPage] Showing primary spinner (waiting for session or store init).');
     return (
-        <div className="d-flex justify-content-center align-items-center" style={{ minHeight: '300px' }}>
-            <div className="spinner-border text-primary" role="status">
+        <div className="d-flex flex-column justify-content-center align-items-center text-center" style={{ minHeight: 'calc(100vh - 200px)' }}>
+            <div className="spinner-border text-primary mb-3" role="status" style={{ width: '3rem', height: '3rem' }}>
                 <span className="visually-hidden">Carregando...</span>
             </div>
+            <p className="text-muted">Carregando dados do parceiro...</p>
         </div>
     );
   }
 
-  // Se, após o carregamento, a sessão não for de parceiro
-  if (!session || session.sessionType !== 'partner') {
+  // Sessão existe, store inicializado, mas não é de parceiro
+  if (session.sessionType !== 'partner') {
+    console.log('[PartnerDashboardPage] Session is not partner type. Showing Access Denied.');
+    // Este caso teoricamente não deveria acontecer se o middleware estiver correto
+    // e o AuthenticatedLayout estiver funcionando, mas é uma proteção.
     return (
-      // Não aninhe AuthenticatedLayout aqui. Esta página já é um filho dele.
       <div className="text-center py-5">
         <h1 className="h3">Acesso Negado</h1>
         <p className="text-muted">Você precisa estar logado como parceiro para ver esta página.</p>
@@ -53,20 +70,9 @@ export default function PartnerDashboardPage() {
     );
   }
 
-  // Se a sessão é de parceiro, mas a lista de OS ainda está sendo carregada pelo store
-  if (!isStoreInitialized && session && session.sessionType === 'partner') {
-      return (
-           <div className="d-flex justify-content-center align-items-center" style={{ minHeight: '300px' }}>
-                <div className="spinner-border text-primary" role="status">
-                    <span className="visually-hidden">Carregando Ordens de Serviço...</span>
-                </div>
-            </div>
-      )
-  }
-
-
+  // Tudo carregado, sessão de parceiro OK. Renderizar conteúdo.
+  console.log('[PartnerDashboardPage] Rendering main content. Partner OS count:', partnerOSList.length);
   return (
-    // O AuthenticatedLayout já envolve esta página
     <>
       <div className="d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom flex-wrap gap-2">
         <h1 className="h3 mb-0 d-flex align-items-center">
@@ -78,7 +84,7 @@ export default function PartnerDashboardPage() {
         </Link>
       </div>
 
-      {partnerOSList.length === 0 ? (
+      {partnerOSList.length === 0 && isStoreInitialized ? ( // Só mostra "nenhuma OS" se o store realmente carregou
         <div className="text-center py-5">
           <p className="fs-5 text-muted">Nenhuma Ordem de Serviço criada por você ainda.</p>
           <p className="text-muted small">Clique em "Criar Nova OS" para começar.</p>
