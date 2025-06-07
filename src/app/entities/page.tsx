@@ -14,8 +14,9 @@ import AddEditPartnerModal from '@/components/entities/AddEditPartnerModal';
 export default function EntitiesPage() {
   const partners = useOSStore((state) => state.partners);
   const clients = useOSStore((state) => state.clients);
-  const deleteClient = useOSStore((state) => state.deleteClient);
-  const deletePartnerEntity = useOSStore((state) => state.deletePartnerEntity); // Renomeado na última vez
+  const updateClientStore = useOSStore((state) => state.updateClient);
+  const deleteClientStore = useOSStore((state) => state.deleteClient);
+  const deletePartnerEntity = useOSStore((state) => state.deletePartnerEntity);
 
   const [isHydrated, setIsHydrated] = useState(false);
 
@@ -50,9 +51,15 @@ export default function EntitiesPage() {
     setSelectedClient(null);
   };
 
-  const handleDeleteClient = (client: Client) => {
-    if (window.confirm(`Tem certeza que deseja excluir o cliente "${client.name}"? Esta ação não pode ser desfeita.`)) {
-      deleteClient(client.id);
+  const handleDeleteClient = async (client: Client) => {
+    if (window.confirm(`Tem certeza que deseja excluir o cliente "${client.name}"? Esta ação não pode ser desfeita e pode falhar se o cliente estiver vinculado a OSs.`)) {
+      try {
+        await deleteClientStore(client.id);
+        alert(`Cliente "${client.name}" excluído com sucesso.`);
+      } catch (error: any) {
+         console.error("Falha ao excluir cliente:", error);
+         alert(`Falha ao excluir cliente "${client.name}": ${error.message}`);
+      }
     }
   };
 

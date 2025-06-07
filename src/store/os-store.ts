@@ -9,7 +9,12 @@ import {
     updateOSInDB as updateOSActionDB,
     toggleOSProductionTimerInDB
 } from '@/lib/actions/os-actions';
-import { findOrCreateClientByName, getAllClientsFromDB } from '@/lib/actions/client-actions';
+import { 
+    findOrCreateClientByName, 
+    getAllClientsFromDB,
+    updateClientInDB,
+    deleteClientFromDB
+} from '@/lib/actions/client-actions';
 import { 
     getAllPartnersFromDB, 
     createPartner as createPartnerAction, 
@@ -52,8 +57,8 @@ interface OSState {
   getPartnerEntityByName: (partnerName: string) => Partner | undefined;
 
   addClient: (clientData: { name: string }) => Promise<Client | null>;
-  updateClient: (updatedClient: Client) => Promise<void>; 
-  deleteClient: (clientId: string) => Promise<void>; 
+  updateClient: (updatedClient: Client) => Promise<Client | null>; 
+  deleteClient: (clientId: string) => Promise<boolean>; 
   getClientById: (clientId: string) => Client | undefined;
   getClientByName: (clientName: string) => Client | undefined;
 }
@@ -358,39 +363,75 @@ export const useOSStore = create<OSState>()(
       addClient: async (clientData) => {
         console.log('[Store addClient] Adicionando cliente:', clientData.name);
         try {
-            const newClient = await findOrCreateClientByName(clientData.name); 
-            if (newClient) {
-                const existing = get().clients.find(c => c.id === newClient.id);
-                if (!existing) {
-                    set(state => ({ clients: [...state.clients, newClient].sort((a,b) => a.name.localeCompare(b.name)) }));
-                    console.log('[Store addClient] Novo cliente adicionado ao store local:', newClient);
+            // findOrCreateClientByName já lida com a criação no DB se não existir
+            const newOrExistingClient = await findOrCreateClientByName(clientData.name); 
+            if (newOrExistingClient) {
+                const existingInStore = get().clients.find(c => c.id === newOrExistingClient.id);
+                if (!existingInStore) { // Adiciona ao store apenas se não estiver lá
+                    set(state => ({ clients: [...state.clients, newOrExistingClient].sort((a,b) => a.name.localeCompare(b.name)) }));
+                    console.log('[Store addClient] Novo cliente adicionado ao store local:', newOrExistingClient);
                 } else {
-                    console.log('[Store addClient] Cliente já existia no store local (ou foi encontrado no DB):', newClient);
+                     // Se já existe no store, mas o nome mudou (improvável com findOrCreateByName), atualiza.
+                    if (existingInStore.name !== newOrExistingClient.name) {
+                         set(state => ({
+                            clients: state.clients.map(c => c.id === newOrExistingClient.id ? newOrExistingClient : c).sort((a,b) => a.name.localeCompare(b.name))
+                        }));
+                         console.log('[Store addClient] Nome do cliente existente atualizado no store local:', newOrExistingClient);
+                    } else {
+                        console.log('[Store addClient] Cliente já existia no store local e no DB:', newOrExistingClient);
+                    }
                 }
-                return newClient;
+                return newOrExistingClient;
             }
             console.error('[Store addClient] findOrCreateClientByName retornou null.');
             return null;
         } catch (error: any) {
-            console.error("[Store addClient] Erro ao adicionar cliente:", error.message, error.stack);
+            console.error("[Store addClient] Erro ao adicionar/encontrar cliente:", error.message, error.stack);
             throw error;
         }
       },
-      updateClient: async (updatedClient) => {
-        console.warn(`[Store updateClient] ATENÇÃO: Atualização de cliente no DB pendente para ID: ${updatedClient.id}. Nome: ${updatedClient.name}. Implementar Server Action.`);
-        // TODO: await updateClientInDB(updatedClient);
-        set(state => ({
-            clients: state.clients.map(c => c.id === updatedClient.id ? updatedClient : c).sort((a,b) => a.name.localeCompare(b.name))
-        }));
-        console.log('[Store updateClient] Cliente atualizado localmente (sem persistência no DB).');
+      updateClient: async (updatedClientData) => {
+        console.log(`[Store updateClient] Atualizando cliente ID: ${updatedClientData.id} para Nome: "${updatedClientData.name}"`);
+        try {
+            const updatedClientFromDB = await updateClientInDB(updatedClientData);
+            if (updatedClientFromDB) {
+                set(state => ({
+                    clients: state.clients.map(c => c.id === updatedClientFromDB.id ? updatedClientFromDB : c).sort((a,b) => a.name.localeCompare(b.name))
+                }));
+                // Atualizar o nome do cliente em todas as OSs associadas na osList localmente
+                set(state => ({
+                    osList: state.osList.map(os => 
+                        os.clientId === updatedClientFromDB.id ? { ...os, cliente: updatedClientFromDB.name } : os
+                    )
+                }));
+                console.log('[Store updateClient] Cliente atualizado no store e OSs locais associadas atualizadas.');
+                return updatedClientFromDB;
+            }
+            console.error(`[Store updateClient] Falha ao atualizar cliente ID: ${updatedClientData.id} no DB.`);
+            return null;
+        } catch (error: any) {
+            console.error(`[Store updateClient] Erro ao atualizar cliente ID: ${updatedClientData.id}:`, error.message);
+            throw error; // Re-throw para o modal poder exibir
+        }
       },
       deleteClient: async (clientId) => {
-        console.warn(`[Store deleteClient] ATENÇÃO: Deleção de cliente no DB pendente para ID: ${clientId}. Implementar Server Action.`);
-        // TODO: await deleteClientInDB(clientId);
-        set(state => ({
-            clients: state.clients.filter(c => c.id !== clientId)
-        }));
-        console.log('[Store deleteClient] Cliente deletado localmente (sem persistência no DB).');
+        console.log(`[Store deleteClient] Tentando excluir cliente ID: ${clientId}`);
+        try {
+            const success = await deleteClientFromDB(clientId);
+            if (success) {
+                set(state => ({
+                    clients: state.clients.filter(c => c.id !== clientId)
+                }));
+                // Não é necessário remover OSs associadas aqui, pois a exclusão no DB já teria falhado se houvesse.
+                console.log(`[Store deleteClient] Cliente ID: ${clientId} excluído do store local.`);
+                return true;
+            }
+            console.warn(`[Store deleteClient] Falha ao excluir cliente ID: ${clientId} no DB (ação retornou false).`);
+            return false;
+        } catch (error: any) {
+            console.error(`[Store deleteClient] Erro ao excluir cliente ID: ${clientId} via action:`, error.message);
+            throw error; // Re-throw para a UI poder exibir
+        }
       },
       getClientById: (clientId) => get().clients.find(c => c.id === clientId),
       getClientByName: (clientName) => get().clients.find(c => c.name.toLowerCase() === clientName.toLowerCase()),

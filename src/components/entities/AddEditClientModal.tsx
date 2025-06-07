@@ -7,6 +7,7 @@ import * as z from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import type { Client } from '@/lib/types';
 import { useOSStore } from '@/store/os-store';
+import { AlertCircle } from 'lucide-react';
 
 const clientSchema = z.object({
   name: z.string().min(1, { message: 'Nome do cliente é obrigatório.' }),
@@ -21,9 +22,10 @@ interface AddEditClientModalProps {
 }
 
 export default function AddEditClientModal({ client, isOpen, onClose }: AddEditClientModalProps) {
-  const addClient = useOSStore((state) => state.addClient);
-  const updateClient = useOSStore((state) => state.updateClient);
+  const addClientStore = useOSStore((state) => state.addClient);
+  const updateClientStore = useOSStore((state) => state.updateClient);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [serverError, setServerError] = useState<string | null>(null);
   const modalRef = useRef<HTMLDivElement>(null);
   const [bootstrapModal, setBootstrapModal] = useState<any>(null);
 
@@ -35,16 +37,21 @@ export default function AddEditClientModal({ client, isOpen, onClose }: AddEditC
     mode: 'onChange',
   });
 
-  // Reset form when client prop changes or modal opens/closes
+  const resetFormAndErrors = () => {
+    form.reset({ name: client?.name || '' });
+    setServerError(null);
+  };
+
   useEffect(() => {
     if (isOpen) {
-      form.reset({ name: client?.name || '' });
-    } else {
-      form.reset({ name: '' }); // Clear form on close
+      resetFormAndErrors();
+       if (client) {
+         form.setValue('name', client.name);
+       }
     }
-  }, [client, isOpen, form.reset]); // form.reset added
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [client, isOpen]); // form.reset e form.setValue removidos da dependência e movidos para resetFormAndErrors
 
-  // Initialize and manage Bootstrap modal instance
   useEffect(() => {
     if (typeof window !== 'undefined' && modalRef.current) {
       import('bootstrap/js/dist/modal').then((ModalModule) => {
@@ -53,20 +60,17 @@ export default function AddEditClientModal({ client, isOpen, onClose }: AddEditC
           const modalInstance = new Modal(modalRef.current);
           setBootstrapModal(modalInstance);
 
-          // Handle external close events (like backdrop click or ESC key)
           const handleHide = () => {
-             if (isOpen) { // Only call onClose if the modal was supposed to be open
+             if (isOpen) { 
                 onClose();
              }
           };
           modalRef.current.addEventListener('hidden.bs.modal', handleHide);
 
-          // Cleanup listener on unmount
           return () => {
             if (modalRef.current) {
                 modalRef.current.removeEventListener('hidden.bs.modal', handleHide);
             }
-            // Attempt to dispose only if instance exists and hasn't been disposed
              if (modalInstance && (modalInstance as any)._isShown) {
                 try {
                     modalInstance.dispose();
@@ -78,13 +82,11 @@ export default function AddEditClientModal({ client, isOpen, onClose }: AddEditC
         }
       }).catch(err => console.error("Failed to load Bootstrap modal:", err));
     }
-     // Ensure modal is disposed if component unmounts while modal is initializing or open
      return () => {
        if (bootstrapModal && typeof bootstrapModal.dispose === 'function') {
             try {
-                 // Check if it's shown before disposing to avoid errors if already hidden/disposed
                 if ((bootstrapModal as any)._isShown) {
-                     bootstrapModal.hide(); // Hide first to trigger events if needed
+                     bootstrapModal.hide();
                 }
                  bootstrapModal.dispose();
             } catch (error) {
@@ -92,17 +94,17 @@ export default function AddEditClientModal({ client, isOpen, onClose }: AddEditC
             }
         }
      };
-  }, []); // Run only once on mount
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); 
 
-  // Show/hide modal based on isOpen prop
   useEffect(() => {
     if (bootstrapModal) {
       if (isOpen) {
-        if (!(bootstrapModal as any)._isShown) { // Avoid showing if already shown
+        if (!(bootstrapModal as any)._isShown) { 
              bootstrapModal.show();
         }
       } else {
-         if ((bootstrapModal as any)._isShown) { // Avoid hiding if already hidden
+         if ((bootstrapModal as any)._isShown) { 
              bootstrapModal.hide();
          }
       }
@@ -111,28 +113,26 @@ export default function AddEditClientModal({ client, isOpen, onClose }: AddEditC
 
   const onSubmit = async (values: ClientFormValues) => {
     setIsSubmitting(true);
+    setServerError(null);
     try {
       if (client) {
-        // Update existing client
-        updateClient({ ...client, name: values.name });
+        await updateClientStore({ ...client, name: values.name });
         console.log(`Cliente "${values.name}" atualizado.`);
       } else {
-        // Add new client
-        const newClient = addClient({ name: values.name });
-        console.log(`Cliente "${newClient.name}" adicionado.`);
+        await addClientStore({ name: values.name });
+        console.log(`Cliente "${values.name}" adicionado.`);
       }
-      onClose(); // Close modal on success
-    } catch (error) {
+      onClose(); 
+    } catch (error: any) {
       console.error('Failed to save client:', error);
-      alert('Falha ao salvar cliente. Por favor, tente novamente.'); // Basic feedback
+      setServerError(error.message || 'Falha ao salvar cliente. Por favor, tente novamente.');
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const handleActualClose = () => {
-     form.reset({ name: '' }); // Explicitly reset form state
-     onClose(); // Call the passed onClose handler
+     onClose(); 
   };
 
 
@@ -142,7 +142,7 @@ export default function AddEditClientModal({ client, isOpen, onClose }: AddEditC
       id="clientModal"
       tabIndex={-1}
       aria-labelledby="clientModalLabel"
-      aria-hidden={!isOpen} // Controlled by isOpen state
+      aria-hidden={!isOpen} 
       ref={modalRef}
     >
       <div className="modal-dialog modal-dialog-centered">
@@ -152,10 +152,15 @@ export default function AddEditClientModal({ client, isOpen, onClose }: AddEditC
               <h5 className="modal-title" id="clientModalLabel">
                 {client ? 'Editar Cliente' : 'Adicionar Novo Cliente'}
               </h5>
-              {/* Use the onClose passed from the parent */}
               <button type="button" className="btn-close" aria-label="Close" onClick={handleActualClose}></button>
             </div>
             <div className="modal-body">
+              {serverError && (
+                <div className="alert alert-danger d-flex align-items-center p-2 mb-3">
+                  <AlertCircle size={18} className="me-2 flex-shrink-0" />
+                  <small>{serverError}</small>
+                </div>
+              )}
               <div className="mb-3">
                 <label htmlFor="clientName" className="form-label">Nome do Cliente *</label>
                 <input
@@ -169,7 +174,6 @@ export default function AddEditClientModal({ client, isOpen, onClose }: AddEditC
                   <div className="invalid-feedback">{form.formState.errors.name.message}</div>
                 )}
               </div>
-              {/* Add more client fields here if needed in the future */}
             </div>
             <div className="modal-footer">
               <button type="button" className="btn btn-outline-secondary" onClick={handleActualClose} disabled={isSubmitting}>
@@ -190,3 +194,4 @@ export default function AddEditClientModal({ client, isOpen, onClose }: AddEditC
     </div>
   );
 }
+

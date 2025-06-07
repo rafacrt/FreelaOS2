@@ -79,3 +79,93 @@ export async function getAllClientsFromDB(): Promise<Client[]> {
     if (connection) connection.release();
   }
 }
+
+/**
+ * Updates an existing client's name in the database.
+ */
+export async function updateClientInDB(client: Client): Promise<Client | null> {
+  if (!client.id || !client.name || client.name.trim() === '') {
+    throw new Error('Client ID and a valid name are required for update.');
+  }
+  const connection = await db.getConnection();
+  try {
+    console.log(`[ClientAction updateClientInDB] Updating client ID: ${client.id} to name: "${client.name.trim()}"`);
+    const [result] = await connection.execute<ResultSetHeader>(
+      'UPDATE clients SET name = ? WHERE id = ?',
+      [client.name.trim(), client.id]
+    );
+
+    if (result.affectedRows > 0) {
+      console.log(`[ClientAction updateClientInDB] Client ID: ${client.id} updated successfully.`);
+      return { id: client.id, name: client.name.trim() };
+    } else {
+      console.warn(`[ClientAction updateClientInDB] No client found with ID: ${client.id} to update, or name was the same.`);
+      // Fetch the client to ensure we return the current state if no rows were affected because the name was identical
+      const [currentClients] = await connection.query<RowDataPacket[]>('SELECT id, name FROM clients WHERE id = ?', [client.id]);
+      if (currentClients.length > 0) {
+        return { id: String(currentClients[0].id), name: currentClients[0].name };
+      }
+      return null; // Client not found
+    }
+  } catch (error: any) {
+    console.error(`[ClientAction updateClientInDB] Error updating client ID ${client.id}:`, error);
+    if (error.code === 'ER_DUP_ENTRY') {
+        throw new Error(`Já existe um cliente com o nome "${client.name.trim()}".`);
+    }
+    throw new Error(`Failed to update client "${client.name.trim()}".`);
+  } finally {
+    if (connection) connection.release();
+  }
+}
+
+/**
+ * Deletes a client from the database.
+ * Throws an error if the client is associated with any OS.
+ */
+export async function deleteClientFromDB(clientId: string): Promise<boolean> {
+  if (!clientId) {
+    throw new Error('Client ID is required for deletion.');
+  }
+  const connection = await db.getConnection();
+  try {
+    console.log(`[ClientAction deleteClientFromDB] Attempting to delete client ID: ${clientId}`);
+
+    // Check if client is associated with any OS
+    const [osCountResult] = await connection.query<RowDataPacket[]>(
+      'SELECT COUNT(*) as count FROM os_table WHERE cliente_id = ?',
+      [clientId]
+    );
+    const osCount = osCountResult[0].count;
+
+    if (osCount > 0) {
+      console.warn(`[ClientAction deleteClientFromDB] Client ID: ${clientId} is associated with ${osCount} OS(s). Deletion aborted.`);
+      throw new Error(`Não é possível excluir este cliente pois ele está vinculado a ${osCount} Ordem(ns) de Serviço. Desassocie-o das OSs primeiro.`);
+    }
+
+    const [result] = await connection.execute<ResultSetHeader>(
+      'DELETE FROM clients WHERE id = ?',
+      [clientId]
+    );
+
+    if (result.affectedRows > 0) {
+      console.log(`[ClientAction deleteClientFromDB] Client ID: ${clientId} deleted successfully.`);
+      return true;
+    } else {
+      console.warn(`[ClientAction deleteClientFromDB] No client found with ID: ${clientId} to delete.`);
+      return false; // Client not found
+    }
+  } catch (error: any) {
+     // If the error is the one we threw, re-throw it.
+    if (error.message.startsWith('Não é possível excluir este cliente pois ele está vinculado')) {
+        throw error;
+    }
+    console.error(`[ClientAction deleteClientFromDB] Error deleting client ID ${clientId}:`, error);
+    // Check for other potential foreign key errors if any exist (though unlikely for clients table beyond OS)
+    if (error.code === 'ER_ROW_IS_REFERENCED_2') {
+         throw new Error('Não é possível excluir este cliente pois ele está referenciado em outros registros.');
+    }
+    throw new Error(`Failed to delete client ID ${clientId}.`);
+  } finally {
+    if (connection) connection.release();
+  }
+}
