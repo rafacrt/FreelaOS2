@@ -59,7 +59,7 @@ export default function AddEditPartnerModal({ partner, isOpen, onClose }: AddEdi
 
   const currentSchema = partner ? editPartnerSchema : createPartnerSchema;
 
-  const form = useForm<CreatePartnerFormValues | EditPartnerFormValues>({
+  const { register, handleSubmit, formState: { errors, isValid, isDirty }, reset } = useForm<CreatePartnerFormValues | EditPartnerFormValues>({
     resolver: zodResolver(currentSchema),
     defaultValues: {
       name: '',
@@ -67,84 +67,55 @@ export default function AddEditPartnerModal({ partner, isOpen, onClose }: AddEdi
       email: '',
       contact_person: '',
       is_approved: false,
-      ...(partner ? {} : { password: '', confirmPassword: '' }), // Only add password fields for create mode
+      ...(!partner && { password: '', confirmPassword: '' }),
     },
     mode: 'onChange',
   });
-
-  const resetFormAndErrors = () => {
-    form.reset({
-      name: partner?.name || '',
-      username: partner?.username || '',
-      email: partner?.email || '',
-      contact_person: partner?.contact_person || '',
-      is_approved: partner?.is_approved || false,
-      ...(partner ? {} : { password: '', confirmPassword: '' }),
-    });
-    setServerError(null);
-  };
   
   useEffect(() => {
     if (isOpen) {
-        resetFormAndErrors(); // Reset with potentially new partner data
-        if (partner) {
-             form.setValue('name', partner.name);
-             form.setValue('username', partner.username || '');
-             form.setValue('email', partner.email || '');
-             form.setValue('contact_person', partner.contact_person || '');
-             form.setValue('is_approved', partner.is_approved || false);
-        }
+      reset({
+        name: partner?.name || '',
+        username: partner?.username || '',
+        email: partner?.email || '',
+        contact_person: partner?.contact_person || '',
+        is_approved: partner?.is_approved || false,
+        ...(!partner && { password: '', confirmPassword: '' }),
+      });
+      setServerError(null);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [partner, isOpen]);
+  }, [isOpen, partner, reset]);
 
   useEffect(() => {
     if (typeof window !== 'undefined' && modalRef.current) {
       import('bootstrap/js/dist/modal').then((ModalModule) => {
         const Modal = ModalModule.default;
+        let modalInstance: any;
         if (modalRef.current) {
-          const modalInstance = new Modal(modalRef.current);
+          modalInstance = Modal.getInstance(modalRef.current) || new Modal(modalRef.current);
           setBootstrapModal(modalInstance);
-
-          const handleHide = () => {
-             if (isOpen) {
-                onClose(); 
-             }
-          };
-          modalRef.current.addEventListener('hidden.bs.modal', handleHide);
-
-          return () => {
-            if (modalRef.current) {
-                modalRef.current.removeEventListener('hidden.bs.modal', handleHide);
-            }
-             if (modalInstance && typeof modalInstance.dispose === 'function') { // Check if dispose exists
-                try {
-                    if ((modalInstance as any)._isShown) { // Check if shown before hiding
-                         modalInstance.hide();
-                    }
-                     modalInstance.dispose();
-                } catch (e) {
-                     console.warn("Error disposing Bootstrap modal:", e);
-                }
-             }
-          };
         }
+
+        const handleHide = () => {
+           if (isOpen) {
+              onClose(); 
+           }
+        };
+        
+        if (modalRef.current && !(modalRef.current as any)._eventListenerAttached) {
+            modalRef.current.addEventListener('hidden.bs.modal', handleHide);
+            (modalRef.current as any)._eventListenerAttached = true;
+        }
+        
+        return () => {
+          if (modalRef.current && (modalRef.current as any)._eventListenerAttached) {
+              modalRef.current.removeEventListener('hidden.bs.modal', handleHide);
+              (modalRef.current as any)._eventListenerAttached = false;
+          }
+        };
       }).catch(err => console.error("Failed to load Bootstrap modal:", err));
     }
-     return () => {
-       if (bootstrapModal && typeof bootstrapModal.dispose === 'function') {
-            try {
-                if ((bootstrapModal as any)._isShown) {
-                     bootstrapModal.hide();
-                }
-                 bootstrapModal.dispose();
-            } catch (error) {
-                console.warn("Error disposing Bootstrap modal on cleanup:", error);
-            }
-        }
-     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen]); // Re-initialize if isOpen changes, to handle dynamic import on modal opening
+  }, [isOpen, onClose]); 
 
   useEffect(() => {
     if (bootstrapModal) {
@@ -160,11 +131,12 @@ export default function AddEditPartnerModal({ partner, isOpen, onClose }: AddEdi
     }
   }, [isOpen, bootstrapModal]);
 
+
   const onSubmit = async (values: CreatePartnerFormValues | EditPartnerFormValues) => {
     setIsSubmitting(true);
     setServerError(null);
     try {
-      if (partner) { // Editing existing partner
+      if (partner) {
         const updateData: UpdatePartnerDetailsData = {
           id: partner.id,
           name: values.name,
@@ -174,8 +146,7 @@ export default function AddEditPartnerModal({ partner, isOpen, onClose }: AddEdi
           is_approved: (values as EditPartnerFormValues).is_approved,
         };
         await updatePartnerEntity(updateData);
-        console.log(`Parceiro "${values.name}" (ID: ${partner.id}) atualizado.`);
-      } else { // Adding new partner
+      } else {
         const createData: CreatePartnerData = {
           name: values.name,
           username: (values as CreatePartnerFormValues).username,
@@ -185,11 +156,9 @@ export default function AddEditPartnerModal({ partner, isOpen, onClose }: AddEdi
           is_approved: (values as CreatePartnerFormValues).is_approved,
         };
         await addPartnerEntity(createData);
-        console.log(`Parceiro "${values.name}" adicionado.`);
       }
       onClose();
     } catch (error: any) {
-      console.error('Falha ao salvar parceiro:', error);
       setServerError(error.message || 'Falha ao salvar parceiro. Verifique os dados e tente novamente.');
     } finally {
       setIsSubmitting(false);
@@ -211,7 +180,7 @@ export default function AddEditPartnerModal({ partner, isOpen, onClose }: AddEdi
     >
       <div className="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
         <div className="modal-content">
-          <form onSubmit={form.handleSubmit(onSubmit)} noValidate>
+          <form onSubmit={handleSubmit(onSubmit)} noValidate>
             <div className="modal-header">
               <h5 className="modal-title" id="partnerModalLabel">
                 {partner ? 'Editar Parceiro' : 'Adicionar Novo Parceiro'}
@@ -231,12 +200,12 @@ export default function AddEditPartnerModal({ partner, isOpen, onClose }: AddEdi
                   <input
                     type="text"
                     id="partnerName"
-                    className={`form-control form-control-sm ${form.formState.errors.name ? 'is-invalid' : ''}`}
+                    className={`form-control form-control-sm ${errors.name ? 'is-invalid' : ''}`}
                     placeholder="Ex: Agência Criativa Ltda."
-                    {...form.register('name')}
+                    {...register('name')}
                   />
-                  {form.formState.errors.name && (
-                    <div className="invalid-feedback small">{form.formState.errors.name.message}</div>
+                  {errors.name && (
+                    <div className="invalid-feedback small">{errors.name.message}</div>
                   )}
                 </div>
                  <div className="col-md-6">
@@ -244,12 +213,12 @@ export default function AddEditPartnerModal({ partner, isOpen, onClose }: AddEdi
                   <input
                     type="text"
                     id="partnerUsername"
-                    className={`form-control form-control-sm ${form.formState.errors.username ? 'is-invalid' : ''}`}
+                    className={`form-control form-control-sm ${errors.username ? 'is-invalid' : ''}`}
                     placeholder="Ex: agenciacriativa_user"
-                    {...form.register('username')}
+                    {...register('username')}
                   />
-                  {form.formState.errors.username && (
-                    <div className="invalid-feedback small">{form.formState.errors.username.message}</div>
+                  {errors.username && (
+                    <div className="invalid-feedback small">{errors.username.message}</div>
                   )}
                 </div>
                  <div className="col-md-6">
@@ -257,12 +226,12 @@ export default function AddEditPartnerModal({ partner, isOpen, onClose }: AddEdi
                   <input
                     type="email"
                     id="partnerEmail"
-                    className={`form-control form-control-sm ${form.formState.errors.email ? 'is-invalid' : ''}`}
+                    className={`form-control form-control-sm ${errors.email ? 'is-invalid' : ''}`}
                     placeholder="Ex: contato@agenciacriativa.com"
-                    {...form.register('email')}
+                    {...register('email')}
                   />
-                  {form.formState.errors.email && (
-                    <div className="invalid-feedback small">{form.formState.errors.email.message}</div>
+                  {errors.email && (
+                    <div className="invalid-feedback small">{errors.email.message}</div>
                   )}
                 </div>
                  <div className="col-md-6">
@@ -270,28 +239,28 @@ export default function AddEditPartnerModal({ partner, isOpen, onClose }: AddEdi
                   <input
                     type="text"
                     id="partnerContactPerson"
-                    className={`form-control form-control-sm ${form.formState.errors.contact_person ? 'is-invalid' : ''}`}
+                    className={`form-control form-control-sm ${errors.contact_person ? 'is-invalid' : ''}`}
                     placeholder="Ex: João Silva"
-                    {...form.register('contact_person')}
+                    {...register('contact_person')}
                   />
-                  {form.formState.errors.contact_person && (
-                    <div className="invalid-feedback small">{form.formState.errors.contact_person.message}</div>
+                  {errors.contact_person && (
+                    <div className="invalid-feedback small">{(errors.contact_person as any)?.message}</div>
                   )}
                 </div>
 
-                {!partner && ( // Somente mostrar campos de senha ao criar novo parceiro
+                {!partner && (
                   <>
                     <div className="col-md-6">
                       <label htmlFor="partnerPassword" className="form-label form-label-sm">Senha *</label>
                       <input
                         type="password"
                         id="partnerPassword"
-                        className={`form-control form-control-sm ${form.formState.errors.password ? 'is-invalid' : ''}`}
+                        className={`form-control form-control-sm ${errors.password ? 'is-invalid' : ''}`}
                         placeholder="Crie uma senha segura"
-                        {...form.register('password')}
+                        {...register('password')}
                       />
-                      {form.formState.errors.password && (
-                        <div className="invalid-feedback small">{form.formState.errors.password.message}</div>
+                      {errors.password && (
+                         <div className="invalid-feedback small">{(errors.password as any)?.message}</div>
                       )}
                     </div>
                     <div className="col-md-6">
@@ -299,12 +268,12 @@ export default function AddEditPartnerModal({ partner, isOpen, onClose }: AddEdi
                       <input
                         type="password"
                         id="partnerConfirmPassword"
-                        className={`form-control form-control-sm ${form.formState.errors.confirmPassword ? 'is-invalid' : ''}`}
+                        className={`form-control form-control-sm ${errors.confirmPassword ? 'is-invalid' : ''}`}
                         placeholder="Repita a senha"
-                        {...form.register('confirmPassword')}
+                        {...register('confirmPassword')}
                       />
-                      {form.formState.errors.confirmPassword && (
-                        <div className="invalid-feedback small">{form.formState.errors.confirmPassword.message}</div>
+                      {errors.confirmPassword && (
+                        <div className="invalid-feedback small">{(errors.confirmPassword as any)?.message}</div>
                       )}
                     </div>
                   </>
@@ -316,14 +285,14 @@ export default function AddEditPartnerModal({ partner, isOpen, onClose }: AddEdi
                             type="checkbox"
                             id="partnerIsApproved"
                             role="switch"
-                            {...form.register('is_approved')}
+                            {...register('is_approved')}
                         />
                         <label className="form-check-label form-check-label-sm" htmlFor="partnerIsApproved">
                             Aprovado para Login
                         </label>
                     </div>
-                     {form.formState.errors.is_approved && (
-                        <div className="text-danger small mt-1">{form.formState.errors.is_approved.message}</div>
+                     {errors.is_approved && (
+                        <div className="text-danger small mt-1">{(errors.is_approved as any)?.message}</div>
                      )}
                 </div>
               </div>
@@ -332,7 +301,7 @@ export default function AddEditPartnerModal({ partner, isOpen, onClose }: AddEdi
               <button type="button" className="btn btn-outline-secondary btn-sm" onClick={handleActualClose} disabled={isSubmitting}>
                 Cancelar
               </button>
-              <button type="submit" className="btn btn-primary btn-sm" disabled={!form.formState.isDirty || !form.formState.isValid || isSubmitting}>
+              <button type="submit" className="btn btn-primary btn-sm" disabled={!isDirty || !isValid || isSubmitting}>
                 {isSubmitting ? (
                   <>
                     <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
@@ -347,6 +316,4 @@ export default function AddEditPartnerModal({ partner, isOpen, onClose }: AddEdi
     </div>
   );
 }
-      
-
     
