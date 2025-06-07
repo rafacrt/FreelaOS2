@@ -15,7 +15,7 @@ export default function EntitiesPage() {
   const partners = useOSStore((state) => state.partners);
   const clients = useOSStore((state) => state.clients);
   const deleteClient = useOSStore((state) => state.deleteClient);
-  const deletePartner = useOSStore((state) => state.deletePartnerEntity); // Updated to use new store action name
+  const deletePartnerEntity = useOSStore((state) => state.deletePartnerEntity); // Renomeado na última vez
 
   const [isHydrated, setIsHydrated] = useState(false);
 
@@ -72,11 +72,18 @@ export default function EntitiesPage() {
     setSelectedPartner(null);
   };
 
-  const handleDeletePartner = (partner: Partner) => {
-    if (window.confirm(`Tem certeza que deseja excluir o parceiro "${partner.name}"? Esta ação não pode ser desfeita.`)) {
-      deletePartner(partner.id);
+  const handleDeletePartner = async (partner: Partner) => {
+    if (window.confirm(`Tem certeza que deseja excluir o parceiro "${partner.name}"? Esta ação não pode ser desfeita e pode falhar se o parceiro estiver vinculado a OSs.`)) {
+      try {
+        await deletePartnerEntity(partner.id);
+        alert(`Parceiro "${partner.name}" excluído com sucesso.`);
+      } catch (error: any) {
+        console.error("Falha ao excluir parceiro:", error);
+        alert(`Falha ao excluir parceiro "${partner.name}": ${error.message}`);
+      }
     }
   };
+
 
   if (!isHydrated) {
      return (
@@ -215,3 +222,4 @@ export default function EntitiesPage() {
     </AuthenticatedLayout>
   );
 }
+

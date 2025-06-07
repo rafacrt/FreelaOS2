@@ -204,6 +204,38 @@ export async function getAllPartnersFromDB(): Promise<Partner[]> {
   }
 }
 
-// TODO: Implementar deletePartnerByIdInDB se necessário
+export async function deletePartnerById(partnerId: string): Promise<boolean> {
+  if (!partnerId) {
+    throw new Error('Partner ID é obrigatório para exclusão.');
+  }
+  const connection = await db.getConnection();
+  try {
+    console.log(`[PartnerAction deletePartnerById] Tentando excluir parceiro com ID: ${partnerId}`);
+    // Verificar se o parceiro está vinculado a alguma OS (como criador ou executor)
+    // Se as constraints ON DELETE SET NULL estiverem ativas, o DB cuidará disso.
+    // Se não, o DB lançará um erro de FK, que será capturado abaixo.
 
+    const [result] = await connection.execute<ResultSetHeader>(
+      'DELETE FROM partners WHERE id = ?',
+      [partnerId]
+    );
+
+    if (result.affectedRows > 0) {
+      console.log(`[PartnerAction deletePartnerById] Parceiro com ID: ${partnerId} excluído com sucesso.`);
+      return true;
+    } else {
+      console.warn(`[PartnerAction deletePartnerById] Nenhum parceiro encontrado com ID: ${partnerId} para excluir.`);
+      return false; // Nenhum parceiro foi excluído (talvez já não existisse)
+    }
+  } catch (error: any) {
+    console.error(`[PartnerAction deletePartnerById] Erro ao excluir parceiro com ID: ${partnerId}. Detalhes:`, error);
+    // Verificar se o erro é de constraint de chave estrangeira
+    if (error.code === 'ER_ROW_IS_REFERENCED_2' || error.message.includes('foreign key constraint fails')) {
+      throw new Error('Não é possível excluir este parceiro pois ele está vinculado a uma ou mais Ordens de Serviço. Desassocie-o das OSs primeiro.');
+    }
+    throw new Error(`Falha ao excluir parceiro: ${error.message}`);
+  } finally {
+    if (connection) connection.release();
+  }
+}
       

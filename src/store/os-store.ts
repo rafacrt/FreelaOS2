@@ -12,8 +12,9 @@ import {
 import { findOrCreateClientByName, getAllClientsFromDB } from '@/lib/actions/client-actions';
 import { 
     getAllPartnersFromDB, 
-    createPartner as createPartnerAction, // Renomeado para evitar conflito de nome
-    updatePartnerDetails as updatePartnerDetailsAction, // Renomeado para evitar conflito
+    createPartner as createPartnerAction, 
+    updatePartnerDetails as updatePartnerDetailsAction, 
+    deletePartnerById as deletePartnerByIdAction,
     type CreatePartnerData,
     type UpdatePartnerDetailsData
 } from '@/lib/actions/partner-actions';
@@ -334,14 +335,23 @@ export const useOSStore = create<OSState>()(
         }
       },
       deletePartnerEntity: async (partnerId) => {
-        console.warn(`[Store deletePartnerEntity] ATENÇÃO: Deleção de entidade parceiro no DB pendente para ID: ${partnerId}. Implementar Server Action.`);
-        // TODO: await deletePartnerByIdInDB(partnerId);
-         set(state => ({
-            partners: state.partners.filter(p => p.id !== partnerId)
-        }));
-        console.log('[Store deletePartnerEntity] Entidade parceiro deletada localmente.');
-        return true;
-      },
+        console.log(`[Store deletePartnerEntity] Tentando excluir parceiro ID: ${partnerId}`);
+        try {
+            const success = await deletePartnerByIdAction(partnerId);
+            if (success) {
+                set(state => ({
+                    partners: state.partners.filter(p => p.id !== partnerId)
+                }));
+                console.log(`[Store deletePartnerEntity] Parceiro ID: ${partnerId} excluído do store local.`);
+                return true;
+            }
+            console.warn(`[Store deletePartnerEntity] Falha ao excluir parceiro ID: ${partnerId} no DB (ação retornou false).`);
+            return false;
+        } catch (error: any) {
+            console.error(`[Store deletePartnerEntity] Erro ao excluir parceiro ID: ${partnerId} via action:`, error.message);
+            throw error; // Re-throw para a UI poder exibir
+        }
+      }, 
       getPartnerEntityById: (partnerId) => get().partners.find(p => p.id === partnerId),
       getPartnerEntityByName: (partnerName) => get().partners.find(p => p.name.toLowerCase() === partnerName.toLowerCase()),
 
