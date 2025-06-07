@@ -31,6 +31,7 @@ export default function AuthenticatedLayout({ children }: AuthenticatedLayoutPro
   useEffect(() => {
     console.log('[AuthenticatedLayout] useEffect triggered for session check.');
     async function checkSessionAndInitializeData() {
+      setIsLoading(true); // Ensure loading is true at the start of the check
       try {
         const response = await fetch('/api/session');
         if (!response.ok) {
@@ -49,6 +50,9 @@ export default function AuthenticatedLayout({ children }: AuthenticatedLayoutPro
             console.log(`[AuthenticatedLayout] Session type ${sessionData.sessionType}, store already initialized.`);
           } else if (!sessionData) {
             console.log('[AuthenticatedLayout] No session data, store initialization skipped if not already done.');
+            // If there's no session, and the store isn't initialized, perhaps it should be initialized anyway
+            // if some parts of the app might need it even for non-logged-in users (though unlikely for this app structure).
+            // For now, only initializing if there's a session.
           }
         }
       } catch (e: any) {
@@ -62,10 +66,11 @@ export default function AuthenticatedLayout({ children }: AuthenticatedLayoutPro
     }
 
     checkSessionAndInitializeData();
-  }, [isStoreInitialized, initializeStore]); // initializeStore é estável, isStoreInitialized é a chave aqui
+  }, [isStoreInitialized, initializeStore]); 
 
   const sessionContextValue = useMemo(() => session, [session]);
 
+  // Render a loading state for the entire layout until the auth check is complete
   if (isLoading || !authCheckCompleted) {
     return (
       <div className="d-flex flex-column justify-content-center align-items-center text-center bg-light" style={{ minHeight: '100vh' }}>
@@ -77,12 +82,13 @@ export default function AuthenticatedLayout({ children }: AuthenticatedLayoutPro
     );
   }
 
+  // Once auth check is complete, render the main layout structure with the session context
   return (
     <SessionContext.Provider value={sessionContextValue}>
       <div className="d-flex flex-column min-vh-100">
         <Header session={session} />
         <main className="container flex-grow-1 py-4 py-lg-5">
-          {children}
+          {children} {/* Children are now rendered only after session check is complete */}
         </main>
         <footer className="py-3 mt-auto text-center text-body-secondary border-top bg-light">
           <FooterContent />
