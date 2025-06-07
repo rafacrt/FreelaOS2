@@ -71,7 +71,9 @@ export async function loginAction(
       }
     } else {
       console.warn(`[LoginAction Admin/Internal] Dev login mode active, but DEV credentials did NOT match. Provided user: ${username}. Expected dev user: ${devUsernameEnv}.`);
-      return { message: 'Credenciais de desenvolvimento (admin) inválidas.', type: 'error' };
+      // Fall through to DB login if dev credentials don't match, or return error?
+      // For now, let's assume if DEV_LOGIN_ENABLED, only dev credentials work for admin on /login
+      // return { message: 'Credenciais de desenvolvimento (admin) inválidas.', type: 'error' };
     }
   }
 
@@ -300,5 +302,10 @@ export async function logoutAction(): Promise<AuthActionState> {
   } else {
     console.log('[LogoutAction] No session cookie found to delete.');
   }
+  // Determine redirect based on previous path or a default
+  // For simplicity, always redirect to login after admin logout.
+  // Partner logout might redirect to /partner-login?status=logged_out if we differentiate.
+  // For now, a generic /login?status=logged_out is fine.
   return { message: 'Você foi desconectado.', type: 'success', redirect: '/login?status=logged_out' };
 }
+    

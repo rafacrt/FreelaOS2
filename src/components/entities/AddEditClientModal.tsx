@@ -38,7 +38,7 @@ export default function AddEditClientModal({ client, isOpen, onClose }: AddEditC
     resolver: zodResolver(clientSchema),
     defaultValues: {
       name: '',
-      sourcePartnerId: null,
+      sourcePartnerId: null, // Default to null
     },
     mode: 'onChange',
   });
@@ -46,7 +46,7 @@ export default function AddEditClientModal({ client, isOpen, onClose }: AddEditC
   const resetFormAndErrors = () => {
     form.reset({ 
         name: client?.name || '',
-        sourcePartnerId: client?.sourcePartnerId || null,
+        sourcePartnerId: client?.sourcePartnerId || null, // Ensure reset uses null for empty
     });
     setServerError(null);
   };
@@ -54,13 +54,11 @@ export default function AddEditClientModal({ client, isOpen, onClose }: AddEditC
   useEffect(() => {
     if (isOpen) {
       resetFormAndErrors();
-       if (client) {
-         form.setValue('name', client.name);
-         form.setValue('sourcePartnerId', client.sourcePartnerId || null);
-       }
+       // No need to call form.setValue here again if resetFormAndErrors covers it.
+       // The form.reset call above should correctly set the initial values based on the client prop.
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [client, isOpen]); // Removido form.setValue daqui para evitar re-renders excessivos. Reset deve cobrir.
+  }, [client, isOpen]);
 
   useEffect(() => {
     if (typeof window !== 'undefined' && modalRef.current) {
@@ -127,19 +125,25 @@ export default function AddEditClientModal({ client, isOpen, onClose }: AddEditC
     setIsSubmitting(true);
     setServerError(null);
     try {
+      const dataToSave = {
+        name: values.name,
+        // Ensure sourcePartnerId is null if the "Nenhum" (empty string) option was selected.
+        sourcePartnerId: values.sourcePartnerId === "" ? null : values.sourcePartnerId,
+      };
+
       if (client) {
         await updateClient({ 
             ...client, 
-            name: values.name, 
-            sourcePartnerId: values.sourcePartnerId || null 
+            name: dataToSave.name, 
+            sourcePartnerId: dataToSave.sourcePartnerId 
         });
-        console.log(`Cliente "${values.name}" atualizado.`);
+        console.log(`Cliente "${dataToSave.name}" atualizado.`);
       } else {
         await addClient({ 
-            name: values.name, 
-            sourcePartnerId: values.sourcePartnerId || null 
+            name: dataToSave.name, 
+            sourcePartnerId: dataToSave.sourcePartnerId 
         });
-        console.log(`Cliente "${values.name}" adicionado.`);
+        console.log(`Cliente "${dataToSave.name}" adicionado.`);
       }
       onClose(); 
     } catch (error: any) {
@@ -198,9 +202,10 @@ export default function AddEditClientModal({ client, isOpen, onClose }: AddEditC
                   id="sourcePartnerId"
                   className={`form-select ${form.formState.errors.sourcePartnerId ? 'is-invalid' : ''}`}
                   {...form.register('sourcePartnerId')}
-                  defaultValue={client?.sourcePartnerId || ""} // Ensure default value is string or empty string
+                  // Use form.watch to get the current value for the select if needed, or rely on register
+                  // DefaultValue should be handled by form.reset and defaultValues in useForm
                 >
-                  <option value="">Nenhum</option>
+                  <option value="">Nenhum</option> {/* value is empty string for "None" */}
                   {partners.sort((a,b) => a.name.localeCompare(b.name)).map(p => (
                     <option key={p.id} value={p.id}>
                       {p.name}
@@ -231,3 +236,4 @@ export default function AddEditClientModal({ client, isOpen, onClose }: AddEditC
     </div>
   );
 }
+    

@@ -6,7 +6,6 @@ import { useFormStatus } from 'react-dom';
 import { partnerLoginAction } from '@/lib/actions/auth-actions'; // Changed to partnerLoginAction
 import type { AuthActionState } from '@/lib/types';
 import { AlertCircle, LogIn } from 'lucide-react';
-// import { useRouter } from 'next/navigation'; // Not strictly needed if action handles redirect
 
 interface PartnerAuthFormProps {
   initialMessage?: string;
@@ -32,8 +31,6 @@ function SubmitButton() {
 }
 
 export default function PartnerAuthForm({ initialMessage, initialMessageType }: PartnerAuthFormProps) {
-  // const router = useRouter(); // Keep if needed for other navigations
-
   const initialState: AuthActionState = {
     message: initialMessage || null,
     type: initialMessageType || undefined,
@@ -49,10 +46,10 @@ export default function PartnerAuthForm({ initialMessage, initialMessageType }: 
     if (state?.message) {
       setDisplayMessage(state.message);
       setDisplayMessageType(state.type);
-    } else if (initialState.message && !state?.message) {
+    } else if (initialState.message && !state?.message) { // Show initial message if action hasn't updated it
       setDisplayMessage(initialState.message);
       setDisplayMessageType(initialState.type);
-    } else if (!state?.message && !initialState.message) {
+    } else if (!state?.message && !initialState.message) { // Clear message if neither action nor initial state has one
       setDisplayMessage(null);
       setDisplayMessageType(undefined);
     }
@@ -61,9 +58,11 @@ export default function PartnerAuthForm({ initialMessage, initialMessageType }: 
 
   useEffect(() => {
     if (state?.type === 'success' && state?.redirect) {
-      // Next.js server action redirects should handle this automatically if `redirect()` is called in action
-      // For client-side forced redirect after message display:
-      // window.location.assign(state.redirect);
+      console.log(`[PartnerAuthForm] Success state detected. Redirecting to: ${state.redirect} using window.location.assign.`);
+      // Using window.location.assign for a more forceful client-side redirect
+      // as Next.js server action redirects might not always be picked up immediately
+      // if the page isn't fully reloaded or if there's client-side navigation interference.
+      window.location.assign(state.redirect);
     }
   }, [state?.type, state?.redirect]);
 
