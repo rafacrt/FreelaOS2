@@ -50,7 +50,7 @@ export default function AddEditClientModal({ client, isOpen, onClose }: AddEditC
        }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [client, isOpen]); // form.reset e form.setValue removidos da dependência e movidos para resetFormAndErrors
+  }, [client, isOpen]);
 
   useEffect(() => {
     if (typeof window !== 'undefined' && modalRef.current) {
@@ -71,9 +71,12 @@ export default function AddEditClientModal({ client, isOpen, onClose }: AddEditC
             if (modalRef.current) {
                 modalRef.current.removeEventListener('hidden.bs.modal', handleHide);
             }
-             if (modalInstance && (modalInstance as any)._isShown) {
+             if (modalInstance && typeof modalInstance.dispose === 'function') { // Check if dispose exists
                 try {
-                    modalInstance.dispose();
+                    if ((modalInstance as any)._isShown) { // Check if shown before hiding
+                         modalInstance.hide();
+                    }
+                     modalInstance.dispose();
                 } catch (e) {
                      console.warn("Error disposing Bootstrap modal:", e);
                 }
@@ -95,7 +98,7 @@ export default function AddEditClientModal({ client, isOpen, onClose }: AddEditC
         }
      };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); 
+  }, [isOpen]); // Re-initialize if isOpen changes, to handle dynamic import on modal opening
 
   useEffect(() => {
     if (bootstrapModal) {
@@ -195,3 +198,5 @@ export default function AddEditClientModal({ client, isOpen, onClose }: AddEditC
   );
 }
 
+
+    

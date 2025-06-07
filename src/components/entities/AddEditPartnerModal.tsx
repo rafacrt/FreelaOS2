@@ -96,36 +96,40 @@ export default function AddEditPartnerModal({ partner, isOpen, onClose }: AddEdi
         }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [partner, isOpen]); // form.reset removed as it's handled by resetFormAndErrors
+  }, [partner, isOpen]);
 
   useEffect(() => {
     if (typeof window !== 'undefined' && modalRef.current) {
-      const ModalModule = require('bootstrap/js/dist/modal');
-      const Modal = ModalModule.default;
-      if (modalRef.current) {
-        const modalInstance = new Modal(modalRef.current);
-        setBootstrapModal(modalInstance);
+      import('bootstrap/js/dist/modal').then((ModalModule) => {
+        const Modal = ModalModule.default;
+        if (modalRef.current) {
+          const modalInstance = new Modal(modalRef.current);
+          setBootstrapModal(modalInstance);
 
-        const handleHide = () => {
-           if (isOpen) {
-              onClose(); // This will trigger the isOpen useEffect above to reset form
-           }
-        };
-        modalRef.current.addEventListener('hidden.bs.modal', handleHide);
+          const handleHide = () => {
+             if (isOpen) {
+                onClose(); 
+             }
+          };
+          modalRef.current.addEventListener('hidden.bs.modal', handleHide);
 
-        return () => {
-          if (modalRef.current) {
-              modalRef.current.removeEventListener('hidden.bs.modal', handleHide);
-          }
-           if (modalInstance && (modalInstance as any)._isShown) {
-              try {
-                  modalInstance.dispose();
-              } catch (e) {
-                   console.warn("Error disposing Bootstrap modal:", e);
-              }
-           }
-        };
-      }
+          return () => {
+            if (modalRef.current) {
+                modalRef.current.removeEventListener('hidden.bs.modal', handleHide);
+            }
+             if (modalInstance && typeof modalInstance.dispose === 'function') { // Check if dispose exists
+                try {
+                    if ((modalInstance as any)._isShown) { // Check if shown before hiding
+                         modalInstance.hide();
+                    }
+                     modalInstance.dispose();
+                } catch (e) {
+                     console.warn("Error disposing Bootstrap modal:", e);
+                }
+             }
+          };
+        }
+      }).catch(err => console.error("Failed to load Bootstrap modal:", err));
     }
      return () => {
        if (bootstrapModal && typeof bootstrapModal.dispose === 'function') {
@@ -140,7 +144,7 @@ export default function AddEditPartnerModal({ partner, isOpen, onClose }: AddEdi
         }
      };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); 
+  }, [isOpen]); // Re-initialize if isOpen changes, to handle dynamic import on modal opening
 
   useEffect(() => {
     if (bootstrapModal) {
@@ -193,7 +197,7 @@ export default function AddEditPartnerModal({ partner, isOpen, onClose }: AddEdi
   };
   
   const handleActualClose = () => {
-     onClose(); // This will trigger the isOpen effect to reset the form
+     onClose();
   };
 
   return (
@@ -344,3 +348,5 @@ export default function AddEditPartnerModal({ partner, isOpen, onClose }: AddEdi
   );
 }
       
+
+    
