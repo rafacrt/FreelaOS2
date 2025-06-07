@@ -11,7 +11,7 @@ export interface CreatePartnerData {
   name: string;
   username: string;
   email?: string;
-  password?: string; // Senha em texto plano, obrigatória na criação
+  password: string; // Senha em texto plano, obrigatória na criação
   contact_person?: string;
   is_approved: boolean;
 }
@@ -23,7 +23,7 @@ export interface UpdatePartnerDetailsData {
   email?: string;
   contact_person?: string;
   is_approved: boolean;
-  // Senha não é atualizada por esta action, para manter a simplicidade
+  password?: string; // Senha opcional para atualização
 }
 
 
@@ -40,7 +40,7 @@ const mapPartnerRowToPartner = (row: RowDataPacket): Partner => ({
 
 export async function createPartner(data: CreatePartnerData): Promise<Partner> {
   const { name, username, email, password, contact_person, is_approved } = data;
-  if (!password) {
+  if (!password) { // Embora o tipo exija, uma verificação extra não faz mal
     throw new Error('Senha é obrigatória para criar um novo parceiro.');
   }
 
@@ -56,7 +56,7 @@ export async function createPartner(data: CreatePartnerData): Promise<Partner> {
     if (existingByUsername.length > 0) {
       throw new Error('Este nome de usuário já está em uso.');
     }
-    if (email) {
+    if (email && email.trim() !== '') {
       const [existingByEmail] = await connection.query<RowDataPacket[]>(
         'SELECT id FROM partners WHERE email = ?',
         [email]
@@ -89,19 +89,18 @@ export async function createPartner(data: CreatePartnerData): Promise<Partner> {
   } catch (error: any) {
     if (connection) await connection.rollback();
     console.error('[PartnerAction createPartner] Erro:', error);
-    throw error; // Re-throw para ser capturado pelo modal
+    throw error;
   } finally {
     if (connection) connection.release();
   }
 }
 
 export async function updatePartnerDetails(data: UpdatePartnerDetailsData): Promise<Partner> {
-  const { id, name, username, email, contact_person, is_approved } = data;
+  const { id, name, username, email, contact_person, is_approved, password } = data;
   const connection = await db.getConnection();
   try {
     await connection.beginTransaction();
 
-    // Verificar se o novo username ou email conflita com OUTRO parceiro
     const [existingByUsername] = await connection.query<RowDataPacket[]>(
       'SELECT id FROM partners WHERE username = ? AND id != ?',
       [username, id]
@@ -109,7 +108,7 @@ export async function updatePartnerDetails(data: UpdatePartnerDetailsData): Prom
     if (existingByUsername.length > 0) {
       throw new Error('Este nome de usuário já está em uso por outro parceiro.');
     }
-    if (email) {
+    if (email && email.trim() !== '') {
       const [existingByEmail] = await connection.query<RowDataPacket[]>(
         'SELECT id FROM partners WHERE email = ? AND id != ?',
         [email, id]
@@ -119,17 +118,25 @@ export async function updatePartnerDetails(data: UpdatePartnerDetailsData): Prom
       }
     }
 
-    const [result] = await connection.execute<ResultSetHeader>(
-      'UPDATE partners SET name = ?, username = ?, email = ?, contact_person = ?, is_approved = ?, updated_at = NOW() WHERE id = ?',
-      [name, username, email || null, contact_person || null, is_approved, id]
-    );
+    let query = 'UPDATE partners SET name = ?, username = ?, email = ?, contact_person = ?, is_approved = ?, updated_at = NOW()';
+    const queryParams: (string | boolean | number | null)[] = [name, username, email || null, contact_person || null, is_approved];
+
+    if (password && password.trim() !== '') {
+      const hashedPassword = await bcrypt.hash(password, 10);
+      query += ', password_hash = ?';
+      queryParams.push(hashedPassword);
+    }
+    query += ' WHERE id = ?';
+    queryParams.push(id);
+
+    const [result] = await connection.execute<ResultSetHeader>(query, queryParams);
 
     if (result.affectedRows === 0) {
       throw new Error('Parceiro não encontrado ou nenhum dado alterado.');
     }
     await connection.commit();
     console.log(`[PartnerAction updatePartnerDetails] Detalhes do Parceiro ID ${id} atualizados.`);
-     return {
+     return { // Retorna os dados como foram passados para atualização (exceto senha)
       id: String(id),
       name,
       username,
@@ -140,7 +147,7 @@ export async function updatePartnerDetails(data: UpdatePartnerDetailsData): Prom
   } catch (error: any) {
     if (connection) await connection.rollback();
     console.error('[PartnerAction updatePartnerDetails] Erro:', error);
-    throw error; // Re-throw para ser capturado pelo modal
+    throw error;
   } finally {
     if (connection) connection.release();
   }
@@ -164,15 +171,18 @@ export async function findOrCreatePartnerByName(partnerName: string, existingCon
       return mapPartnerRowToPartner(p);
     }
 
+    // Se criando, username e password hash são indefinidos inicialmente
+    const defaultUsername = `parceiro_${Date.now()}`; // Username placeholder
     const [result] = await connection.execute<ResultSetHeader>(
-      'INSERT INTO partners (name, is_approved, created_at, updated_at) VALUES (?, ?, NOW(), NOW())',
-      [trimmedPartnerName, false] // Default to not approved if created this way
+      'INSERT INTO partners (name, username, is_approved, created_at, updated_at) VALUES (?, ?, ?, NOW(), NOW())',
+      [trimmedPartnerName, defaultUsername, false] 
     );
 
     if (result.insertId) {
       return { 
           id: String(result.insertId), 
           name: trimmedPartnerName, 
+          username: defaultUsername,
           is_approved: false 
         };
     } else {
@@ -211,9 +221,10 @@ export async function deletePartnerById(partnerId: string): Promise<boolean> {
   const connection = await db.getConnection();
   try {
     console.log(`[PartnerAction deletePartnerById] Tentando excluir parceiro com ID: ${partnerId}`);
-    // Verificar se o parceiro está vinculado a alguma OS (como criador ou executor)
-    // Se as constraints ON DELETE SET NULL estiverem ativas, o DB cuidará disso.
-    // Se não, o DB lançará um erro de FK, que será capturado abaixo.
+    
+    // As constraints ON DELETE SET NULL em `os_table` para `parceiro_id` e `created_by_partner_id`
+    // devem desassociar automaticamente as OSs.
+    // Portanto, não precisamos verificar explicitamente aqui antes de deletar.
 
     const [result] = await connection.execute<ResultSetHeader>(
       'DELETE FROM partners WHERE id = ?',
@@ -225,13 +236,13 @@ export async function deletePartnerById(partnerId: string): Promise<boolean> {
       return true;
     } else {
       console.warn(`[PartnerAction deletePartnerById] Nenhum parceiro encontrado com ID: ${partnerId} para excluir.`);
-      return false; // Nenhum parceiro foi excluído (talvez já não existisse)
+      return false; 
     }
   } catch (error: any) {
     console.error(`[PartnerAction deletePartnerById] Erro ao excluir parceiro com ID: ${partnerId}. Detalhes:`, error);
-    // Verificar se o erro é de constraint de chave estrangeira
-    if (error.code === 'ER_ROW_IS_REFERENCED_2' || error.message.includes('foreign key constraint fails')) {
-      throw new Error('Não é possível excluir este parceiro pois ele está vinculado a uma ou mais Ordens de Serviço. Desassocie-o das OSs primeiro.');
+    // Verificar se o erro é de constraint de chave estrangeira (embora ON DELETE SET NULL deva prevenir isso)
+    if (error.code === 'ER_ROW_IS_REFERENCED_2' || (error.message && error.message.includes('foreign key constraint fails'))) {
+      throw new Error('Não é possível excluir este parceiro pois ele ainda está vinculado a outros registros importantes, apesar das tentativas de desassociação automática.');
     }
     throw new Error(`Falha ao excluir parceiro: ${error.message}`);
   } finally {
