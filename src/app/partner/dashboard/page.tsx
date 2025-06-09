@@ -91,10 +91,12 @@ export default function PartnerDashboardPage() {
     return (
       <>
         <div className="d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom flex-wrap gap-2">
-          <h1 className="h3 mb-0 d-flex align-items-center">
-            <ListChecks size={28} className="me-2 text-primary" />
-            Painel do Parceiro: {session.partnerName || session.username}
-          </h1>
+          {session && session.sessionType === 'partner' && ( // Adicionado guarda aqui
+            <h1 className="h3 mb-0 d-flex align-items-center">
+              <ListChecks size={28} className="me-2 text-primary" />
+              Painel do Parceiro: {session.partnerName}
+            </h1>
+          )}
           <Link href="/partner/create-os" className="btn btn-success disabled" aria-disabled="true">
             <PlusCircle size={18} className="me-2" /> Criar Nova OS
           </Link>
@@ -114,10 +116,13 @@ export default function PartnerDashboardPage() {
   return (
     <>
       <div className="d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom flex-wrap gap-2">
-        <h1 className="h3 mb-0 d-flex align-items-center">
-          <ListChecks size={28} className="me-2 text-primary" />
-          Painel do Parceiro: {session.partnerName || session.username}
-        </h1>
+        {/* Adicionado guarda aqui também para consistência e segurança */}
+        {session && session.sessionType === 'partner' && (
+            <h1 className="h3 mb-0 d-flex align-items-center">
+                <ListChecks size={28} className="me-2 text-primary" />
+                Painel do Parceiro: {session.partnerName || session.username}
+            </h1>
+        )}
         <Link href="/partner/create-os" className="btn btn-success">
           <PlusCircle size={18} className="me-2" /> Criar Nova OS
         </Link>
