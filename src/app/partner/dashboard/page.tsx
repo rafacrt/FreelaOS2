@@ -2,12 +2,11 @@
 'use client';
 
 import React, { useMemo, useEffect, useState } from 'react';
-import Link from 'next/link';
+// import Link from 'next/link'; // Comentado para teste
 import { useSession } from '@/hooks/useSession';
 import { useOSStore } from '@/store/os-store';
 // import OSCard from '@/components/os-grid/OSCard'; // Comentado para teste
-// AuthenticatedLayout NÃO deve ser importado ou usado aqui diretamente
-import { PlusCircle } from 'lucide-react'; // ListChecks removido para teste
+// import { PlusCircle } from 'lucide-react'; // Ícones comentados para teste
 
 export default function PartnerDashboardPage() {
   const session = useSession();
@@ -20,11 +19,14 @@ export default function PartnerDashboardPage() {
 
   useEffect(() => {
     setIsClient(true);
-    if (typeof window !== 'undefined' && session?.sessionType === 'partner' && !isStoreInitialized) {
+  }, []);
+
+  useEffect(() => {
+    if (isClient && session?.sessionType === 'partner' && !isStoreInitialized) {
       console.log('[PartnerDashboardPage] Client-side: Partner session detected, store not initialized. Attempting to initialize.');
       initializeStore();
     }
-  }, [session, isStoreInitialized, initializeStore]);
+  }, [isClient, session, isStoreInitialized, initializeStore]);
 
   useEffect(() => {
     if (isClient) {
@@ -42,9 +44,15 @@ export default function PartnerDashboardPage() {
                  .sort((a, b) => new Date(b.dataAbertura).getTime() - new Date(a.dataAbertura).getTime());
   }, [osList, session, isStoreInitialized]);
 
+
   if (!isClient) {
+    // Render nothing or a minimal static loader on the server/first client render pass
+    // This helps avoid issues before client-side hooks and state are fully available
     return null;
   }
+
+  // At this point, isClient is true. AuthenticatedLayout should have handled session fetching and initial redirects.
+  // Now, we handle the specific states for the partner dashboard.
 
   if (!session) {
     console.warn('[PartnerDashboardPage] Session is null even after client mount. This might indicate an issue with AuthenticatedLayout or session propagation.');
@@ -54,7 +62,7 @@ export default function PartnerDashboardPage() {
           <span className="visually-hidden">Verificando sessão...</span>
         </div>
         <p className="text-muted">Verificando sessão...</p>
-        <p className="small mt-2">Se o problema persistir, tente <Link href="/partner-login">fazer login novamente</Link>.</p>
+        <p className="small mt-2">Se o problema persistir, tente <a href="/partner-login">fazer login novamente</a>.</p>
       </div>
     );
   }
@@ -65,28 +73,30 @@ export default function PartnerDashboardPage() {
       <div className="text-center py-5">
         <h1 className="h3">Acesso Negado</h1>
         <p className="text-muted">Esta página é exclusiva para parceiros.</p>
-        <Link href={session.sessionType === 'admin' ? "/dashboard" : "/login"} className="btn btn-primary mt-2">
+        <a href={session.sessionType === 'admin' ? "/dashboard" : "/login"} className="btn btn-primary mt-2">
           {session.sessionType === 'admin' ? "Ir para Painel Admin" : "Ir para Login"}
-        </Link>
+        </a>
       </div>
     );
   }
 
-  // Se a sessão é de parceiro, mas o store (lista de OSs) ainda não carregou:
+  // Session is valid and is a partner session.
+  // Now check if the store (OS list) is initialized.
   if (!isStoreInitialized) {
     console.log('[PartnerDashboardPage] Session OK (Partner), mas store não inicializado. Mostrando spinner de OSs.');
     return (
       <>
         <div className="d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom flex-wrap gap-2">
-          {session && session.sessionType === 'partner' && ( 
+          {session && session.sessionType === 'partner' && (
             <h1 className="h3 mb-0 d-flex align-items-center">
-              {/* <ListChecks size={28} className="me-2 text-primary" /> Ícone removido para teste */}
-              Painel do Parceiro: {session.partnerName || session.username}
+                {/* Ícone removido para teste */}
+                Painel do Parceiro: {session.partnerName || session.username}
             </h1>
           )}
-          <Link href="/partner/create-os" className="btn btn-success disabled" aria-disabled="true">
-            <PlusCircle size={18} className="me-2" /> Criar Nova OS
-          </Link>
+          {/* <PlusCircle size={18} className="me-2" /> Ícone removido */}
+          <a href="/partner/create-os" className="btn btn-success disabled" aria-disabled="true">
+             Criar Nova OS (Link Teste)
+          </a>
         </div>
         <div className="text-center py-5">
           <div className="spinner-border text-secondary mb-3" role="status">
@@ -98,20 +108,21 @@ export default function PartnerDashboardPage() {
     );
   }
 
-  // Sessão de parceiro OK, store inicializado OK. Renderizar conteúdo.
+  // Session is partner, store is initialized. Render the main content.
   console.log('[PartnerDashboardPage] Session and store OK. Rendering partner dashboard content (simplified).');
   return (
     <>
       <div className="d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom flex-wrap gap-2">
         {session && session.sessionType === 'partner' && (
             <h1 className="h3 mb-0 d-flex align-items-center">
-                {/* <ListChecks size={28} className="me-2 text-primary" /> Ícone removido para teste */}
+                {/* Ícone removido para teste */}
                 Painel do Parceiro: {session.partnerName || session.username}
             </h1>
         )}
-        <Link href="/partner/create-os" className="btn btn-success">
-          <PlusCircle size={18} className="me-2" /> Criar Nova OS
-        </Link>
+        {/* <PlusCircle size={18} className="me-2" /> Ícone removido */}
+        <a href="/partner/create-os" className="btn btn-success">
+           Criar Nova OS (Link Teste)
+        </a>
       </div>
 
       {partnerOSList.length === 0 ? (
@@ -135,4 +146,3 @@ export default function PartnerDashboardPage() {
     </>
   );
 }
-    
