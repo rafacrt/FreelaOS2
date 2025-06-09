@@ -5,9 +5,9 @@ import React, { useMemo, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useSession } from '@/hooks/useSession';
 import { useOSStore } from '@/store/os-store';
-import OSCard from '@/components/os-grid/OSCard';
+// import OSCard from '@/components/os-grid/OSCard'; // Comentado para teste
 // AuthenticatedLayout NÃO deve ser importado ou usado aqui diretamente
-import { PlusCircle, ListChecks } from 'lucide-react';
+import { PlusCircle } from 'lucide-react'; // ListChecks removido para teste
 
 export default function PartnerDashboardPage() {
   const session = useSession();
@@ -20,9 +20,6 @@ export default function PartnerDashboardPage() {
 
   useEffect(() => {
     setIsClient(true);
-    // Se estamos no cliente, temos uma sessão de parceiro, mas o store não foi inicializado,
-    // tentamos inicializá-lo. Isso pode ser redundante se o AuthenticatedLayout pai já fez,
-    // mas é uma salvaguarda.
     if (typeof window !== 'undefined' && session?.sessionType === 'partner' && !isStoreInitialized) {
       console.log('[PartnerDashboardPage] Client-side: Partner session detected, store not initialized. Attempting to initialize.');
       initializeStore();
@@ -46,18 +43,10 @@ export default function PartnerDashboardPage() {
   }, [osList, session, isStoreInitialized]);
 
   if (!isClient) {
-    // Renderiza um placeholder simples ou null no lado do servidor ou antes da hidratação do cliente
-    // para evitar o erro #130 se algo for undefined prematuramente.
-    // O AuthenticatedLayout pai já mostra um spinner global.
     return null;
   }
 
-  // **Condições de Carregamento e Erro (SEM AuthenticatedLayout aninhado)**
-  // O AuthenticatedLayout PAI já deve ter lidado com o redirecionamento se não houver sessão.
-  // Aqui, lidamos com os estados PÓS AuthenticatedLayout ter carregado a sessão.
   if (!session) {
-    // Isso não deveria acontecer se o AuthenticatedLayout pai estiver funcionando corretamente
-    // e redirecionando usuários não autenticados. Mas como uma segurança:
     console.warn('[PartnerDashboardPage] Session is null even after client mount. This might indicate an issue with AuthenticatedLayout or session propagation.');
     return (
       <div className="text-center py-5">
@@ -71,8 +60,6 @@ export default function PartnerDashboardPage() {
   }
 
   if (session.sessionType !== 'partner') {
-    // Se o usuário logado não for um parceiro, o middleware deveria ter redirecionado.
-    // Mas como uma segurança:
     console.warn(`[PartnerDashboardPage] Acesso negado. Tipo de sessão '${session.sessionType}' não é 'partner'.`);
     return (
       <div className="text-center py-5">
@@ -91,10 +78,10 @@ export default function PartnerDashboardPage() {
     return (
       <>
         <div className="d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom flex-wrap gap-2">
-          {session && session.sessionType === 'partner' && ( // Adicionado guarda aqui
+          {session && session.sessionType === 'partner' && ( 
             <h1 className="h3 mb-0 d-flex align-items-center">
-              <ListChecks size={28} className="me-2 text-primary" />
-              Painel do Parceiro: {session.partnerName}
+              {/* <ListChecks size={28} className="me-2 text-primary" /> Ícone removido para teste */}
+              Painel do Parceiro: {session.partnerName || session.username}
             </h1>
           )}
           <Link href="/partner/create-os" className="btn btn-success disabled" aria-disabled="true">
@@ -112,14 +99,13 @@ export default function PartnerDashboardPage() {
   }
 
   // Sessão de parceiro OK, store inicializado OK. Renderizar conteúdo.
-  console.log('[PartnerDashboardPage] Session and store OK. Rendering partner dashboard content.');
+  console.log('[PartnerDashboardPage] Session and store OK. Rendering partner dashboard content (simplified).');
   return (
     <>
       <div className="d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom flex-wrap gap-2">
-        {/* Adicionado guarda aqui também para consistência e segurança */}
         {session && session.sessionType === 'partner' && (
             <h1 className="h3 mb-0 d-flex align-items-center">
-                <ListChecks size={28} className="me-2 text-primary" />
+                {/* <ListChecks size={28} className="me-2 text-primary" /> Ícone removido para teste */}
                 Painel do Parceiro: {session.partnerName || session.username}
             </h1>
         )}
@@ -134,13 +120,17 @@ export default function PartnerDashboardPage() {
           <p className="text-muted small">Clique em "Criar Nova OS" para começar.</p>
         </div>
       ) : (
-        <div className="row row-cols-1 row-cols-sm-2 row-cols-md-3 row-cols-xl-4 g-3 pb-4">
-          {partnerOSList.map((os) => (
-            <div className="col" key={os.id}>
-              <OSCard os={os} viewMode="partner" />
-            </div>
-          ))}
+        <div className="alert alert-info" role="alert">
+          Lista de OSs temporariamente removida para teste. Se você vê esta mensagem e não há erros no console, a lógica básica de carregamento da página está funcionando.
+          Total de OSs do parceiro: {partnerOSList.length}
         </div>
+        // <div className="row row-cols-1 row-cols-sm-2 row-cols-md-3 row-cols-xl-4 g-3 pb-4">
+        //   {partnerOSList.map((os) => (
+        //     <div className="col" key={os.id}>
+        //       {/* <OSCard os={os} viewMode="partner" /> Componente OSCard comentado para teste */}
+        //     </div>
+        //   ))}
+        // </div>
       )}
     </>
   );
