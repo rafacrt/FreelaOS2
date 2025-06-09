@@ -105,7 +105,11 @@ export async function createOSInDB(data: CreateOSData, createdByPartnerId?: stri
     await connection.beginTransaction();
     console.log('[OSAction createOSInDB] Transação iniciada.');
 
-    const client = await findOrCreateClientByName(data.cliente, connection);
+    // O sourcePartnerId do cliente é gerenciado na criação/edição do cliente, não na criação da OS.
+    // Passamos `null` para sourcePartnerId aqui porque não estamos definindo/alterando o parceiro de origem do cliente durante a criação da OS.
+    // A função findOrCreateClientByName irá buscar o cliente ou criá-lo SEM um parceiro de origem se ele não existir
+    // ou manterá o parceiro de origem existente se o cliente já existir.
+    const client = await findOrCreateClientByName(data.cliente, null, connection);
     if (!client || !client.id) {
       console.error('[OSAction createOSInDB] Falha ao obter ID do cliente para:', data.cliente);
       await connection.rollback();
@@ -242,7 +246,7 @@ export async function updateOSInDB(osData: OS): Promise<OS | null> {
     }
     const currentOSFromDB = currentOSRows[0];
 
-    const client = await findOrCreateClientByName(osData.cliente, connection);
+    const client = await findOrCreateClientByName(osData.cliente, null, connection);
     if (!client || !client.id) {
       await connection.rollback();
       throw new Error('Falha ao obter ID do cliente para atualização.');
@@ -556,3 +560,4 @@ export async function toggleOSProductionTimerInDB(osId: string, action: 'play' |
     if (connection) connection.release();
   }
 }
+
