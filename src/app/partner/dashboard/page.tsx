@@ -1,7 +1,8 @@
-
+// src/app/partner/dashboard/page.tsx
 'use client';
 
 import React from 'react'; // Manter a importação do React
+import Link from 'next/link'; // Restaurar Link
 
 // Hooks e lógica de estado temporariamente comentados para depuração extrema
 // import { useSession } from '@/hooks/useSession';
@@ -39,18 +40,12 @@ export default function PartnerDashboardPage() {
       <h1>Partner Dashboard (Extremamente Simplificado)</h1>
       <p>Se você vê esta mensagem, o componente básico renderizou sem o erro React #130.</p>
       <p>A lógica de sessão e do store está temporariamente desabilitada nesta página.</p>
-      <a 
+      <Link 
         href="/partner/create-os" 
         className="btn btn-success" // Adicionando classes Bootstrap para que pareça um botão
-        onClick={(e) => { // Adicionando um onClick apenas para logar, já que Link está comentado
-            e.preventDefault(); 
-            console.log('[PartnerDashboardPage EXTREME SIMPLIFICATION DEBUG] Link "Criar Nova OS" clicado (tag "a").');
-            // Idealmente, aqui você usaria router.push ou <Link>, mas estão comentados para teste.
-            // window.location.href = '/partner/create-os'; // Para navegação básica se necessário no teste
-        }}
       >
-         Criar Nova OS (Link de Teste)
-      </a>
+         Criar Nova OS (Link de Teste Restaurado)
+      </Link>
     </div>
   );
 }
