@@ -1,11 +1,11 @@
 // src/app/partner/dashboard/page.tsx
 'use client';
 
-import React, { useEffect, useState, useContext } from 'react'; // Adicionado useContext
+import React, { useEffect, useState, useContext } from 'react';
 import Link from 'next/link';
 import { SessionContext } from '@/contexts/SessionContext'; // Importar contexto diretamente
 import type { SessionPayload } from '@/lib/types';
-import { ListChecks, PlusCircle } from 'lucide-react'; // Re-adicionando ícones
+import { ListChecks, PlusCircle } from 'lucide-react';
 
 export default function PartnerDashboardPage() {
   const [isClient, setIsClient] = useState(false);
