@@ -3,10 +3,9 @@
 
 import type { ReactNode } from 'react';
 import { useEffect, useState, createContext } from 'react';
-// Header e FooterContent estão comentados da alteração anterior, manteremos assim por enquanto
-// import Header from './Header'; 
+// import Header from './Header'; // Ainda comentado conforme depuração anterior
 import type { SessionPayload } from '@/lib/types';
-// import FooterContent from './FooterContent';
+// import FooterContent from './FooterContent'; // Ainda comentado
 import { useOSStore } from '@/store/os-store';
 import { useRouter, usePathname } from 'next/navigation';
 
@@ -18,22 +17,16 @@ interface AuthenticatedLayoutProps {
 
 export default function AuthenticatedLayout({ children }: AuthenticatedLayoutProps) {
   const [session, setSession] = useState<SessionPayload | null>(null);
-  const [isLoading, setIsLoading] = useState(true); // Começa true
-  const [authCheckCompleted, setAuthCheckCompleted] = useState(false); // Começa false
+  const [isLoading, setIsLoading] = useState(true);
+  const [authCheckCompleted, setAuthCheckCompleted] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
 
   const initializeStore = useOSStore((state) => state.initializeStore);
 
-  // Log para quando o estado da sessão interna do AuthenticatedLayout muda
   useEffect(() => {
     console.log('[AuthenticatedLayout] Internal session state CHANGED to:', session);
   }, [session]);
-
-  // Log para quando authCheckCompleted muda
-  useEffect(() => {
-    console.log('[AuthenticatedLayout] authCheckCompleted CHANGED to:', authCheckCompleted);
-  }, [authCheckCompleted]);
 
   useEffect(() => {
     let isMounted = true;
@@ -41,70 +34,43 @@ export default function AuthenticatedLayout({ children }: AuthenticatedLayoutPro
 
     async function checkSession() {
       console.log('[AuthenticatedLayout checkSession] Initiated.');
-      setIsLoading(true); // Garante que está carregando no início desta verificação
-      setAuthCheckCompleted(false); // Reseta se estiver refazendo a verificação
+      setIsLoading(true);
+      setAuthCheckCompleted(false);
 
-      try {
-        const res = await fetch('/api/session');
-        if (!isMounted) {
-            console.log('[AuthenticatedLayout checkSession] Component unmounted before fetch completed.');
-            return;
+      // TEMPORARY DEBUGGING: Force mock partner session
+      const mockPartnerSession: SessionPayload = {
+        sessionType: 'partner',
+        id: 'mock-partner-id-007',
+        username: 'mock_partner_user_debug',
+        partnerName: 'Mock Partner Debug Inc.',
+        email: 'mock.debug@partner.com',
+        isApproved: true,
+      };
+      console.log('[AuthenticatedLayout checkSession] USING MOCK PARTNER SESSION:', JSON.stringify(mockPartnerSession));
+      
+      // Simulate a small delay like an API call might have
+      await new Promise(resolve => setTimeout(resolve, 50)); 
+
+      if (isMounted) {
+        setSession(mockPartnerSession); // Set the mock session
+
+        // Simulate store initialization after setting mock session
+        const currentStoreInitialized = useOSStore.getState().isStoreInitialized;
+        console.log(`[AuthenticatedLayout checkSession MOCK] Current isStoreInitialized (via getState()): ${currentStoreInitialized}`);
+        if (!currentStoreInitialized) {
+          console.log(`[AuthenticatedLayout checkSession MOCK] Store not yet initialized. Calling initializeStore.`);
+          await initializeStore();
+          console.log(`[AuthenticatedLayout checkSession MOCK] initializeStore call completed. isStoreInitialized NOW (via getState()): ${useOSStore.getState().isStoreInitialized}`);
+        } else {
+          console.log(`[AuthenticatedLayout checkSession MOCK] Store already initialized.`);
         }
-
-        const responseText = await res.text(); 
-        console.log('[AuthenticatedLayout checkSession] API /api/session response status:', res.status, 'Response text:', responseText);
-
-        if (res.ok) {
-          const sessionData: SessionPayload | null = responseText ? JSON.parse(responseText) : null;
-          console.log('[AuthenticatedLayout checkSession] Parsed sessionData from API:', sessionData);
-          
-          if (isMounted) {
-            setSession(sessionData); // Atualiza o estado da sessão
-          }
-
-          if (!sessionData) {
-            const publicPaths = ['/login', '/register', '/partner-login', '/health'];
-            if (!publicPaths.includes(pathname)) {
-                console.log('[AuthenticatedLayout checkSession] No sessionData, redirecting to login page from protected path:', pathname);
-                router.push('/login');
-            }
-          } else { // sessionData EXISTE
-            if (!sessionData.isApproved) {
-                console.log(`[AuthenticatedLayout checkSession] Session for ${sessionData.username || (sessionData as any).partnerName} exists but is NOT approved. Redirecting.`);
-                const targetLogin = sessionData.sessionType === 'admin' ? '/login' : '/partner-login';
-                router.push(`${targetLogin}?status=not_approved`);
-            } else { // SESSÃO EXISTE E APROVADA
-                 const currentStoreInitialized = useOSStore.getState().isStoreInitialized;
-                 console.log(`[AuthenticatedLayout checkSession] Session type ${sessionData.sessionType}. Current isStoreInitialized (via getState()): ${currentStoreInitialized}`);
-                 if (!currentStoreInitialized) {
-                    console.log(`[AuthenticatedLayout checkSession] Store not yet initialized. Calling initializeStore.`);
-                    await initializeStore(); 
-                    console.log(`[AuthenticatedLayout checkSession] initializeStore call completed. isStoreInitialized NOW (via getState()): ${useOSStore.getState().isStoreInitialized}`);
-                 } else {
-                    console.log(`[AuthenticatedLayout checkSession] Store already initialized.`);
-                 }
-            }
-          }
-        } else { // res não ok
-          console.error('[AuthenticatedLayout checkSession] Failed to fetch session status. Status:', res.status);
-          if (isMounted) setSession(null); // Garante que a sessão é nula
-           if (!['/login', '/register', '/partner-login', '/health'].includes(pathname)) {
-             router.push('/login');
-           }
-        }
-      } catch (error) { // Erro no fetch ou JSON.parse
-        console.error('[AuthenticatedLayout checkSession] Error fetching session:', error);
-        if (isMounted) setSession(null); // Garante que a sessão é nula
-         if (!['/login', '/register', '/partner-login', '/health'].includes(pathname)) {
-           router.push('/login');
-         }
-      } finally {
-        if (isMounted) {
-          setIsLoading(false);
-          setAuthCheckCompleted(true);
-          console.log(`[AuthenticatedLayout checkSession] Finalized. isLoading: false, authCheckCompleted: true. Current session state:`, session); // Loga o estado 'session' no momento do finally
-        }
+        
+        setIsLoading(false);
+        setAuthCheckCompleted(true);
+        // Log the session state *after* all async operations related to it are done within this scope
+        console.log(`[AuthenticatedLayout checkSession MOCK] Finalized. isLoading: false, authCheckCompleted: true. Current internal session state:`, JSON.stringify(get().session)); // Use get().session for the most up-to-date value if setSession is batched
       }
+      return; // End checkSession early, skipping actual API call
     }
 
     checkSession();
@@ -113,52 +79,55 @@ export default function AuthenticatedLayout({ children }: AuthenticatedLayoutPro
       isMounted = false;
       console.log('[AuthenticatedLayout] Main useEffect cleanup. Pathname was:', pathname);
     };
-  // Apenas pathname e router como dependências para re-executar em mudança de rota.
-  // initializeStore é estável.
-  }, [pathname, router, initializeStore]);
+  }, [pathname, router, initializeStore]); // initializeStore is stable, pathname/router for route changes
+
+  // Helper function to access the current session state for logging,
+  // as direct access to `session` variable inside `checkSession` after `setSession` call
+  // might not reflect the updated value immediately due to batching.
+  const get = () => ({ session });
 
 
-  console.log('[AuthenticatedLayout RENDER] FINAL session value before providing to context:', session, `authCheckCompleted: ${authCheckCompleted}`, `isLoading: ${isLoading}`);
+  console.log(`[AuthenticatedLayout RENDER] isLoading: ${isLoading}, authCheckCompleted: ${authCheckCompleted}, Current session state (before context provider):`, JSON.stringify(session));
 
-
-  if (isLoading || !authCheckCompleted) { // Condição de spinner mais simples
+  if (isLoading || !authCheckCompleted) {
     console.log('[AuthenticatedLayout RENDER] Showing initial loading spinner (isLoading or !authCheckCompleted).');
     return (
       <div className="d-flex flex-column justify-content-center align-items-center text-center bg-light" style={{ minHeight: '100vh' }}>
         <div className="spinner-border text-primary mb-3" role="status" style={{ width: '3rem', height: '3rem' }}>
-          <span className="visually-hidden">Verificando sessão...</span>
+          <span className="visually-hidden">Verificando sessão (mock)...</span>
         </div>
-        <p className="text-muted">Verificando sessão...</p>
+        <p className="text-muted">Verificando sessão (mock)...</p>
       </div>
     );
   }
 
-  // Lógica de redirecionamento caso o auth check esteja completo mas não haja sessão em rota protegida
-  if (authCheckCompleted && !session && !['/login', '/register', '/partner-login', '/health'].includes(pathname)) {
-     console.log("[AuthenticatedLayout RENDER] Auth check complete, no session, on protected path. Showing redirect spinner.");
-     // Este return também é um spinner, mas indica um estado diferente da verificação inicial.
+  // With mock session, this redirect logic for !session on protected path shouldn't trigger
+  // if the mock session is correctly set and propagated.
+  const publicPaths = ['/login', '/register', '/partner-login', '/health'];
+  if (authCheckCompleted && !session && !publicPaths.includes(pathname)) {
+     console.log("[AuthenticatedLayout RENDER] Auth check complete, NO SESSION, on protected path. This should not happen with mock. Redirecting for safety.");
+     router.push('/login'); // Fallback redirect
      return (
         <div className="d-flex flex-column justify-content-center align-items-center text-center bg-light" style={{ minHeight: '100vh' }}>
-            <div className="spinner-border text-primary mb-3" role="status" style={{ width: '3rem', height: '3rem' }}>
-                <span className="visually-hidden">Redirecionando...</span>
+            <div className="spinner-border text-danger mb-3" role="status" style={{ width: '3rem', height: '3rem' }}>
+                <span className="visually-hidden">Erro de Sessão / Redirecionando...</span>
             </div>
-            <p className="text-muted">Redirecionando para login...</p>
+            <p className="text-danger">Erro de Sessão. Redirecionando...</p>
         </div>
      );
   }
 
   return (
-    <SessionContext.Provider value={session}> 
+    <SessionContext.Provider value={session}>
       <div className="d-flex flex-column min-vh-100">
-        {/* <Header session={session} />  // Header ainda comentado */}
+        {/* <Header session={session} /> */}
         <main className="container flex-grow-1 py-4 py-lg-5">
           {children}
         </main>
-        {/* <footer className="py-3 mt-auto text-center text-body-secondary border-top bg-light"> // Footer ainda comentado
+        {/* <footer className="py-3 mt-auto text-center text-body-secondary border-top bg-light">
           <FooterContent />
         </footer> */}
       </div>
     </SessionContext.Provider>
   );
 }
-    
