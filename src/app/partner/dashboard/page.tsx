@@ -3,10 +3,9 @@
 
 import React, { useEffect, useState, useContext } from 'react'; // Adicionado useContext
 import Link from 'next/link';
-// import { useSession } from '@/hooks/useSession'; // USANDO useContext DIRETAMENTE
 import { SessionContext } from '@/contexts/SessionContext'; // Importar contexto diretamente
-import { PlusCircle, ListChecks } from 'lucide-react';
 import type { SessionPayload } from '@/lib/types';
+import { ListChecks, PlusCircle } from 'lucide-react'; // Re-adicionando ícones
 
 export default function PartnerDashboardPage() {
   const [isClient, setIsClient] = useState(false);
@@ -17,7 +16,7 @@ export default function PartnerDashboardPage() {
     // Logar o objeto de contexto em si e a sessão dele
     console.log('[PartnerDashboardPage AGGRESSIVE] Context object from SessionContext:', SessionContext);
     console.log('[PartnerDashboardPage AGGRESSIVE] Render/Update. Session from useContext(SessionContext):', JSON.stringify(session));
-  }, [session]);
+  }, [session]); // Re-log when session from context changes
 
   if (!isClient) {
     console.log('[PartnerDashboardPage AGGRESSIVE] Loading state: Aguardando cliente (isClient false).');
@@ -31,7 +30,7 @@ export default function PartnerDashboardPage() {
     );
   }
   
-  if (!session) {
+  if (!session) { // This check now happens after isClient is true
     console.log('[PartnerDashboardPage AGGRESSIVE] Loading state: Verificando sessão (session is null/undefined from useContext).');
     return (
         <div className="d-flex flex-column align-items-center justify-content-center text-center p-4" style={{ minHeight: 'calc(100vh - 200px)' }}>
@@ -43,9 +42,10 @@ export default function PartnerDashboardPage() {
     );
   }
 
+  // Se chegamos aqui, a sessão DEVE ser o objeto mockado.
   console.log('[PartnerDashboardPage AGGRESSIVE] Session object received via useContext:', JSON.stringify(session));
 
-  if (session.sessionType !== 'partner') {
+  if (session.sessionType !== 'partner') { // Should not happen with the mock
     console.warn('[PartnerDashboardPage AGGRESSIVE] Session type is not partner. Session:', JSON.stringify(session));
     return (
         <div className="text-center py-5">
@@ -70,9 +70,7 @@ export default function PartnerDashboardPage() {
 
       <div className="alert alert-info">
         <h4 className="alert-heading">Página Simplificada (AGGRESSIVE TEST)!</h4>
-        <p>Se você está vendo esta mensagem, a `PartnerDashboardPage` carregou com uma sessão de parceiro válida (via useContext).</p>
-        <hr />
-        <p className="mb-0">Dados da Sessão Recebida (via useContext(SessionContext)):</p>
+        <p>Se você está vendo esta mensagem, a `PartnerDashboardPage` carregou e a sessão (via useContext) é:</p>
         <pre className="small bg-light p-2 rounded mt-2 text-break" style={{whiteSpace: "pre-wrap"}}><code>{JSON.stringify(session, null, 2)}</code></pre>
       </div>
        <p className="mt-3">A lógica de exibição da lista de OS foi removida temporariamente para este teste.</p>
