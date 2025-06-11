@@ -2,11 +2,11 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { useEffect, useState, createContext } // Removido useMemo temporariamente
-  from 'react';
-import Header from './Header';
+import { useEffect, useState, createContext } from 'react';
+// Header e FooterContent estão comentados da alteração anterior, manteremos assim por enquanto
+// import Header from './Header'; 
 import type { SessionPayload } from '@/lib/types';
-import FooterContent from './FooterContent';
+// import FooterContent from './FooterContent';
 import { useOSStore } from '@/store/os-store';
 import { useRouter, usePathname } from 'next/navigation';
 
@@ -18,13 +18,12 @@ interface AuthenticatedLayoutProps {
 
 export default function AuthenticatedLayout({ children }: AuthenticatedLayoutProps) {
   const [session, setSession] = useState<SessionPayload | null>(null);
-  const [isLoading, setIsLoading] = useState(true); 
-  const [authCheckCompleted, setAuthCheckCompleted] = useState(false);
+  const [isLoading, setIsLoading] = useState(true); // Começa true
+  const [authCheckCompleted, setAuthCheckCompleted] = useState(false); // Começa false
   const router = useRouter();
   const pathname = usePathname();
 
   const initializeStore = useOSStore((state) => state.initializeStore);
-  const isStoreInitializedHook = useOSStore((state) => state.isStoreInitialized); // Renomeado para evitar conflito de escopo
 
   // Log para quando o estado da sessão interna do AuthenticatedLayout muda
   useEffect(() => {
@@ -37,12 +36,13 @@ export default function AuthenticatedLayout({ children }: AuthenticatedLayoutPro
   }, [authCheckCompleted]);
 
   useEffect(() => {
-    console.log(`[AuthenticatedLayout] Main useEffect triggered. Pathname: ${pathname}, Current internal session:`, session, `isStoreInitialized (from store hook): ${isStoreInitializedHook}`);
     let isMounted = true;
+    console.log(`[AuthenticatedLayout] Main useEffect triggered. Pathname: ${pathname}. Initial isLoading: ${isLoading}, Initial authCheckCompleted: ${authCheckCompleted}`);
 
     async function checkSession() {
       console.log('[AuthenticatedLayout checkSession] Initiated.');
-      setIsLoading(true); 
+      setIsLoading(true); // Garante que está carregando no início desta verificação
+      setAuthCheckCompleted(false); // Reseta se estiver refazendo a verificação
 
       try {
         const res = await fetch('/api/session');
@@ -60,9 +60,7 @@ export default function AuthenticatedLayout({ children }: AuthenticatedLayoutPro
           
           if (isMounted) {
             setSession(sessionData); // Atualiza o estado da sessão
-            console.log('[AuthenticatedLayout checkSession] setSession called with:', sessionData);
           }
-
 
           if (!sessionData) {
             const publicPaths = ['/login', '/register', '/partner-login', '/health'];
@@ -70,34 +68,33 @@ export default function AuthenticatedLayout({ children }: AuthenticatedLayoutPro
                 console.log('[AuthenticatedLayout checkSession] No sessionData, redirecting to login page from protected path:', pathname);
                 router.push('/login');
             }
-          } else {
+          } else { // sessionData EXISTE
             if (!sessionData.isApproved) {
                 console.log(`[AuthenticatedLayout checkSession] Session for ${sessionData.username || (sessionData as any).partnerName} exists but is NOT approved. Redirecting.`);
                 const targetLogin = sessionData.sessionType === 'admin' ? '/login' : '/partner-login';
                 router.push(`${targetLogin}?status=not_approved`);
-            } else {
-                 // Usar getState() para obter o valor mais recente do store aqui é crucial
+            } else { // SESSÃO EXISTE E APROVADA
                  const currentStoreInitialized = useOSStore.getState().isStoreInitialized;
                  console.log(`[AuthenticatedLayout checkSession] Session type ${sessionData.sessionType}. Current isStoreInitialized (via getState()): ${currentStoreInitialized}`);
                  if (!currentStoreInitialized) {
                     console.log(`[AuthenticatedLayout checkSession] Store not yet initialized. Calling initializeStore.`);
-                    await initializeStore(); // initializeStore deve ter sua própria guarda interna
+                    await initializeStore(); 
                     console.log(`[AuthenticatedLayout checkSession] initializeStore call completed. isStoreInitialized NOW (via getState()): ${useOSStore.getState().isStoreInitialized}`);
                  } else {
                     console.log(`[AuthenticatedLayout checkSession] Store already initialized.`);
                  }
             }
           }
-        } else {
+        } else { // res não ok
           console.error('[AuthenticatedLayout checkSession] Failed to fetch session status. Status:', res.status);
-          if (isMounted) setSession(null);
+          if (isMounted) setSession(null); // Garante que a sessão é nula
            if (!['/login', '/register', '/partner-login', '/health'].includes(pathname)) {
              router.push('/login');
            }
         }
-      } catch (error) {
+      } catch (error) { // Erro no fetch ou JSON.parse
         console.error('[AuthenticatedLayout checkSession] Error fetching session:', error);
-        if (isMounted) setSession(null);
+        if (isMounted) setSession(null); // Garante que a sessão é nula
          if (!['/login', '/register', '/partner-login', '/health'].includes(pathname)) {
            router.push('/login');
          }
@@ -105,7 +102,7 @@ export default function AuthenticatedLayout({ children }: AuthenticatedLayoutPro
         if (isMounted) {
           setIsLoading(false);
           setAuthCheckCompleted(true);
-          console.log(`[AuthenticatedLayout checkSession] Finalized. isLoading: false, authCheckCompleted: true.`);
+          console.log(`[AuthenticatedLayout checkSession] Finalized. isLoading: false, authCheckCompleted: true. Current session state:`, session); // Loga o estado 'session' no momento do finally
         }
       }
     }
@@ -116,17 +113,16 @@ export default function AuthenticatedLayout({ children }: AuthenticatedLayoutPro
       isMounted = false;
       console.log('[AuthenticatedLayout] Main useEffect cleanup. Pathname was:', pathname);
     };
-  // A dependência initializeStore é uma função do Zustand, geralmente estável.
-  // A remoção de isStoreInitializedHook da lista de dependências é intencional
-  // para evitar loops, pois a verificação é feita com getState() dentro do checkSession.
+  // Apenas pathname e router como dependências para re-executar em mudança de rota.
+  // initializeStore é estável.
   }, [pathname, router, initializeStore]);
 
 
-  console.log('[AuthenticatedLayout RENDER] Current internal session (before context provider):', session, `authCheckCompleted: ${authCheckCompleted}`, `isLoading: ${isLoading}`);
+  console.log('[AuthenticatedLayout RENDER] FINAL session value before providing to context:', session, `authCheckCompleted: ${authCheckCompleted}`, `isLoading: ${isLoading}`);
 
 
-  if (!authCheckCompleted) {
-    console.log('[AuthenticatedLayout RENDER] Showing initial loading spinner (authCheckCompleted is false).');
+  if (isLoading || !authCheckCompleted) { // Condição de spinner mais simples
+    console.log('[AuthenticatedLayout RENDER] Showing initial loading spinner (isLoading or !authCheckCompleted).');
     return (
       <div className="d-flex flex-column justify-content-center align-items-center text-center bg-light" style={{ minHeight: '100vh' }}>
         <div className="spinner-border text-primary mb-3" role="status" style={{ width: '3rem', height: '3rem' }}>
@@ -137,8 +133,10 @@ export default function AuthenticatedLayout({ children }: AuthenticatedLayoutPro
     );
   }
 
+  // Lógica de redirecionamento caso o auth check esteja completo mas não haja sessão em rota protegida
   if (authCheckCompleted && !session && !['/login', '/register', '/partner-login', '/health'].includes(pathname)) {
      console.log("[AuthenticatedLayout RENDER] Auth check complete, no session, on protected path. Showing redirect spinner.");
+     // Este return também é um spinner, mas indica um estado diferente da verificação inicial.
      return (
         <div className="d-flex flex-column justify-content-center align-items-center text-center bg-light" style={{ minHeight: '100vh' }}>
             <div className="spinner-border text-primary mb-3" role="status" style={{ width: '3rem', height: '3rem' }}>
@@ -149,17 +147,16 @@ export default function AuthenticatedLayout({ children }: AuthenticatedLayoutPro
      );
   }
 
-  console.log('[AuthenticatedLayout RENDER] Passing to SessionContext.Provider, value:', session);
   return (
     <SessionContext.Provider value={session}> 
       <div className="d-flex flex-column min-vh-100">
-        <Header session={session} />
+        {/* <Header session={session} />  // Header ainda comentado */}
         <main className="container flex-grow-1 py-4 py-lg-5">
           {children}
         </main>
-        <footer className="py-3 mt-auto text-center text-body-secondary border-top bg-light">
+        {/* <footer className="py-3 mt-auto text-center text-body-secondary border-top bg-light"> // Footer ainda comentado
           <FooterContent />
-        </footer>
+        </footer> */}
       </div>
     </SessionContext.Provider>
   );
