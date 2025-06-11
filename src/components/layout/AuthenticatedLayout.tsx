@@ -1,14 +1,10 @@
-
+// src/components/layout/AuthenticatedLayout.tsx
 'use client';
 
 import type { ReactNode } from 'react';
-import { useEffect, useState } from 'react';
+import { useLayoutEffect, useState } from 'react'; // Mudado para useLayoutEffect
 import type { SessionPayload } from '@/lib/types';
-import { SessionContext } from '@/contexts/SessionContext'; // Importar contexto diretamente
-
-interface AuthenticatedLayoutProps {
-  children: ReactNode;
-}
+import { SessionContext } from '@/contexts/SessionContext';
 
 // MOCK SESSION - Versão AGGRESSIVE V4
 const mockPartnerSession: SessionPayload = {
@@ -21,25 +17,23 @@ const mockPartnerSession: SessionPayload = {
 };
 
 export default function AuthenticatedLayout({ children }: AuthenticatedLayoutProps) {
-  // Estado interno para a sessão
   const [session, setSession] = useState<SessionPayload | null>(null);
 
-  console.log(`[AuthenticatedLayout RENDER ENTRY] Current internal session state (before useEffect):`, JSON.stringify(session));
+  console.log(`[AuthenticatedLayout RENDER ENTRY] Current internal session state (before useLayoutEffect):`, JSON.stringify(session));
   console.log('[AuthenticatedLayout RENDER ENTRY] SessionContext object instance:', SessionContext);
 
-  useEffect(() => {
-    // Este useEffect agora tem um array de dependências vazio [],
-    // então ele executa apenas uma vez após a montagem inicial.
-    console.log(`[AuthenticatedLayout] Main useEffect (ONE-TIME MOCK) triggered.`);
+  // Alterado para useLayoutEffect
+  useLayoutEffect(() => {
+    console.log(`[AuthenticatedLayout] Main useLayoutEffect (ONE-TIME MOCK) triggered.`);
     console.log('[AuthenticatedLayout MOCK] About to call setSession with MOCK data:', JSON.stringify(mockPartnerSession));
-    setSession(mockPartnerSession); // Define a sessão mockada
+    setSession(mockPartnerSession);
     console.log('[AuthenticatedLayout MOCK] setSession called.');
   }, []); // Array de dependências VAZIO
 
-  // useEffect para observar mudanças no estado 'session'
-  useEffect(() => {
-    console.log(`[AuthenticatedLayout] Internal 'session' state CHANGED to:`, JSON.stringify(session));
-  }, [session]);
+  // Este useEffect continua como useEffect normal para observar mudanças
+  useState(() => {
+    console.log(`[AuthenticatedLayout] Internal 'session' state CHANGED to (via state observer):`, JSON.stringify(session));
+  });
 
 
   if (!session) {
@@ -47,14 +41,13 @@ export default function AuthenticatedLayout({ children }: AuthenticatedLayoutPro
     return (
       <div className="d-flex flex-column align-items-center justify-content-center text-center p-4" style={{ minHeight: '100vh' }}>
         <div className="spinner-border text-primary mb-3" role="status" style={{ width: '3rem', height: '3rem' }}>
-          <span className="visually-hidden">Carregando Layout Autenticado...</span>
+          <span className="visually-hidden">Carregando Layout Autenticado (Sessão Interna)...</span>
         </div>
-        <p className="text-muted fs-5">Carregando Layout Autenticado...</p>
+        <p className="text-muted fs-5">Carregando Layout Autenticado (Sessão Interna)...</p>
       </div>
     );
   }
 
-  // Se a sessão (mockada) estiver definida, renderiza o provedor e os filhos
   console.log('[AuthenticatedLayout RENDER] Internal session state IS POPULATED. PROVIDING SESSION TO CONTEXT:', JSON.stringify(session));
   return (
     <SessionContext.Provider value={session}>
