@@ -1,3 +1,4 @@
+
 'use client';
 
 import type { ReactNode } from 'react';
@@ -46,6 +47,7 @@ export default function AuthenticatedLayout({ children }: AuthenticatedLayoutPro
     );
   }
   
+  // Se chegamos aqui, 'session' não é mais null e deve ser o objeto mockado.
   console.log('[AuthenticatedLayout RENDER] PROVIDING SESSION TO CONTEXT (value should be non-null here):', JSON.stringify(session));
   return (
     <SessionContext.Provider value={session}>
