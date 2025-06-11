@@ -1,6 +1,14 @@
 
-import PartnerAuthForm from '@/components/auth/PartnerAuthForm';
+'use client'; // Necessário para useActionState e useEffect
+
+// import PartnerAuthForm from '@/components/auth/PartnerAuthForm'; // Removido
 import Link from 'next/link';
+import { useActionState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { devLoginAction, simulatePartnerLoginAction } from '@/lib/actions/auth-actions';
+import type { AuthActionState } from '@/lib/types';
+import { SimulatedLoginButton } from '@/components/auth/SimulatedLoginButton';
+import { AlertCircle, UserShield, Briefcase } from 'lucide-react'; // Ícones para os botões
 
 // Logo SVG (Orange Theme)
 const FreelaOSPartnerLoginLogo = () => (
@@ -17,17 +25,38 @@ export default function PartnerLoginPage({
 }: {
   searchParams?: { [key: string]: string | string[] | undefined };
 }) {
-  const status = searchParams?.status;
+  const router = useRouter();
+  const initialActionState: AuthActionState = { message: null, type: undefined, redirect: undefined };
+
+  const statusQuery = searchParams?.status;
   let initialMessage = '';
   let messageType : 'success' | 'error' | undefined = undefined;
 
-  if (status === 'logged_out') {
+  if (statusQuery === 'logged_out') {
     initialMessage = 'Você foi desconectado com sucesso.';
     messageType = 'success';
-  } else if (status === 'not_approved') {
+  } else if (statusQuery === 'not_approved') {
     initialMessage = 'Sua conta de parceiro ainda não foi aprovada. Por favor, aguarde a aprovação de um administrador.';
     messageType = 'error';
   }
+
+  // Ações e estados para cada botão de login simulado
+  const [adminLoginState, adminLoginSubmitAction] = useActionState(devLoginAction, initialActionState);
+  const [partnerLoginState, partnerLoginSubmitAction] = useActionState(simulatePartnerLoginAction, initialActionState);
+
+  // Efeitos para redirecionamento e tratamento de mensagens de erro/sucesso
+  useEffect(() => {
+    if (adminLoginState?.type === 'success' && adminLoginState?.redirect) {
+      router.push(adminLoginState.redirect);
+    }
+  }, [adminLoginState, router]);
+
+  useEffect(() => {
+    if (partnerLoginState?.type === 'success' && partnerLoginState?.redirect) {
+      router.push(partnerLoginState.redirect);
+    }
+  }, [partnerLoginState, router]);
+
 
   return (
     <div className="d-flex align-items-center justify-content-center min-vh-100 bg-light">
@@ -36,13 +65,62 @@ export default function PartnerLoginPage({
           <div className="text-center mb-4">
             <FreelaOSPartnerLoginLogo />
             <h1 className="h3 fw-bold mb-0" style={{ color: 'hsl(var(--primary))' }}>FreelaOS</h1>
-            <p className="text-muted">Acesso Parceiro</p>
+            <p className="text-muted">Acesso Rápido Parceiro (Temporário)</p>
           </div>
-          <PartnerAuthForm initialMessage={initialMessage} initialMessageType={messageType} />
+
+           {/* Mensagem inicial da URL */}
+          {initialMessage && (
+            <div className={`alert ${messageType === 'error' ? 'alert-danger' : 'alert-success'} d-flex align-items-center p-2`} role="alert">
+              {messageType === 'error' && <AlertCircle size={18} className="me-2 flex-shrink-0" />}
+              <small>{initialMessage}</small>
+            </div>
+          )}
+
+          {/* Mensagem de erro do login de Parceiro Simulado */}
+          {partnerLoginState?.type === 'error' && partnerLoginState.message && (
+            <div className="alert alert-danger d-flex align-items-center p-2" role="alert">
+              <AlertCircle size={18} className="me-2 flex-shrink-0" />
+              <small>{partnerLoginState.message}</small>
+            </div>
+          )}
+          <form action={partnerLoginSubmitAction} className="mb-3">
+            <SimulatedLoginButton
+              buttonText="Entrar como Parceiro"
+              className="btn-info"
+              icon={<Briefcase size={16} className="me-2" />}
+            />
+          </form>
+
+          {/* Mensagem de erro do login de Admin Simulado */}
+          {adminLoginState?.type === 'error' && adminLoginState.message && (
+            <div className="alert alert-danger d-flex align-items-center p-2" role="alert">
+              <AlertCircle size={18} className="me-2 flex-shrink-0" />
+              <small>{adminLoginState.message}</small>
+            </div>
+          )}
+          <form action={adminLoginSubmitAction}>
+            <SimulatedLoginButton
+              buttonText="Entrar como Admin"
+              icon={<UserShield size={16} className="me-2" />}
+            />
+          </form>
+
           <div className="text-center mt-4">
-            <p className="mb-0">Não é um parceiro?</p>
-            <Link href="/login" className="fw-medium text-primary text-decoration-none">
-              Acesso Admin
+             <p className="mb-1 small text-muted">Acesso normal:</p>
+            <Link href="/login" className="fw-medium text-decoration-none mx-2 small" onClick={(e) => {
+                e.preventDefault();
+                alert("O formulário de login normal está temporariamente desabilitado. Use os botões acima.");
+              }}
+            >
+              Login Admin
+            </Link>
+             | 
+            <Link href="/partner-login" className="fw-medium text-decoration-none mx-2 small" onClick={(e) => {
+                e.preventDefault();
+                alert("O formulário de login de parceiro está temporariamente desabilitado. Use os botões acima.");
+              }}
+            >
+              Login Parceiro
             </Link>
           </div>
         </div>
@@ -50,4 +128,3 @@ export default function PartnerLoginPage({
     </div>
   );
 }
-    

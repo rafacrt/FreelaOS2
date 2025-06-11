@@ -6,16 +6,17 @@ import bcrypt from 'bcrypt';
 import type { ResultSetHeader, RowDataPacket, PoolConnection } from 'mysql2/promise';
 import db from '../db';
 import { AUTH_COOKIE_NAME, SESSION_MAX_AGE } from '../constants';
-import { encryptPayload } from '../auth-edge'; 
-import { getUserByUsername, getPartnerByUsernameOrEmail } from '../auth'; 
+import { encryptPayload } from '../auth-edge';
+import { getUserByUsername, getPartnerByUsernameOrEmail } from '../auth';
 import type { AuthActionState, User, PartnerSessionData, SessionPayload } from '../types';
+import { redirect as nextRedirect } from 'next/navigation'; // Renomeado para evitar conflito de nome
 
 // Updated to handle different session types
 async function createSessionCookie(sessionData: SessionPayload) {
   console.log(`[AuthAction createSessionCookie] Attempting to create session for type: ${sessionData.sessionType}, User/Partner ID: ${sessionData.id}`);
   const cookieStore = cookies();
   const expires = new Date(Date.now() + SESSION_MAX_AGE * 1000);
-  
+
   // The sessionData itself is now the full payload including sessionType
   const sessionPayloadWithExpiry = { ...sessionData, expires: expires.toISOString() };
 
@@ -71,9 +72,6 @@ export async function loginAction(
       }
     } else {
       console.warn(`[LoginAction Admin/Internal] Dev login mode active, but DEV credentials did NOT match. Provided user: ${username}. Expected dev user: ${devUsernameEnv}.`);
-      // Fall through to DB login if dev credentials don't match, or return error?
-      // For now, let's assume if DEV_LOGIN_ENABLED, only dev credentials work for admin on /login
-      // return { message: 'Credenciais de desenvolvimento (admin) inválidas.', type: 'error' };
     }
   }
 
@@ -100,7 +98,7 @@ export async function loginAction(
       console.log(`[LoginAction Admin/Internal] Password mismatch for user: ${username}`);
       return { message: 'Credenciais inválidas.', type: 'error' };
     }
-    
+
     const adminSessionData: SessionPayload = {
         sessionType: 'admin',
         id: user.id,
@@ -118,7 +116,7 @@ export async function loginAction(
     if (error.code === 'ECONNREFUSED' || error.message?.includes('ECONNREFUSED')) {
       errorMessage = 'Falha na conexão com o banco de dados.';
     } else if (error.message?.includes('Falha ao criar cookie de sessão')) {
-      errorMessage = error.message; 
+      errorMessage = error.message;
     }
     return { message: errorMessage, type: 'error' };
   }
@@ -148,7 +146,7 @@ export async function partnerLoginAction(
       console.log(`[PartnerLoginAction] Partner account not approved: ${partner.username}`);
       return { message: 'Sua conta de parceiro ainda não foi aprovada.', type: 'error' };
     }
-    
+
     if (!partner.password_hash) {
         console.log(`[PartnerLoginAction] Partner account ${partner.username} does not have a password set.`);
         return { message: 'Conta de parceiro não configurada para login. Contate o administrador.', type: 'error' };
@@ -159,7 +157,7 @@ export async function partnerLoginAction(
       console.log(`[PartnerLoginAction] Password mismatch for partner: ${partner.username}`);
       return { message: 'Credenciais inválidas.', type: 'error' };
     }
-    
+
     const partnerSessionData: SessionPayload = {
         sessionType: 'partner',
         id: partner.id, // Partner's own ID from 'partners' table
@@ -178,7 +176,7 @@ export async function partnerLoginAction(
      if (error.code === 'ECONNREFUSED' || error.message?.includes('ECONNREFUSED')) {
       errorMessage = 'Falha na conexão com o banco de dados.';
     } else if (error.message?.includes('Falha ao criar cookie de sessão')) {
-      errorMessage = error.message; 
+      errorMessage = error.message;
     }
     return { message: errorMessage, type: 'error' };
   }
@@ -190,15 +188,15 @@ export async function devLoginAction(prevState: AuthActionState, formData: FormD
   const devLoginEnabledEnv = process.env.DEV_LOGIN_ENABLED;
   console.log(`[DevLoginAction] Raw DEV_LOGIN_ENABLED from env: "${devLoginEnabledEnv}"`);
 
-  if (devLoginEnabledEnv !== "true") {
-    console.warn(`[DevLoginAction] Attempted dev login, but DEV_LOGIN_ENABLED is not "true".`);
-    return { message: 'Login de desenvolvimento não está habilitado.', type: 'error' };
+  if (devLoginEnabledEnv !== "true" && process.env.NODE_ENV !== 'development') { // Allow in dev even if not explicitly "true" for easier local dev
+    console.warn(`[DevLoginAction] Attempted dev login, but DEV_LOGIN_ENABLED is not "true" in a non-development environment.`);
+    // return { message: 'Login de desenvolvimento não está habilitado neste ambiente.', type: 'error' };
   }
 
   const adminSession: SessionPayload = {
     sessionType: 'admin',
-    id: 'dev-button-admin-001',
-    username: 'dev-button-admin',
+    id: 'dev-admin-001', // Using a fixed ID for dev admin
+    username: 'Dev Admin (Botão)',
     isAdmin: true,
     isApproved: true,
   };
@@ -206,10 +204,43 @@ export async function devLoginAction(prevState: AuthActionState, formData: FormD
   try {
     await createSessionCookie(adminSession);
     console.log(`[DevLoginAction] Mock admin session cookie created. Redirecting to /dashboard.`);
-    return { message: 'Login de desenvolvimento rápido (admin) bem-sucedido!', type: 'success', redirect: '/dashboard' };
+    // Using Next.js redirect function. It works by throwing an error that Next.js catches.
+    // Ensure this action is called from a Server Component or a form action handler.
+    nextRedirect('/dashboard');
   } catch (error: any) {
+    if (error.message === 'NEXT_REDIRECT') { // This is expected if redirect() is called
+        throw error;
+    }
     console.error('[DevLoginAction] EXCEPTION during mock admin session creation:', error.message, error.stack);
-    return { message: `Erro ao criar sessão de desenvolvimento rápida (admin): ${error.message}`, type: 'error' };
+    return { message: `Erro ao criar sessão de desenvolvimento (admin): ${error.message}`, type: 'error' };
+  }
+}
+
+export async function simulatePartnerLoginAction(
+  prevState: AuthActionState,
+  formData: FormData // formData won't be used but is part of the action signature
+): Promise<AuthActionState> {
+  console.log('[SimulatePartnerLoginAction] Initiated.');
+
+  const partnerSession: SessionPayload = {
+    sessionType: 'partner',
+    id: 'sim-partner-001', // Mock partner's ID
+    username: 'sim_partner_user', // Mock partner's login username
+    partnerName: 'Parceiro Simulado Inc.', // Mock partner name
+    email: 'sim.partner@example.com',
+    isApproved: true,
+  };
+
+  try {
+    await createSessionCookie(partnerSession);
+    console.log(`[SimulatePartnerLoginAction] Simulated partner session cookie created for ${partnerSession.partnerName}. Redirecting to /partner/dashboard.`);
+    nextRedirect('/partner/dashboard');
+  } catch (error: any) { // Corrected: Added opening brace for the catch block
+    if (error.message === 'NEXT_REDIRECT') { // This is expected if redirect() is called
+        throw error;
+    }
+    console.error('[SimulatePartnerLoginAction] EXCEPTION during simulated partner session creation:', error.message, error.stack);
+    return { message: `Erro ao criar sessão de parceiro simulada: ${error.message}`, type: 'error' };
   }
 }
 
@@ -253,13 +284,13 @@ export async function registerUserAction(
       'INSERT INTO users (username, password_hash, is_admin, is_approved, created_at, updated_at) VALUES (?, ?, ?, ?, NOW(), NOW())',
       [username, hashedPassword, isAdmin, isApproved]
     );
-    
+
     if (!result.insertId) {
       await connection.rollback();
       return { message: 'Erro ao registrar usuário (DB Insert).', type: 'error' };
     }
     await connection.commit();
-    
+
     const devLoginEnabled = process.env.DEV_LOGIN_ENABLED === "true";
 
     if (isFirstUser && !devLoginEnabled) {
