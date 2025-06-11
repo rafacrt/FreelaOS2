@@ -3,9 +3,11 @@
 
 import type { ReactNode } from 'react';
 import { useEffect, useState, createContext } from 'react';
-// import Header from './Header'; // Ainda comentado conforme depuração anterior
+// Header e Footer ainda comentados para simplificar
+// import Header from './Header';
+// import type { SessionPayload } from '@/lib/types'; // SessionPayload já importado em types
 import type { SessionPayload } from '@/lib/types';
-// import FooterContent from './FooterContent'; // Ainda comentado
+// import FooterContent from './FooterContent';
 import { useOSStore } from '@/store/os-store';
 import { useRouter, usePathname } from 'next/navigation';
 
@@ -17,16 +19,24 @@ interface AuthenticatedLayoutProps {
 
 export default function AuthenticatedLayout({ children }: AuthenticatedLayoutProps) {
   const [session, setSession] = useState<SessionPayload | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(true); // Começa true
   const [authCheckCompleted, setAuthCheckCompleted] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
 
   const initializeStore = useOSStore((state) => state.initializeStore);
+  const isStoreInitializedState = useOSStore((state) => state.isStoreInitialized); // Para logging
 
+  // useEffect para logar mudanças no estado 'session' interno do AuthenticatedLayout
   useEffect(() => {
-    console.log('[AuthenticatedLayout] Internal session state CHANGED to:', session);
+    console.log('[AuthenticatedLayout] Internal session state CHANGED to:', JSON.stringify(session));
   }, [session]);
+
+  // useEffect para logar mudanças no estado isStoreInitializedState do useOSStore
+  useEffect(() => {
+    console.log('[AuthenticatedLayout] isStoreInitializedState (from useOSStore) CHANGED to:', isStoreInitializedState);
+  }, [isStoreInitializedState]);
+
 
   useEffect(() => {
     let isMounted = true;
@@ -34,7 +44,7 @@ export default function AuthenticatedLayout({ children }: AuthenticatedLayoutPro
 
     async function checkSession() {
       console.log('[AuthenticatedLayout checkSession] Initiated.');
-      setIsLoading(true);
+      setIsLoading(true); // Sempre começa o processo de carregamento
       setAuthCheckCompleted(false);
 
       // TEMPORARY DEBUGGING: Force mock partner session
@@ -47,45 +57,50 @@ export default function AuthenticatedLayout({ children }: AuthenticatedLayoutPro
         isApproved: true,
       };
       console.log('[AuthenticatedLayout checkSession] USING MOCK PARTNER SESSION:', JSON.stringify(mockPartnerSession));
-      
-      // Simulate a small delay like an API call might have
-      await new Promise(resolve => setTimeout(resolve, 50)); 
+
+      // Simula um pequeno atraso, como uma chamada de API
+      await new Promise(resolve => setTimeout(resolve, 100)); // Pequeno delay
 
       if (isMounted) {
-        setSession(mockPartnerSession); // Set the mock session
+        console.log('[AuthenticatedLayout checkSession MOCK] About to call setSession with MOCK data.');
+        setSession(mockPartnerSession); // Define a sessão mockada
 
-        // Simulate store initialization after setting mock session
+        // A inicialização do store deve ocorrer APÓS a sessão ser definida (ou pelo menos agendada para definição)
+        // e se o store ainda não estiver inicializado.
+        // Usar getState() aqui para obter o valor mais recente de isStoreInitialized ANTES de decidir chamar initializeStore.
         const currentStoreInitialized = useOSStore.getState().isStoreInitialized;
         console.log(`[AuthenticatedLayout checkSession MOCK] Current isStoreInitialized (via getState()): ${currentStoreInitialized}`);
-        if (!currentStoreInitialized) {
-          console.log(`[AuthenticatedLayout checkSession MOCK] Store not yet initialized. Calling initializeStore.`);
-          await initializeStore();
-          console.log(`[AuthenticatedLayout checkSession MOCK] initializeStore call completed. isStoreInitialized NOW (via getState()): ${useOSStore.getState().isStoreInitialized}`);
-        } else {
+
+        if (mockPartnerSession.sessionType === 'partner' && !currentStoreInitialized) {
+          console.log(`[AuthenticatedLayout checkSession MOCK] Session is partner, store not initialized. Calling initializeStore.`);
+          try {
+            await initializeStore(); // Espera a inicialização do store
+            console.log(`[AuthenticatedLayout checkSession MOCK] initializeStore call completed. isStoreInitialized NOW (via getState()): ${useOSStore.getState().isStoreInitialized}`);
+          } catch (error) {
+            console.error('[AuthenticatedLayout checkSession MOCK] Error during initializeStore:', error);
+          }
+        } else if (currentStoreInitialized) {
           console.log(`[AuthenticatedLayout checkSession MOCK] Store already initialized.`);
+        } else {
+          console.log(`[AuthenticatedLayout checkSession MOCK] Session is not partner OR store already initialized. Skipping initializeStore for partner logic.`);
         }
-        
-        setIsLoading(false);
-        setAuthCheckCompleted(true);
-        // Log the session state *after* all async operations related to it are done within this scope
-        console.log(`[AuthenticatedLayout checkSession MOCK] Finalized. isLoading: false, authCheckCompleted: true. Current internal session state:`, JSON.stringify(get().session)); // Use get().session for the most up-to-date value if setSession is batched
       }
-      return; // End checkSession early, skipping actual API call
     }
 
-    checkSession();
+    checkSession().finally(() => {
+      if (isMounted) {
+        console.log('[AuthenticatedLayout checkSession finally] Setting isLoading: false, authCheckCompleted: true.');
+        setIsLoading(false);
+        setAuthCheckCompleted(true);
+      }
+    });
 
     return () => {
       isMounted = false;
       console.log('[AuthenticatedLayout] Main useEffect cleanup. Pathname was:', pathname);
     };
-  }, [pathname, router, initializeStore]); // initializeStore is stable, pathname/router for route changes
-
-  // Helper function to access the current session state for logging,
-  // as direct access to `session` variable inside `checkSession` after `setSession` call
-  // might not reflect the updated value immediately due to batching.
-  const get = () => ({ session });
-
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname]); // Depender apenas de pathname para re-executar em mudança de rota. initializeStore é estável.
 
   console.log(`[AuthenticatedLayout RENDER] isLoading: ${isLoading}, authCheckCompleted: ${authCheckCompleted}, Current session state (before context provider):`, JSON.stringify(session));
 
@@ -101,22 +116,29 @@ export default function AuthenticatedLayout({ children }: AuthenticatedLayoutPro
     );
   }
 
-  // With mock session, this redirect logic for !session on protected path shouldn't trigger
-  // if the mock session is correctly set and propagated.
+  // Fallback de segurança (não deve ser atingido com mock)
   const publicPaths = ['/login', '/register', '/partner-login', '/health'];
   if (authCheckCompleted && !session && !publicPaths.includes(pathname)) {
-     console.log("[AuthenticatedLayout RENDER] Auth check complete, NO SESSION, on protected path. This should not happen with mock. Redirecting for safety.");
-     router.push('/login'); // Fallback redirect
+     console.warn("[AuthenticatedLayout RENDER] Auth check complete, NO SESSION, on protected path. This should not happen with mock. Redirecting for safety.");
+     // Não podemos chamar router.push diretamente na renderização.
+     // Se isso acontecer, o middleware deve ter falhado em redirecionar.
+     // A melhor maneira de lidar com isso aqui é talvez renderizar uma mensagem de erro ou um redirecionamento do lado do cliente via useEffect.
+     // Por agora, com o mock, isso não deveria ser alcançado. Se for, é um problema.
+     if (typeof window !== 'undefined') { // Garante que só executa no cliente
+        // router.push('/login'); // Causa "Error: Rerendered too many times" se chamado diretamente.
+        // A melhor abordagem seria um redirecionamento via useEffect ou, idealmente, confiar no middleware.
+     }
      return (
         <div className="d-flex flex-column justify-content-center align-items-center text-center bg-light" style={{ minHeight: '100vh' }}>
             <div className="spinner-border text-danger mb-3" role="status" style={{ width: '3rem', height: '3rem' }}>
                 <span className="visually-hidden">Erro de Sessão / Redirecionando...</span>
             </div>
-            <p className="text-danger">Erro de Sessão. Redirecionando...</p>
+            <p className="text-danger">Erro de Sessão. Necessário redirecionamento.</p>
         </div>
      );
   }
-
+  
+  console.log('[AuthenticatedLayout RENDER] PROVIDING SESSION TO CONTEXT:', JSON.stringify(session));
   return (
     <SessionContext.Provider value={session}>
       <div className="d-flex flex-column min-vh-100">
@@ -131,3 +153,4 @@ export default function AuthenticatedLayout({ children }: AuthenticatedLayoutPro
     </SessionContext.Provider>
   );
 }
+    
