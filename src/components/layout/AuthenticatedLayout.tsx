@@ -3,9 +3,9 @@
 
 import type { ReactNode } from 'react';
 import { useEffect, useState, createContext, useMemo } from 'react';
-import Header from './Header'; // Restaurado
+import Header from './Header';
 import type { SessionPayload } from '@/lib/types';
-import FooterContent from './FooterContent'; // Restaurado
+import FooterContent from './FooterContent';
 import { useOSStore } from '@/store/os-store';
 import { useRouter, usePathname } from 'next/navigation';
 
@@ -23,10 +23,11 @@ export default function AuthenticatedLayout({ children }: AuthenticatedLayoutPro
   const pathname = usePathname();
 
   const initializeStore = useOSStore((state) => state.initializeStore);
-  const isStoreInitialized = useOSStore((state) => state.isStoreInitialized);
+  // Não precisamos mais de isStoreInitialized como um estado local ou prop aqui,
+  // vamos verificar diretamente o estado do store.
 
   useEffect(() => {
-    console.log('[AuthenticatedLayout] useEffect for session check triggered.');
+    console.log('[AuthenticatedLayout] useEffect for session check triggered. Pathname:', pathname);
     let isMounted = true;
 
     async function checkSession() {
@@ -37,7 +38,7 @@ export default function AuthenticatedLayout({ children }: AuthenticatedLayoutPro
         if (res.ok) {
           const sessionData: SessionPayload | null = await res.json();
           console.log('[AuthenticatedLayout] Session data from API:', sessionData);
-          setSession(sessionData);
+          setSession(sessionData); // Atualiza o estado da sessão
 
           if (!sessionData) {
             const publicPaths = ['/login', '/register', '/partner-login', '/health'];
@@ -51,11 +52,15 @@ export default function AuthenticatedLayout({ children }: AuthenticatedLayoutPro
                 const targetLogin = sessionData.sessionType === 'admin' ? '/login' : '/partner-login';
                 router.push(`${targetLogin}?status=not_approved`);
             } else {
-                 if ((sessionData.sessionType === 'admin' || sessionData.sessionType === 'partner') && !isStoreInitialized) {
-                    console.log(`[AuthenticatedLayout] Session type ${sessionData.sessionType}, store not initialized, calling initializeStore.`);
-                    await initializeStore();
+                 // Verifica o estado do store DIRETAMENTE antes de inicializar.
+                 // Isso evita depender de `isStoreInitialized` na lista de dependências do useEffect.
+                 if (!useOSStore.getState().isStoreInitialized) {
+                    if (sessionData.sessionType === 'admin' || sessionData.sessionType === 'partner') {
+                        console.log(`[AuthenticatedLayout] Session type ${sessionData.sessionType}, store not yet initialized. Calling initializeStore.`);
+                        await initializeStore(); // initializeStore é do hook useOSStore
+                    }
                  } else {
-                    console.log(`[AuthenticatedLayout] Session type ${sessionData.sessionType}, store already initialized or no init needed.`);
+                    console.log(`[AuthenticatedLayout] Store already initialized. Session type: ${sessionData.sessionType}`);
                  }
             }
           }
@@ -87,7 +92,7 @@ export default function AuthenticatedLayout({ children }: AuthenticatedLayoutPro
       isMounted = false;
       console.log('[AuthenticatedLayout] Unmounting or re-running effect.');
     };
-  }, [pathname, router, initializeStore, isStoreInitialized]);
+  }, [pathname, router, initializeStore]); // Removido isStoreInitialized das dependências
 
 
   const sessionContextValue = useMemo(() => session, [session]);
@@ -119,12 +124,12 @@ export default function AuthenticatedLayout({ children }: AuthenticatedLayoutPro
   return (
     <SessionContext.Provider value={sessionContextValue}>
       <div className="d-flex flex-column min-vh-100">
-        <Header session={session} /> {/* Restaurado */}
+        <Header session={session} />
         <main className="container flex-grow-1 py-4 py-lg-5">
           {children}
         </main>
         <footer className="py-3 mt-auto text-center text-body-secondary border-top bg-light">
-          <FooterContent /> {/* Restaurado */}
+          <FooterContent />
         </footer>
       </div>
     </SessionContext.Provider>
