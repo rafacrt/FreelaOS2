@@ -2,40 +2,106 @@
 'use client';
 
 import type { ReactNode } from 'react';
+import { useState, useEffect } from 'react';
 import type { SessionPayload } from '@/lib/types';
-import { SessionContext } from '@/contexts/SessionContext'; // Importar do local correto
-
-// MOCK SESSION - Versão AGGRESSIVE (Directly provided)
-// Mantendo o mock direto para este teste de estrutura
-const mockPartnerSession: SessionPayload = {
-  sessionType: 'partner',
-  id: 'mock-partner-id-007-DIRECT-PROVIDER-V4-FINAL-TEST',
-  username: 'mock_partner_user_DIRECT_PROVIDER_V4_FINAL_TEST',
-  partnerName: 'Mock Partner DIRECT PROVIDER V4 FINAL TEST Inc.',
-  email: 'mock.direct.provider.v4.final.test@partner.com',
-  isApproved: true,
-};
+import { SessionContext } from '@/contexts/SessionContext';
+import { useOSStore } from '@/store/os-store';
+import Header from './Header';
+import FooterContent from './FooterContent';
+import { usePathname } from 'next/navigation';
 
 interface AuthenticatedLayoutProps {
   children: ReactNode;
 }
 
 export default function AuthenticatedLayout({ children }: AuthenticatedLayoutProps) {
-  // Removido o estado interno 'session' e 'useEffect' para este teste.
-  // Estamos passando o mockPartnerSession diretamente para o Provider.
+  const [session, setSession] = useState<SessionPayload | null>(null);
+  const [isLoadingSession, setIsLoadingSession] = useState(true);
+  const { initializeStore, isStoreInitialized } = useOSStore();
+  const pathname = usePathname();
 
-  console.log(`[AuthenticatedLayout RENDER ENTRY - DIRECT MOCK PROVIDER V4 FINAL TEST]`);
-  console.log('[AuthenticatedLayout RENDER - DIRECT MOCK PROVIDER V4 FINAL TEST] SessionContext object instance:', SessionContext);
-  console.log('[AuthenticatedLayout RENDER - DIRECT MOCK PROVIDER V4 FINAL TEST] PROVIDING DIRECT MOCK SESSION TO CONTEXT:', JSON.stringify(mockPartnerSession));
+  useEffect(() => {
+    console.log('[AuthenticatedLayout] Main useEffect triggered. Attempting to fetch session.');
+    let isMounted = true;
+
+    async function fetchSessionData() {
+      setIsLoadingSession(true);
+      try {
+        const response = await fetch('/api/session');
+        if (!response.ok) {
+          throw new Error(`API responded with ${response.status}`);
+        }
+        const sessionData: SessionPayload | null = await response.json();
+        if (isMounted) {
+          console.log('[AuthenticatedLayout] Session data fetched from API:', JSON.stringify(sessionData));
+          setSession(sessionData);
+        }
+      } catch (error) {
+        console.error('[AuthenticatedLayout] Error fetching session:', error);
+        if (isMounted) {
+          setSession(null);
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoadingSession(false);
+        }
+      }
+    }
+
+    fetchSessionData();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [pathname]); // Re-fetch session if pathname changes
+
+  useEffect(() => {
+    if (!isLoadingSession && !isStoreInitialized) {
+      console.log('[AuthenticatedLayout] Session loaded and store not initialized. Initializing OS store...');
+      initializeStore().then(() => {
+        console.log('[AuthenticatedLayout] OS Store initialization complete.');
+      }).catch(err => {
+        console.error('[AuthenticatedLayout] Error initializing OS Store:', err);
+      });
+    }
+  }, [isLoadingSession, isStoreInitialized, initializeStore, session]); // Add session as dependency
+
+  const showFullLayout = !pathname.startsWith('/login') && !pathname.startsWith('/register') && !pathname.startsWith('/partner-login');
+
+  if (isLoadingSession && showFullLayout) { // Only show full page spinner for protected routes
+    return (
+      <div className="d-flex justify-content-center align-items-center min-vh-100 bg-light">
+        <div className="spinner-border text-primary" role="status" style={{ width: '3rem', height: '3rem' }}>
+          <span className="visually-hidden">Carregando sessão...</span>
+        </div>
+      </div>
+    );
+  }
+  
+  // For public pages (login, register, partner-login), render children immediately if session is still loading
+  // The pages themselves can handle their own loading states or content based on session presence.
+  // Middleware should handle redirects if session exists for public pages.
 
   return (
-    <SessionContext.Provider value={mockPartnerSession}>
+    <SessionContext.Provider value={session}>
       <div className="d-flex flex-column min-vh-100">
-        {/* Header e Footer poderiam ser adicionados aqui se AuthenticatedLayout fosse um layout de página completo */}
-        {/* Por agora, apenas provendo o contexto e a estrutura básica */}
-        <main className="container flex-grow-1 py-4 py-lg-5">
-          {children}
+        {showFullLayout && <Header session={session} />}
+        <main className={`flex-grow-1 ${showFullLayout ? 'container py-3 py-md-4' : ''}`}>
+          {isLoadingSession && !showFullLayout ? (
+             <div className="d-flex justify-content-center align-items-center min-vh-100 bg-light">
+                <div className="spinner-border text-primary" role="status" style={{ width: '3rem', height: '3rem' }}>
+                    <span className="visually-hidden">Carregando...</span>
+                </div>
+            </div>
+          ) : children}
         </main>
+        {showFullLayout && (
+          <footer className="footer mt-auto py-3 bg-light border-top text-center no-print">
+            <div className="container footer-content-container">
+              <FooterContent />
+            </div>
+          </footer>
+        )}
       </div>
     </SessionContext.Provider>
   );
