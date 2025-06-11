@@ -3,10 +3,9 @@
 
 import type { ReactNode } from 'react';
 import { useEffect, useState } from 'react';
-import { useRouter, usePathname } from 'next/navigation'; // Keep useRouter and usePathname
+import { usePathname } from 'next/navigation'; 
 import type { SessionPayload } from '@/lib/types';
 import { SessionContext } from '@/contexts/SessionContext';
-// Store logic is still removed for this specific test
 
 interface AuthenticatedLayoutProps {
   children: ReactNode;
@@ -14,79 +13,52 @@ interface AuthenticatedLayoutProps {
 
 export default function AuthenticatedLayout({ children }: AuthenticatedLayoutProps) {
   const [session, setSession] = useState<SessionPayload | null>(null);
-  const [isLoadingLayout, setIsLoadingLayout] = useState(true); // Manages the loading state of the layout
-
-  const router = useRouter(); // Keep router
-  const pathname = usePathname(); // Keep pathname
-
-  // Effect to log internal session state changes in AuthenticatedLayout
-  useEffect(() => {
-    console.log('[AuthenticatedLayout] Internal session state (from session state watcher useEffect) CHANGED to:', JSON.stringify(session));
-  }, [session]);
+  const pathname = usePathname();
 
   useEffect(() => {
-    let isMounted = true;
     console.log(`[AuthenticatedLayout] Main useEffect triggered. Pathname: ${pathname}.`);
+    // console.log('[AuthenticatedLayout mockAndSetSession] Current internal session BEFORE mock set:', JSON.stringify(session)); // Log before setting
 
-    async function mockAndSetSession() {
-      console.log('[AuthenticatedLayout mockAndSetSession] Initiated with MOCK.');
-
-      const mockPartnerSession: SessionPayload = {
-        sessionType: 'partner',
-        id: 'mock-partner-id-007-isolated-layout-delayed',
-        username: 'mock_partner_user_debug_isolated_layout_delayed',
-        partnerName: 'Mock Partner Debug Inc. Isolated Layout Delayed',
-        email: 'mock.debug.delayed@partner.com',
-        isApproved: true,
-      };
-      console.log('[AuthenticatedLayout mockAndSetSession] USING MOCK PARTNER SESSION:', JSON.stringify(mockPartnerSession));
-
-      // Set the session state
-      if (isMounted) {
-        console.log('[AuthenticatedLayout mockAndSetSession MOCK] About to call setSession with MOCK data.');
-        setSession(mockPartnerSession);
-      }
-
-      // Introduce a small delay AFTER setting the session, then set isLoadingLayout to false
-      // This gives React a cycle to process the session state update before children are rendered.
-      setTimeout(() => {
-        if (isMounted) {
-          console.log(`[AuthenticatedLayout] Delay timer expired, setting isLoadingLayout to false. Current session:`, JSON.stringify(mockPartnerSession)); // Log session at this point
-          setIsLoadingLayout(false);
-        }
-      }, 100); // 100ms delay, can be adjusted
-
-      // Store initialization logic is still removed for this test
-    }
-
-    mockAndSetSession(); // No .finally here as isLoadingLayout is set inside setTimeout
-
-    return () => {
-      isMounted = false;
-      console.log('[AuthenticatedLayout] Main useEffect cleanup. Pathname was:', pathname);
+    const mockPartnerSession: SessionPayload = {
+      sessionType: 'partner',
+      id: 'mock-partner-id-007-isolated-layout-direct-set-vNext',
+      username: 'mock_partner_user_debug_isolated_layout_direct_set_vNext',
+      partnerName: 'Mock Partner Debug Inc. Isolated Layout Direct Set vNext',
+      email: 'mock.debug.direct.vNext@partner.com',
+      isApproved: true,
     };
-  }, [pathname]); // Minimal dependencies for this test
+    console.log('[AuthenticatedLayout mockAndSetSession] USING MOCK PARTNER SESSION:', JSON.stringify(mockPartnerSession));
+    
+    // Diretamente define o estado da sessão
+    console.log('[AuthenticatedLayout mockAndSetSession MOCK] About to call setSession with MOCK data.');
+    setSession(mockPartnerSession); // Isso deve causar uma nova renderização
 
-  console.log(`[AuthenticatedLayout RENDER] isLoadingLayout: ${isLoadingLayout}, Current session state (before context provider or loading):`, JSON.stringify(session));
+    console.log('[AuthenticatedLayout] Main useEffect FINISHED setting mock session.');
+    
+  }, [pathname]); // pathname é uma dependência razoável para reavaliar a "sessão" se a navegação ocorrer
 
-  if (isLoadingLayout || !session) { // Show loading if layout is loading OR session is still null
-    console.log('[AuthenticatedLayout RENDER] Showing AuthenticatedLayout loading spinner (isLoadingLayout or session is null).');
+  // Log o estado atual da sessão em cada renderização
+  console.log(`[AuthenticatedLayout RENDER] Current internal session state (value of 'session' state):`, JSON.stringify(session));
+
+  if (!session) {
+    // Se a sessão ainda for nula (ex: na primeira renderização antes do useEffect rodar), mostra um estado de carregamento.
+    console.log('[AuthenticatedLayout RENDER] Showing AuthenticatedLayout loading spinner (internal "session" state is still null).');
     return (
       <div className="d-flex flex-column justify-content-center align-items-center text-center bg-light" style={{ minHeight: '100vh' }}>
         <div className="spinner-border text-primary mb-3" role="status" style={{ width: '3rem', height: '3rem' }}>
-          <span className="visually-hidden">Carregando Layout (mock, com delay)...</span>
+          <span className="visually-hidden">Carregando Layout (direct set)...</span>
         </div>
-        <p className="text-muted">Carregando Layout (mock, com delay)...</p>
+        <p className="text-muted">Carregando Layout (direct set)...</p>
       </div>
     );
   }
   
-  // If we reach here, isLoadingLayout is false and session is not null
+  // Se a sessão estiver definida (deve ser mockPartnerSession após o useEffect rodar), proveja-a.
   console.log('[AuthenticatedLayout RENDER] PROVIDING SESSION TO CONTEXT (value should be non-null here):', JSON.stringify(session));
   return (
     <SessionContext.Provider value={session}>
       <div className="d-flex flex-column min-vh-100">
-        {/* Header and Footer are still removed for this test */}
+        {/* Header e Footer ainda removidos para este teste */}
         <main className="container flex-grow-1 py-4 py-lg-5">
           {children}
         </main>
@@ -94,3 +66,4 @@ export default function AuthenticatedLayout({ children }: AuthenticatedLayoutPro
     </SessionContext.Provider>
   );
 }
+
