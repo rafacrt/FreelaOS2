@@ -5,8 +5,10 @@ import type { ReactNode } from 'react';
 import { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import type { SessionPayload } from '@/lib/types';
-// import { useOSStore } from '@/store/os-store'; // Temporarily removed store logic
-import { SessionContext } from '@/contexts/SessionContext'; // Import from new location
+import { SessionContext } from '@/contexts/SessionContext';
+// import { useOSStore } from '@/store/os-store'; // Store logic still removed for this test
+// import Header from './Header'; // Header still removed
+// import FooterContent from './FooterContent'; // Footer still removed
 
 interface AuthenticatedLayoutProps {
   children: ReactNode;
@@ -14,53 +16,54 @@ interface AuthenticatedLayoutProps {
 
 export default function AuthenticatedLayout({ children }: AuthenticatedLayoutProps) {
   const [session, setSession] = useState<SessionPayload | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [authCheckCompleted, setAuthCheckCompleted] = useState(false);
+  const [isLoadingLayout, setIsLoadingLayout] = useState(true); // New state for layout loading
+
   const router = useRouter();
   const pathname = usePathname();
-  // const { initializeStore, isStoreInitialized: isStoreInitializedState } = useOSStore(); // Temporarily removed
+  // const { initializeStore, isStoreInitialized: isStoreInitializedState } = useOSStore(); // Store logic still removed
 
   // Effect to log internal session state changes in AuthenticatedLayout
   useEffect(() => {
     console.log('[AuthenticatedLayout] Internal session state CHANGED to:', JSON.stringify(session));
+    if (session !== null) {
+        setIsLoadingLayout(false); // Once session is set (even to mock), layout is "ready"
+    }
   }, [session]);
 
   useEffect(() => {
     let isMounted = true;
     console.log(`[AuthenticatedLayout] Main useEffect triggered. Pathname: ${pathname}.`);
 
-    async function mockAndCheckSession() {
-      console.log('[AuthenticatedLayout mockAndCheckSession] Initiated with MOCK.');
-      setIsLoading(true);
-      setAuthCheckCompleted(false);
+    async function mockAndSetSession() {
+      console.log('[AuthenticatedLayout mockAndSetSession] Initiated with MOCK.');
 
       const mockPartnerSession: SessionPayload = {
         sessionType: 'partner',
-        id: 'mock-partner-id-007-isolated',
-        username: 'mock_partner_user_debug_isolated',
-        partnerName: 'Mock Partner Debug Inc. Isolated',
-        email: 'mock.debug.isolated@partner.com',
+        id: 'mock-partner-id-007-isolated-layout',
+        username: 'mock_partner_user_debug_isolated_layout',
+        partnerName: 'Mock Partner Debug Inc. Isolated Layout',
+        email: 'mock.debug.isolated.layout@partner.com',
         isApproved: true,
       };
-      console.log('[AuthenticatedLayout mockAndCheckSession] USING MOCK PARTNER SESSION:', JSON.stringify(mockPartnerSession));
+      console.log('[AuthenticatedLayout mockAndSetSession] USING MOCK PARTNER SESSION:', JSON.stringify(mockPartnerSession));
 
-      // Simulate a small delay, like an API call
-      await new Promise(resolve => setTimeout(resolve, 50)); // Small delay
+      // Simulate a small delay, like an API call or internal processing
+      await new Promise(resolve => setTimeout(resolve, 50));
 
       if (isMounted) {
-        console.log('[AuthenticatedLayout mockAndCheckSession MOCK] About to call setSession with MOCK data.');
-        setSession(mockPartnerSession);
-        // console.log('[AuthenticatedLayout mockAndCheckSession MOCK] Store initialization logic TEMPORARILY SKIPPED.');
+        console.log('[AuthenticatedLayout mockAndSetSession MOCK] About to call setSession with MOCK data.');
+        setSession(mockPartnerSession); // This should trigger the useEffect above to set isLoadingLayout to false
+        
+        // Store initialization logic is still removed for this test
+        // console.log('[AuthenticatedLayout mockAndSetSession MOCK] Store initialization logic TEMPORARILY SKIPPED.');
       }
     }
 
-    mockAndCheckSession().finally(() => {
+    mockAndSetSession().finally(() => {
       if (isMounted) {
-        const finalSessionStateForLog = session; // Capture current value of session for logging in finally
-        console.log(`[AuthenticatedLayout mockAndCheckSession MOCK] Finalized. Current internal session state for 'finally' block:`, JSON.stringify(finalSessionStateForLog));
-        setIsLoading(false);
-        setAuthCheckCompleted(true);
-        console.log(`[AuthenticatedLayout mockAndCheckSession MOCK] setIsLoading: false, authCheckCompleted: true. Session (post-finally log):`, JSON.stringify(session));
+        const finalSessionStateForLog = session;
+        console.log(`[AuthenticatedLayout mockAndSetSession MOCK] Finalized. Current internal session state for 'finally' block:`, JSON.stringify(finalSessionStateForLog));
+        // setIsLoadingLayout(false) is now handled by the useEffect watching `session`
       }
     });
 
@@ -68,43 +71,27 @@ export default function AuthenticatedLayout({ children }: AuthenticatedLayoutPro
       isMounted = false;
       console.log('[AuthenticatedLayout] Main useEffect cleanup. Pathname was:', pathname);
     };
-  }, [pathname]); // Depend on pathname to re-run if route changes.
+  }, [pathname]); // Minimal dependencies
 
-  console.log(`[AuthenticatedLayout RENDER] isLoading: ${isLoading}, authCheckCompleted: ${authCheckCompleted}, Current session state (before context provider):`, JSON.stringify(session));
+  console.log(`[AuthenticatedLayout RENDER] isLoadingLayout: ${isLoadingLayout}, Current session state (before context provider or loading):`, JSON.stringify(session));
 
-  if (isLoading || !authCheckCompleted) {
-    console.log('[AuthenticatedLayout RENDER] Showing initial loading spinner (isLoading or !authCheckCompleted).');
+  if (isLoadingLayout || !session) { // Show loading if layout is loading OR session is still null
+    console.log('[AuthenticatedLayout RENDER] Showing AuthenticatedLayout loading spinner (isLoadingLayout or session is null).');
     return (
       <div className="d-flex flex-column justify-content-center align-items-center text-center bg-light" style={{ minHeight: '100vh' }}>
         <div className="spinner-border text-primary mb-3" role="status" style={{ width: '3rem', height: '3rem' }}>
-          <span className="visually-hidden">Verificando sessão (mock)...</span>
+          <span className="visually-hidden">Carregando Layout (mock)...</span>
         </div>
-        <p className="text-muted">Verificando sessão (mock)...</p>
+        <p className="text-muted">Carregando Layout (mock)...</p>
       </div>
     );
   }
-
-  // Fallback if auth check is complete but session is still null (should not happen with mock)
-  const publicPaths = ['/login', '/register', '/partner-login', '/health'];
-  if (authCheckCompleted && !session && !publicPaths.includes(pathname)) {
-     console.warn("[AuthenticatedLayout RENDER] Auth check complete, NO SESSION, on protected path. This should ideally not be reached with mock. Redirecting for safety (simulated).");
-     // In a real scenario, you might redirect:
-     // if (typeof window !== 'undefined') { router.push('/login'); }
-     return (
-        <div className="d-flex flex-column justify-content-center align-items-center text-center bg-light" style={{ minHeight: '100vh' }}>
-            <div className="spinner-border text-danger mb-3" role="status" style={{ width: '3rem', height: '3rem' }}>
-                <span className="visually-hidden">Erro de Sessão / Redirecionando...</span>
-            </div>
-            <p className="text-danger">Erro de Sessão. Necessário redirecionamento.</p>
-        </div>
-     );
-  }
   
+  // If we reach here, isLoadingLayout is false and session is not null
   console.log('[AuthenticatedLayout RENDER] PROVIDING SESSION TO CONTEXT:', JSON.stringify(session));
   return (
     <SessionContext.Provider value={session}>
       <div className="d-flex flex-column min-vh-100">
-        {/* Header and Footer remain commented out for this test */}
         {/* <Header session={session} /> */}
         <main className="container flex-grow-1 py-4 py-lg-5">
           {children}
