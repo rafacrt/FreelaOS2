@@ -8,7 +8,7 @@ import { useRouter } from 'next/navigation';
 import { devLoginAction, simulatePartnerLoginAction } from '@/lib/actions/auth-actions';
 import type { AuthActionState } from '@/lib/types';
 import { SimulatedLoginButton } from '@/components/auth/SimulatedLoginButton';
-import { AlertCircle, UserShield, Briefcase } from 'lucide-react'; // Ícones para os botões
+import { AlertCircle, ShieldCheck, Briefcase } from 'lucide-react'; // Ícones para os botões // UserShield substituído por ShieldCheck
 
 // Logo SVG (Orange Theme)
 const FreelaOSPartnerLoginLogo = () => (
@@ -101,7 +101,7 @@ export default function PartnerLoginPage({
           <form action={adminLoginSubmitAction}>
             <SimulatedLoginButton
               buttonText="Entrar como Admin"
-              icon={<UserShield size={16} className="me-2" />}
+              icon={<ShieldCheck size={16} className="me-2" />}
             />
           </form>
 
