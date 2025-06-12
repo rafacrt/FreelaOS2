@@ -23,6 +23,7 @@ import {
     type CreatePartnerData,
     type UpdatePartnerDetailsData
 } from '@/lib/actions/partner-actions';
+import { notify } from './notification-store'; // Import notification helper
 
 
 export interface Partner {
@@ -44,7 +45,7 @@ interface OSState {
 
   addOS: (data: CreateOSData, createdByPartnerId?: string) => Promise<OS | null>;
   updateOS: (updatedOS: OS) => Promise<OS | null>;
-  updateOSStatus: (osId: string, newStatus: OSStatus) => Promise<OS | null>; 
+  updateOSStatus: (osId: string, newStatus: OSStatus, adminApproverName?: string) => Promise<OS | null>; 
   getOSById: (osId: string) => OS | undefined;
   duplicateOS: (osId: string) => Promise<OS | null>;
   toggleUrgent: (osId: string) => Promise<void>;
@@ -87,7 +88,6 @@ export const useOSStore = create<OSState>()(
             const processedOSList = osListFromDB.map(os => ({
                 ...os,
                 checklist: os.checklist || [], 
-                // Ensure createdByPartnerName is populated from the DB query
                 createdByPartnerName: os.createdByPartnerName || undefined,
             }));
 
@@ -127,6 +127,14 @@ export const useOSStore = create<OSState>()(
                 return new Date(b.dataAbertura).getTime() - new Date(a.dataAbertura).getTime();
               }),
             }));
+
+            if (createdByPartnerId && newOSWithDefaults.createdByPartnerName) {
+                notify.admin(
+                    `Nova OS #${newOSWithDefaults.numero} (${newOSWithDefaults.projeto}) criada por ${newOSWithDefaults.createdByPartnerName} e aguarda sua aprovação.`,
+                    'os_created_by_partner',
+                    `/os/${newOSWithDefaults.id}`
+                );
+            }
 
             const clientFromDB = await get().getClientById(newOSWithDefaults.clientId); 
             if (clientFromDB) {
@@ -225,8 +233,9 @@ export const useOSStore = create<OSState>()(
         }
       },
 
-      updateOSStatus: async (osId, newStatus) => {
-        console.log(`[Store updateOSStatus] Iniciando para OS ID: ${osId}, Novo Status: ${newStatus}`);
+      updateOSStatus: async (osId, newStatus, adminApproverName?: string) => {
+        console.log(`[Store updateOSStatus] Iniciando para OS ID: ${osId}, Novo Status: ${newStatus}, Admin: ${adminApproverName}`);
+        const originalOS = get().getOSById(osId);
         try {
           const updatedOS = await updateOSStatusInDB(osId, newStatus);
           if (updatedOS) {
@@ -247,6 +256,35 @@ export const useOSStore = create<OSState>()(
               }),
             }));
             console.log('[Store updateOSStatus] Estado do store atualizado.');
+
+            // Notification Logic
+            if (originalOS && originalOS.createdByPartnerId) {
+                if (originalOS.status === OSStatus.AGUARDANDO_APROVACAO) {
+                    if (newStatus === OSStatus.NA_FILA) { // Implies approved
+                         notify.partner(
+                            originalOS.createdByPartnerId,
+                            `Sua OS #${originalOS.numero} (${originalOS.projeto}) foi APROVADA por ${adminApproverName || 'um admin'} e está Na Fila.`,
+                            'os_approved',
+                            `/os/${originalOS.id}`
+                        );
+                    } else if (newStatus === OSStatus.RECUSADA) {
+                        notify.partner(
+                            originalOS.createdByPartnerId,
+                            `Sua OS #${originalOS.numero} (${originalOS.projeto}) foi RECUSADA por ${adminApproverName || 'um admin'}.`,
+                            'os_refused',
+                            `/os/${originalOS.id}`
+                        );
+                    }
+                } else if (newStatus !== originalOS.status) { // General status change by admin
+                     notify.partner(
+                        originalOS.createdByPartnerId,
+                        `O status da OS #${originalOS.numero} (${originalOS.projeto}) foi alterado para ${newStatus} por ${adminApproverName || 'um admin'}.`,
+                        'os_status_changed',
+                        `/os/${originalOS.id}`
+                     );
+                }
+            }
+
             return updatedOSWithDefaults;
           }
           console.error(`[Store updateOSStatus] Falha ao atualizar status da OS ${osId} no DB (updateOSStatusInDB retornou null).`);
@@ -314,7 +352,6 @@ export const useOSStore = create<OSState>()(
             checklistItems: osToDuplicate.checklist ? osToDuplicate.checklist.map(item => item.text) : undefined,
         };
         console.log('[Store duplicateOS] Dados para nova OS duplicada:', JSON.stringify(duplicatedOSData, null, 2));
-        // Se a OS original foi criada por um parceiro, a duplicada também deve ser marcada assim
         return get().addOS(duplicatedOSData, osToDuplicate.createdByPartnerId);
       },
 
@@ -471,3 +508,8 @@ export const useOSStore = create<OSState>()(
       getClientByName: (clientName) => get().clients.find(c => c.name.toLowerCase() === clientName.toLowerCase()),
     })
 );
+
+// Adicionar uuid ao package.json se ainda não estiver lá.
+// Vou assumir que você fará isso manualmente ou que já está lá.
+// Se não estiver, precisará de: npm install uuid && npm install --save-dev @types/uuid
+// E depois reiniciar o servidor de desenvolvimento.

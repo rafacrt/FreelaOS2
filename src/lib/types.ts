@@ -100,3 +100,18 @@ export type AuthActionState = {
 export function isValidDate(d: any): d is Date {
   return d instanceof Date && !isNaN(d.getTime());
 }
+
+// Notification System Types
+export type NotificationRecipientType = 'admin' | 'partner';
+export type NotificationType = 'os_created_by_partner' | 'os_approved' | 'os_refused' | 'os_status_changed' | 'generic';
+
+export interface AppNotification {
+  id: string;
+  recipientType: NotificationRecipientType;
+  recipientId: string; // Specific partner ID, or a generic ID like 'all_admins'
+  message: string;
+  link?: string; // Optional link, e.g., to an OS: /os/[id]
+  type: NotificationType;
+  createdAt: string; // ISO string
+  isRead: boolean;
+}

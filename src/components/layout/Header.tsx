@@ -8,6 +8,7 @@ import { useTheme } from '@/hooks/useTheme';
 import { logoutAction } from '@/lib/actions/auth-actions';
 import { usePathname, useRouter } from 'next/navigation'; // Import useRouter
 import { useActionState, useEffect } from 'react'; // Import useEffect
+import NotificationBell from '@/components/notifications/NotificationBell'; // Import NotificationBell
 
 const FreelaOSLogo = () => (
   <svg width="28" height="28" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -76,15 +77,17 @@ export default function Header({ session }: HeaderProps) {
 
         <div className="d-flex align-items-center ms-auto">
           <button
-            className={`btn btn-sm me-3 ${theme === 'dark' ? 'btn-outline-light' : 'btn-outline-secondary'}`}
+            className={`btn btn-sm me-2 ${theme === 'dark' ? 'btn-outline-light' : 'btn-outline-secondary'}`}
             onClick={toggleTheme}
             aria-label={theme === 'dark' ? 'Mudar para modo claro' : 'Mudar para modo escuro'}
           >
             {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
           </button>
+          
+          {session && <NotificationBell />} 
 
           {session ? (
-            <div className="d-flex align-items-center">
+            <div className="d-flex align-items-center ms-2">
               {session.sessionType === 'admin' ? 
                 <UserCircle className="text-secondary me-2" size={24} aria-label={`Usuário: ${session.username}`} />
                 : <Briefcase className="text-secondary me-2" size={24} aria-label={`Parceiro: ${session.partnerName}`} />
