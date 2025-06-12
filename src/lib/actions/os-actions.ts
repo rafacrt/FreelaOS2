@@ -1,3 +1,4 @@
+
 'use server';
 
 import db from '@/lib/db';
@@ -178,23 +179,33 @@ export async function createOSInDB(data: CreateOSData, createdByPartnerId?: stri
     }
 
     const now = new Date();
-    const initialStatus = createdByPartnerId ? (data.status || OSStatus.AGUARDANDO_APROVACAO) : (data.status || OSStatus.NA_FILA);
-    console.log(`[OSAction createOSInDB] SERVER LOG: Status inicial definido como: ${initialStatus}`);
-
+    let initialStatus = data.status || OSStatus.NA_FILA; // Default para Na Fila se admin/parceiro aprovado
     let createdByPartnerIdSQL: number | null = null;
+
     if (createdByPartnerId) {
         console.log(`[OSAction createOSInDB] SERVER LOG: Processando createdByPartnerId: "${createdByPartnerId}"`);
         const parsedId = parseInt(createdByPartnerId, 10);
         if (!isNaN(parsedId) && parsedId > 0) {
             createdByPartnerIdSQL = parsedId;
             console.log(`[OSAction createOSInDB] SERVER LOG: createdByPartnerIdSQL definido como: ${createdByPartnerIdSQL}`);
+            // Verificar se o parceiro criador está aprovado
+            const [partnerRows] = await connection.query<RowDataPacket[]>('SELECT is_approved FROM partners WHERE id = ?', [createdByPartnerIdSQL]);
+            if (partnerRows.length > 0 && !partnerRows[0].is_approved) {
+                initialStatus = OSStatus.AGUARDANDO_APROVACAO;
+                console.log(`[OSAction createOSInDB] SERVER LOG: Parceiro criador ID ${createdByPartnerIdSQL} não aprovado. Status inicial definido para AGUARDANDO_APROVACAO.`);
+            } else if (partnerRows.length === 0) {
+                 console.warn(`[OSAction createOSInDB] SERVER LOG: Parceiro criador ID ${createdByPartnerIdSQL} não encontrado no DB. Status seguirá o default ou o enviado.`);
+            } else {
+                console.log(`[OSAction createOSInDB] SERVER LOG: Parceiro criador ID ${createdByPartnerIdSQL} está aprovado. Status inicial: ${initialStatus}`);
+            }
         } else {
-            console.warn(`[OSAction createOSInDB] SERVER LOG: createdByPartnerId "${createdByPartnerId}" não é um número válido ou é <= 0. Será tratado como null.`);
-            // Decidir se deve lançar erro ou tratar como nulo. Por ora, nulo.
-            // await connection.rollback();
-            // throw new Error(`createdByPartnerId inválido: ${createdByPartnerId}`);
+            console.warn(`[OSAction createOSInDB] SERVER LOG: createdByPartnerId "${createdByPartnerId}" não é um número válido ou é <= 0. Será tratado como null. Status seguirá o default ou o enviado.`);
         }
+    } else {
+        console.log(`[OSAction createOSInDB] SERVER LOG: OS não criada por parceiro (createdByPartnerId nulo). Status inicial: ${initialStatus}`);
     }
+    console.log(`[OSAction createOSInDB] SERVER LOG: Status inicial final definido como: ${initialStatus}`);
+
 
     const clienteIdSQL = parseInt(client.id, 10);
     if (isNaN(clienteIdSQL)) {
