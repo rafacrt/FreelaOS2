@@ -179,7 +179,7 @@ export async function createOSInDB(data: CreateOSData, createdByPartnerId?: stri
     }
 
     const now = new Date();
-    let initialStatus = data.status || OSStatus.NA_FILA; // Default para Na Fila se admin/parceiro aprovado
+    let initialStatus = data.status || OSStatus.NA_FILA; // Default for admin or if partner status not determined
     let createdByPartnerIdSQL: number | null = null;
 
     if (createdByPartnerId) {
@@ -190,16 +190,21 @@ export async function createOSInDB(data: CreateOSData, createdByPartnerId?: stri
             console.log(`[OSAction createOSInDB] SERVER LOG: createdByPartnerIdSQL definido como: ${createdByPartnerIdSQL}`);
             // Verificar se o parceiro criador está aprovado
             const [partnerRows] = await connection.query<RowDataPacket[]>('SELECT is_approved FROM partners WHERE id = ?', [createdByPartnerIdSQL]);
-            if (partnerRows.length > 0 && !partnerRows[0].is_approved) {
-                initialStatus = OSStatus.AGUARDANDO_APROVACAO;
-                console.log(`[OSAction createOSInDB] SERVER LOG: Parceiro criador ID ${createdByPartnerIdSQL} não aprovado. Status inicial definido para AGUARDANDO_APROVACAO.`);
-            } else if (partnerRows.length === 0) {
-                 console.warn(`[OSAction createOSInDB] SERVER LOG: Parceiro criador ID ${createdByPartnerIdSQL} não encontrado no DB. Status seguirá o default ou o enviado.`);
+            if (partnerRows.length > 0) {
+                if (!partnerRows[0].is_approved) {
+                    initialStatus = OSStatus.AGUARDANDO_APROVACAO;
+                    console.log(`[OSAction createOSInDB] SERVER LOG: Parceiro criador ID ${createdByPartnerIdSQL} NÃO APROVADO. Status inicial definido para AGUARDANDO_APROVACAO.`);
+                } else {
+                    initialStatus = OSStatus.NA_FILA; // Se parceiro está aprovado, OS vai para Na Fila
+                    console.log(`[OSAction createOSInDB] SERVER LOG: Parceiro criador ID ${createdByPartnerIdSQL} APROVADO. Status inicial definido para NA_FILA.`);
+                }
             } else {
-                console.log(`[OSAction createOSInDB] SERVER LOG: Parceiro criador ID ${createdByPartnerIdSQL} está aprovado. Status inicial: ${initialStatus}`);
+                 console.warn(`[OSAction createOSInDB] SERVER LOG: Parceiro criador ID ${createdByPartnerIdSQL} não encontrado no DB. OS será criada com status NA_FILA (comportamento de admin).`);
+                 initialStatus = OSStatus.NA_FILA;
             }
         } else {
-            console.warn(`[OSAction createOSInDB] SERVER LOG: createdByPartnerId "${createdByPartnerId}" não é um número válido ou é <= 0. Será tratado como null. Status seguirá o default ou o enviado.`);
+            console.warn(`[OSAction createOSInDB] SERVER LOG: createdByPartnerId "${createdByPartnerId}" não é um número válido ou é <= 0. OS será criada com status NA_FILA (comportamento de admin).`);
+            initialStatus = OSStatus.NA_FILA;
         }
     } else {
         console.log(`[OSAction createOSInDB] SERVER LOG: OS não criada por parceiro (createdByPartnerId nulo). Status inicial: ${initialStatus}`);
@@ -366,7 +371,7 @@ export async function updateOSInDB(osData: OS): Promise<OS | null> {
     let programadoParaSQL: string | null = null;
     if (osData.programadoPara && osData.programadoPara.trim() !== '') {
       if (/^\d{4}-\d{2}-\d{2}$/.test(osData.programadoPara)) {
-        const parsedDate = parseISO(osData.programadoPara);
+        const parsedDate = parseISO(osData.programadoPara); // Não precisa de + "T00:00:00Z" se já é YYYY-MM-DD
         if (isValid(parsedDate)) {
              programadoParaSQL = osData.programadoPara; // Armazena como YYYY-MM-DD
         } else {
