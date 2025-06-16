@@ -224,19 +224,19 @@ export async function simulatePartnerLoginAction(
 
   const partnerSession: SessionPayload = {
     sessionType: 'partner',
-    id: 'sim-partner-001', // Mock partner's ID
+    id: '99901', // Mock partner's ID - Changed to a numeric string
     username: 'sim_partner_user', // Mock partner's login username
     partnerName: 'Parceiro Simulado Inc.', // Mock partner name
     email: 'sim.partner@example.com',
-    isApproved: true,
+    isApproved: true, // Partner is approved
   };
 
   try {
     await createSessionCookie(partnerSession);
-    console.log(`[SimulatePartnerLoginAction] Simulated partner session cookie created for ${partnerSession.partnerName}. Redirecting to /partner/dashboard.`);
+    console.log(`[SimulatePartnerLoginAction] Simulated partner session cookie created for ${partnerSession.partnerName} (ID: ${partnerSession.id}). Redirecting to /partner/dashboard.`);
     nextRedirect('/partner/dashboard');
-  } catch (error: any) { // Corrected: Added opening brace for the catch block
-    if (error.message === 'NEXT_REDIRECT') { // This is expected if redirect() is called
+  } catch (error: any) { 
+    if (error.message === 'NEXT_REDIRECT') { 
         throw error;
     }
     console.error('[SimulatePartnerLoginAction] EXCEPTION during simulated partner session creation:', error.message, error.stack);

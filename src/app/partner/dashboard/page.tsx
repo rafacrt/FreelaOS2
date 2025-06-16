@@ -32,9 +32,20 @@ export default function PartnerDashboardPage() {
 
   const partnerOSList = useMemo(() => {
     if (!session || session.sessionType !== 'partner' || !isStoreInitialized) {
+      console.log(`[PartnerDashboardPage useMemo] Pre-condition failed: session=${!!session}, sessionType=${session?.sessionType}, isStoreInitialized=${isStoreInitialized}`);
       return [];
     }
-    const filtered = osList.filter(os => os.createdByPartnerId === session.id);
+    console.log(`[PartnerDashboardPage useMemo] Filtering for partner ID: "${session.id}". Total OS in store: ${osList.length}`);
+    
+    const filtered = osList.filter(os => {
+      const match = os.createdByPartnerId === session.id;
+    //   if (osList.length < 10) { // Log only for small lists to avoid console spam
+    //      console.log(`[PartnerDashboardPage useMemo DEBUG] Checking OS ID ${os.id} (numero ${os.numero}) - os.createdByPartnerId: "${os.createdByPartnerId}" (type: ${typeof os.createdByPartnerId}) vs session.id: "${session.id}" (type: ${typeof session.id}). Match: ${match}`);
+    //   }
+      return match;
+    });
+    console.log(`[PartnerDashboardPage useMemo] Found ${filtered.length} OSs for partner ID "${session.id}".`);
+    
     // Sort by most recent first, then by urgent
     return filtered.sort((a, b) => {
         if (a.isUrgent && !b.isUrgent) return -1;
