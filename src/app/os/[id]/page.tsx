@@ -3,12 +3,12 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import AuthenticatedLayout from '@/components/layout/AuthenticatedLayout';
+// import AuthenticatedLayout from '@/components/layout/AuthenticatedLayout'; // Removido
 import OSDetailsView from '@/components/os/OSDetailsView';
 import { useOSStore } from '@/store/os-store';
-import type { OS, SessionPayload } from '@/lib/types'; // Import SessionPayload
+import type { OS, SessionPayload } from '@/lib/types';
 import Link from 'next/link';
-import { useSession } from '@/hooks/useSession'; // Import useSession
+import { useSession } from '@/hooks/useSession'; 
 
 export default function OSDetailsPage() {
   const params = useParams();
@@ -27,20 +27,18 @@ export default function OSDetailsPage() {
   const [loadingMessage, setLoadingMessage] = useState('Carregando detalhes da OS...');
 
   useEffect(() => {
-    if (!isStoreInitialized && session) { // Garante que o store seja inicializado se houver sessão
+    if (!isStoreInitialized && session) { 
       setLoadingMessage('Inicializando dados da aplicação...');
       initializeStore().then(() => {
-        // A re-renderização causada pelo set({ isStoreInitialized: true }) no store 
-        // deve acionar o próximo useEffect para definir a OS.
       }).catch(err => {
-        setOs(null); // Indica falha ao carregar
+        setOs(null); 
         setLoadingMessage('Falha ao carregar dados da aplicação.');
       });
     }
   }, [id, isStoreInitialized, initializeStore, session]);
 
   useEffect(() => {
-    if (id && isStoreInitialized) { // Apenas tente definir a OS se o store estiver pronto
+    if (id && isStoreInitialized) { 
       const currentOsInStore = useOSStore.getState().osList.find(o => o.id === id);
 
       if (currentOsInStore) {
@@ -50,12 +48,12 @@ export default function OSDetailsPage() {
         const timer = setTimeout(() => {
             const stillNotFoundInStore = !useOSStore.getState().osList.find(o => o.id === id);
             if (stillNotFoundInStore) {
-                setOs(null); // OS não encontrada
+                setOs(null); 
                 setLoadingMessage(`OS ${id} não encontrada.`);
             } else {
                  setOs(useOSStore.getState().osList.find(o => o.id === id));
             }
-        }, 1500); // Aumentado o delay para dar mais tempo se a atualização do store for lenta
+        }, 2000); 
         return () => clearTimeout(timer);
       }
     } else if (!id) {
@@ -64,24 +62,21 @@ export default function OSDetailsPage() {
     } else if (!isStoreInitialized) {
        setLoadingMessage('Aguardando dados da aplicação...');
     }
-  }, [id, osFromStore, isStoreInitialized]); // osFromStore é incluído para reavaliar se ele mudar
+  }, [id, osFromStore, isStoreInitialized]); 
 
   if (os === undefined || !session || !isStoreInitialized) {
     return (
-      <AuthenticatedLayout>
         <div className="d-flex flex-column align-items-center justify-content-center text-center" style={{ minHeight: 'calc(100vh - 200px)' }}>
            <div className="spinner-border text-primary me-3 mb-3" role="status" style={{ width: '3rem', height: '3rem' }}>
              <span className="visually-hidden">{loadingMessage}</span>
            </div>
           <p className="fs-5 text-muted mb-0">{loadingMessage}</p>
         </div>
-      </AuthenticatedLayout>
     );
   }
 
   if (os === null) {
     return (
-      <AuthenticatedLayout>
         <div className="text-center py-5">
           <h2 className="h3 fw-semibold mb-3 text-danger">Ordem de Serviço Não Encontrada</h2>
           <p className="text-muted mb-4">A OS que você está procurando (ID: {id}) não existe ou não pôde ser carregada.</p>
@@ -89,17 +84,13 @@ export default function OSDetailsPage() {
              Ir para o Painel
            </Link>
         </div>
-      </AuthenticatedLayout>
     );
   }
 
-  // Determine viewMode based on session
   const viewMode = session.sessionType === 'admin' ? 'admin' : 'partner';
 
-  // For partners, check if they are authorized to view this OS
   if (viewMode === 'partner' && os.createdByPartnerId !== session.id) {
     return (
-      <AuthenticatedLayout>
         <div className="text-center py-5">
           <h2 className="h3 fw-semibold mb-3 text-danger">Acesso Negado</h2>
           <p className="text-muted mb-4">Você não tem permissão para visualizar esta Ordem de Serviço.</p>
@@ -107,15 +98,12 @@ export default function OSDetailsPage() {
              Ir para o Painel do Parceiro
            </Link>
         </div>
-      </AuthenticatedLayout>
     );
   }
 
   return (
-    <AuthenticatedLayout>
-      <div className="transition-opacity">
-         <OSDetailsView initialOs={os} viewMode={viewMode} />
-      </div>
-    </AuthenticatedLayout>
+    <div className="transition-opacity">
+        <OSDetailsView initialOs={os} viewMode={viewMode} />
+    </div>
   );
 }

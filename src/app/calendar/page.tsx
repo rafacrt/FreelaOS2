@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useState, useMemo, useEffect } from 'react';
-import AuthenticatedLayout from '@/components/layout/AuthenticatedLayout';
+// import AuthenticatedLayout from '@/components/layout/AuthenticatedLayout'; // Removido
 import Link from 'next/link';
 import { ArrowLeft, CheckCircle, Clock, Square, Circle } from 'lucide-react';
 import { DayPicker, type DayProps, type Modifiers } from 'react-day-picker';
@@ -13,7 +13,6 @@ import { useOSStore } from '@/store/os-store';
 import type { OS } from '@/lib/types';
 import { OSStatus } from '@/lib/types';
 
-// Helper to get status color (Bootstrap class names for text)
 const getStatusTextColorClass = (status: OSStatus): string => {
   switch (status) {
     case OSStatus.NA_FILA: return 'text-secondary-emphasis';
@@ -25,16 +24,14 @@ const getStatusTextColorClass = (status: OSStatus): string => {
   }
 };
 
-// Helper to get a darker border color for contrast, using Bootstrap theme names
 const getStatusBorderColorClass = (status: OSStatus): string => {
-    // These map to Bootstrap theme colors which will adapt with light/dark mode
     switch (status) {
         case OSStatus.NA_FILA: return 'border-secondary';
         case OSStatus.AGUARDANDO_CLIENTE: return 'border-warning';
         case OSStatus.EM_PRODUCAO: return 'border-info';
         case OSStatus.AGUARDANDO_PARCEIRO: return 'border-primary';
         case OSStatus.FINALIZADO: return 'border-success';
-        default: return 'border-secondary'; // Fallback
+        default: return 'border-secondary'; 
     }
 };
 
@@ -51,7 +48,6 @@ export default function CalendarPage() {
     return () => clearTimeout(timer);
   }, []);
 
-  // Memoize OS data processing
   const { scheduledDates, finalizedDates, osByDate } = useMemo(() => {
     const scheduled = new Set<string>();
     const finalized = new Set<string>();
@@ -65,20 +61,17 @@ export default function CalendarPage() {
         }
       };
 
-      // Handle scheduled date ('programadoPara' is YYYY-MM-DD string)
       if (os.programadoPara) {
         try {
-            const dateStr = os.programadoPara; // Already YYYY-MM-DD
-            const date = parseISO(dateStr + "T00:00:00Z"); // Treat as UTC date part
+            const dateStr = os.programadoPara; 
+            const date = parseISO(dateStr + "T00:00:00Z"); 
             if (isValid(date)) {
                 scheduled.add(dateStr);
                 addOsToMap(dateStr, os);
-            } else {
             }
         } catch (e) {
         }
       }
-      // Handle finalized date (ISO string)
       if (os.dataFinalizacao) {
         try {
           const date = parseISO(os.dataFinalizacao);
@@ -86,14 +79,12 @@ export default function CalendarPage() {
             const dateStr = format(date, 'yyyy-MM-dd');
             finalized.add(dateStr);
             addOsToMap(dateStr, os);
-          } else {
           }
         } catch (e) {
         }
       }
     });
     
-    // Convert date strings back to Date objects for DayPicker modifiers
     const parseDateStrings = (dateStrSet: Set<string>): Date[] => {
         return Array.from(dateStrSet).map(dStr => parseISO(dStr + "T00:00:00Z")).filter(isValid);
     };
@@ -105,7 +96,6 @@ export default function CalendarPage() {
     };
   }, [osList]);
 
-  // --- Custom Day Component ---
   const DayContent = (props: DayProps) => {
     const dateStr = format(props.date, 'yyyy-MM-dd');
     const dayOS = osByDate.get(dateStr) || [];
@@ -133,13 +123,10 @@ export default function CalendarPage() {
                const textColorClass = getStatusTextColorClass(os.status);
                const borderColorClass = getStatusBorderColorClass(os.status);
                
-               let icon = <Clock size={10} className="me-1 flex-shrink-0"/>; // Default to scheduled
+               let icon = <Clock size={10} className="me-1 flex-shrink-0"/>; 
                if (isThisDayFinalized) {
                    icon = <CheckCircle size={10} className="me-1 flex-shrink-0 text-success-emphasis"/>;
-               } else if (isThisDayScheduled) {
-                   // Keep default clock icon if only scheduled
                }
-
 
                return (
                    <Link key={os.id} href={`/os/${os.id}`} className={`d-block text-decoration-none mb-1 p-1 rounded border-start border-3 ${borderColorClass} bg-light-subtle shadow-sm transition-transform`}>
@@ -160,32 +147,28 @@ export default function CalendarPage() {
      );
   };
 
-  // --- Modifiers ---
   const modifiers: Modifiers = useMemo(() => ({
     scheduled: scheduledDates,
     finalized: finalizedDates,
   }), [scheduledDates, finalizedDates]);
 
   const modifiersStyles = {
-     // Styling is mostly handled by DayContent now
   };
 
 
   if (!isHydrated) {
     return (
-      <AuthenticatedLayout>
         <div className="d-flex flex-column justify-content-center align-items-center text-center" style={{ minHeight: '400px' }}>
           <div className="spinner-border text-primary mb-3" role="status" style={{ width: '3rem', height: '3rem' }}>
             <span className="visually-hidden">Carregando calendário...</span>
           </div>
           <p className="text-muted">Carregando calendário...</p>
         </div>
-      </AuthenticatedLayout>
     );
   }
 
   return (
-    <AuthenticatedLayout>
+    <>
       <div className="d-flex justify-content-between align-items-center mb-4">
         <h1 className="h3 mb-0">Calendário de OS</h1>
         <Link href="/dashboard" className="btn btn-outline-secondary btn-sm">
@@ -196,7 +179,6 @@ export default function CalendarPage() {
         O calendário exibe as Ordens de Serviço com base na data em que foram <strong className="text-primary">Programadas</strong> ou <strong className="text-success">Finalizadas</strong>.
         A funcionalidade para exibir OSs em todos os dias em que estiveram em produção não está disponível no momento.
       </p>
-
 
       <div className="border rounded shadow-sm overflow-hidden transition-all">
          <DayPicker
@@ -227,7 +209,6 @@ export default function CalendarPage() {
                caption: 'px-3 pt-2',
                caption_label: 'fs-5 fw-bold',
                nav_button: 'btn btn-sm btn-outline-secondary border-0',
-               // Updated dropdown styles for consistency
                dropdown_month: 'form-select form-select-sm d-inline-block w-auto mx-1',
                dropdown_year: 'form-select form-select-sm d-inline-block w-auto mx-1',
            }}
@@ -237,7 +218,7 @@ export default function CalendarPage() {
              <span className="d-inline-flex align-items-center"><CheckCircle size={12} className="me-1 text-success-emphasis"/> Finalizada no Dia</span>
          </div>
        </div>
-    </AuthenticatedLayout>
+    </>
   );
 }
 

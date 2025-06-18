@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useMemo, useState, useEffect } from 'react';
-import AuthenticatedLayout from '@/components/layout/AuthenticatedLayout';
+// import AuthenticatedLayout from '@/components/layout/AuthenticatedLayout'; // Removido
 import { useOSStore } from '@/store/os-store';
 import { OSStatus } from '@/lib/types';
 import Link from 'next/link';
@@ -10,7 +10,6 @@ import { ArrowLeft, FileText as ReportIcon, CheckCircle2, Clock, ArrowDown, Arro
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
-// Helper to format seconds into a human-readable time string
 const formatSecondsToReadableTime = (totalSeconds: number | undefined | null): string | React.ReactNode => {
     if (totalSeconds === undefined || totalSeconds === null || totalSeconds < 0 || isNaN(totalSeconds)) {
         return <span className="text-muted fst-italic">N/D</span>;
@@ -19,7 +18,7 @@ const formatSecondsToReadableTime = (totalSeconds: number | undefined | null): s
 
     const hours = Math.floor(totalSeconds / 3600);
     const minutes = Math.floor((totalSeconds % 3600) / 60);
-    const seconds = Math.floor(totalSeconds % 60); // Use Math.floor for seconds too
+    const seconds = Math.floor(totalSeconds % 60); 
 
     let parts: string[] = [];
     if (hours > 0) parts.push(`${hours}h`);
@@ -89,19 +88,17 @@ export default function ProductionTimeReportPage() {
 
   if (!isHydrated) {
      return (
-       <AuthenticatedLayout>
          <div className="d-flex flex-column justify-content-center align-items-center text-center" style={{ minHeight: '400px' }}>
            <div className="spinner-border text-primary mb-3" role="status" style={{ width: '3rem', height: '3rem' }}>
              <span className="visually-hidden">Carregando relatório...</span>
            </div>
            <p className="text-muted">Carregando relatório...</p>
          </div>
-       </AuthenticatedLayout>
      );
    }
 
   return (
-    <AuthenticatedLayout>
+    <>
       <div className="transition-opacity">
           <div className="d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom">
             <h1 className="h3 mb-0 d-flex align-items-center">
@@ -169,7 +166,7 @@ export default function ProductionTimeReportPage() {
             </div>
           </div>
        </div>
-    </AuthenticatedLayout>
+    </>
   );
 }
 

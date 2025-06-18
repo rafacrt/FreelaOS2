@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import AuthenticatedLayout from '@/components/layout/AuthenticatedLayout';
+// import AuthenticatedLayout from '@/components/layout/AuthenticatedLayout'; // Removido
 import Link from 'next/link';
 import { ArrowLeft, Building, Users, PlusCircle, Edit, Trash2, ShieldCheck, ShieldOff, UserPlus, Link2 } from 'lucide-react';
 import { useOSStore } from '@/store/os-store';
@@ -17,7 +17,7 @@ export default function EntitiesPage() {
   const { partners, clients, deleteClient, deletePartnerEntity } = useOSStore(state => ({
     partners: state.partners,
     clients: state.clients,
-    deleteClient: state.deleteClient, // Renamed for clarity
+    deleteClient: state.deleteClient, 
     deletePartnerEntity: state.deletePartnerEntity,
   }));
 
@@ -54,7 +54,7 @@ export default function EntitiesPage() {
   const handleDeleteClient = async (client: Client) => {
     if (window.confirm(`Tem certeza que deseja excluir o cliente "${client.name}"? Esta ação não pode ser desfeita.`)) {
       try {
-        await deleteClient(client.id); // Uses the renamed store action
+        await deleteClient(client.id); 
         alert(`Cliente "${client.name}" excluído com sucesso.`);
       } catch (error: any) {
          alert(`Falha ao excluir cliente "${client.name}": ${error.message}`);
@@ -91,19 +91,17 @@ export default function EntitiesPage() {
 
   if (!isHydrated) {
      return (
-       <AuthenticatedLayout>
          <div className="d-flex flex-column justify-content-center align-items-center text-center" style={{ minHeight: '400px' }}>
            <div className="spinner-border text-primary mb-3" role="status" style={{ width: '3rem', height: '3rem' }}>
              <span className="visually-hidden">Carregando Entidades...</span>
            </div>
            <p className="text-muted">Carregando Entidades...</p>
          </div>
-       </AuthenticatedLayout>
      );
    }
 
   return (
-    <AuthenticatedLayout>
+    <>
       <div className="transition-opacity">
           <div className="d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom">
             <h1 className="h3 mb-0">Gerenciamento de Entidades</h1>
@@ -194,7 +192,7 @@ export default function EntitiesPage() {
                                 {partner.email && <div>Email: {partner.email}</div>}
                                 {partner.contact_person && <div>Contato: {partner.contact_person}</div>}
                                 <div>
-                                    Status Login: {(partner.is_approved === undefined ? true : partner.is_approved) ? // Default to true if undefined for older data
+                                    Status Login: {(partner.is_approved === undefined ? true : partner.is_approved) ? 
                                         <span className="badge bg-success-subtle text-success-emphasis rounded-pill ms-1"><ShieldCheck size={12} className="me-1"/>Aprovado</span> : 
                                         <span className="badge bg-danger-subtle text-danger-emphasis rounded-pill ms-1"><ShieldOff size={12} className="me-1"/>Não Aprovado</span>}
                                 </div>
@@ -231,7 +229,6 @@ export default function EntitiesPage() {
             onClose={handleClosePartnerModal}
         />
       )}
-
-    </AuthenticatedLayout>
+    </>
   );
 }

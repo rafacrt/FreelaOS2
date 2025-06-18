@@ -2,7 +2,7 @@
 'use client';
 
 import React from 'react';
-import AuthenticatedLayout from '@/components/layout/AuthenticatedLayout';
+// import AuthenticatedLayout from '@/components/layout/AuthenticatedLayout'; // Removido
 import Link from 'next/link';
 import { ArrowLeft, ListChecks, Users, Clock, BarChart3 } from 'lucide-react';
 
@@ -20,17 +20,10 @@ export default function ReportsMenuPage() {
       href: '/reports/by-entity',
       icon: <Users size={24} className="text-info" />,
     },
-    // Adicione mais relatórios aqui no futuro
-    // {
-    //   title: 'Relatório Financeiro (Futuro)',
-    //   description: 'Acompanhe faturamento, custos e lucratividade por OS ou período.',
-    //   href: '#', // Link para o futuro relatório
-    //   icon: <BarChart3 size={24} className="text-success" />,
-    // },
   ];
 
   return (
-    <AuthenticatedLayout>
+    <>
       <div className="d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom">
         <h1 className="h3 mb-0 d-flex align-items-center">
           <ListChecks className="me-2 text-success" /> Central de Relatórios
@@ -70,6 +63,6 @@ export default function ReportsMenuPage() {
           </div>
         ))}
       </div>
-    </AuthenticatedLayout>
+    </>
   );
 }

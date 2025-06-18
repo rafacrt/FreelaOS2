@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useMemo, useState, useEffect } from 'react';
-import AuthenticatedLayout from '@/components/layout/AuthenticatedLayout';
+// import AuthenticatedLayout from '@/components/layout/AuthenticatedLayout'; // Removido
 import { useOSStore } from '@/store/os-store';
 import type { OS, Client } from '@/lib/types';
 import { OSStatus, ALL_OS_STATUSES } from '@/lib/types';
@@ -13,10 +13,9 @@ import { format, parseISO, isValid } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 type ReportOSStatusFilter = 'all' | 'active' | 'completed' | OSStatus;
-type SortKey = 'dataAbertura' | 'numero' | 'cliente' | 'projeto' | 'status' | 'programadoPara' | 'dataFinalizacao';
+type SortKey = 'dataAbertura' | 'numero' | 'cliente' | 'projeto' | 'status' | 'programadoPara' | 'dataFinalizacao' | 'parceiro';
 type SortDirection = 'asc' | 'desc';
 
-// Use ALL_OS_STATUSES from types.ts for consistency
 const statusOptions: { value: ReportOSStatusFilter; label: string }[] = [
   { value: 'all', label: 'Todas as OS' },
   { value: 'active', label: 'OS Ativas (Não Finalizadas/Recusadas/Aguardando Aprovação)' },
@@ -87,7 +86,7 @@ export default function ReportByEntityPage() {
         compareResult = timeA - timeB;
       } else if (sortBy === 'numero') {
         compareResult = parseInt(valA as string || '0', 10) - parseInt(valB as string || '0', 10);
-      } else if (sortBy === 'cliente' || sortBy === 'projeto' || sortBy === 'status') {
+      } else if (sortBy === 'cliente' || sortBy === 'projeto' || sortBy === 'status' || sortBy === 'parceiro') {
         compareResult = (valA as string || '').localeCompare(valB as string || '');
       }
 
@@ -118,26 +117,24 @@ export default function ReportByEntityPage() {
       if (isValid(date)) {
         return format(date, dateString.length === 10 ? 'dd/MM/yyyy' : 'dd/MM/yyyy HH:mm', { locale: ptBR });
       }
-    } catch (e) { /* fall through */ }
+    } catch (e) { }
     return dateString; 
   };
 
 
   if (!isHydrated) {
     return (
-      <AuthenticatedLayout>
         <div className="d-flex flex-column justify-content-center align-items-center text-center" style={{ minHeight: '400px' }}>
           <div className="spinner-border text-primary mb-3" role="status" style={{ width: '3rem', height: '3rem' }}>
             <span className="visually-hidden">Carregando relatório...</span>
           </div>
           <p className="text-muted">Carregando relatório...</p>
         </div>
-      </AuthenticatedLayout>
     );
   }
 
   return (
-    <AuthenticatedLayout>
+    <>
       <div className="d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom">
         <h1 className="h3 mb-0 d-flex align-items-center">
           <UsersIcon className="me-2 text-info" /> Relatório de OS por Cliente / Parceiro
@@ -260,13 +257,16 @@ export default function ReportByEntityPage() {
             Total de {filteredAndSortedOS.length} OS exibidas.
         </div>
       </div>
-    </AuthenticatedLayout>
+    </>
   );
 }
 
 function getSortValue<T, K extends keyof T>(obj: T | null | undefined, key: K): T[K] | null {
-    return obj ? obj[key] : null;
+    if (!obj) return null;
+    if (key === 'parceiro') return (obj as any).parceiro || null; // Specific handling for partner name if it's not directly on OS type for sorting
+    return obj[key];
 }
+
 
 const getStatusBadgeClass = (status: OSStatus): string => {
   switch (status) {
