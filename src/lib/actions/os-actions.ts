@@ -32,6 +32,7 @@ const mapDbRowToOS = (row: RowDataPacket): OS => {
         }));
       }
     } catch (e) {
+      // console.warn(`[mapDbRowToOS] Error parsing checklist for OS ID ${row.id}:`, e);
     }
   }
 
@@ -50,15 +51,13 @@ const mapDbRowToOS = (row: RowDataPacket): OS => {
   }
 
   let programadoParaFormatted: string | undefined = undefined;
-  // programadoPara is stored as DATE (YYYY-MM-DD) in DB, needs no time conversion for parseISO
   if (row.programadoPara && typeof row.programadoPara === 'string') {
-    // Check if it's already in YYYY-MM-DD format, otherwise parse might fail or give wrong date
      if (/^\d{4}-\d{2}-\d{2}$/.test(row.programadoPara)) {
-        const parsed = parseISO(row.programadoPara + "T00:00:00Z"); // Treat as UTC date part
+        const parsed = parseISO(row.programadoPara + "T00:00:00Z"); 
         if (isValid(parsed)) {
             programadoParaFormatted = formatDateFns(parsed, 'yyyy-MM-dd');
         }
-    } else { // If it's a full ISO string from old data or incorrect entry
+    } else { 
         const parsed = parseISO(row.programadoPara);
         if (isValid(parsed)) {
              programadoParaFormatted = formatDateFns(parsed, 'yyyy-MM-dd');
@@ -136,10 +135,10 @@ export async function createOSInDB(data: CreateOSData, createdByPartnerId?: stri
 
     let programadoParaDate: string | null = null;
     if (data.programadoPara && data.programadoPara.trim() !== '') {
-      if (/^\d{4}-\d{2}-\d{2}$/.test(data.programadoPara)) { // Valid YYYY-MM-DD string
-          const parsedDate = parseISO(data.programadoPara + "T00:00:00.000Z"); // Add time for UTC interpretation
+      if (/^\d{4}-\d{2}-\d{2}$/.test(data.programadoPara)) { 
+          const parsedDate = parseISO(data.programadoPara + "T00:00:00.000Z"); 
           if (isValid(parsedDate)) {
-            programadoParaDate = data.programadoPara; // Store as YYYY-MM-DD
+            programadoParaDate = data.programadoPara; 
           }
       }
     }
@@ -163,13 +162,18 @@ export async function createOSInDB(data: CreateOSData, createdByPartnerId?: stri
         const parsedCreatorId = parseInt(createdByPartnerId, 10);
         if (!isNaN(parsedCreatorId) && parsedCreatorId > 0) {
             createdByPartnerIdSQL = parsedCreatorId;
-            // Definir status como AGUARDANDO_APROVACAO se for criada por um parceiro
+            
+            // Sempre definir como AGUARDANDO_APROVACAO se criado por parceiro
             initialStatus = OSStatus.AGUARDANDO_APROVACAO;
         } else {
-            // Se o ID do parceiro criador for inválido, tratamos como se fosse uma OS criada por admin
-            // (status será data.status ou OSStatus.NA_FILA)
+            // console.warn(`[os-actions createOSInDB] ID do parceiro criador inválido: ${createdByPartnerId}. OS será criada sem associação direta.`);
         }
+    } else { // Admin está criando
+        initialStatus = data.status || OSStatus.NA_FILA;
     }
+    
+    console.log(`[createOSInDB DEBUG] received createdByPartnerId: ${createdByPartnerId}, parsed to SQL: ${createdByPartnerIdSQL}, initialStatus: ${initialStatus}`);
+
 
     const clienteIdSQL = parseInt(client.id, 10);
     if (isNaN(clienteIdSQL)) {
@@ -198,16 +202,20 @@ export async function createOSInDB(data: CreateOSData, createdByPartnerId?: stri
       updated_at: now,
     };
 
-    const [result] = await connection.execute<ResultSetHeader>(
-      `INSERT INTO os_table (numero, cliente_id, parceiro_id, created_by_partner_id, projeto, tarefa, observacoes, checklist_json, status, dataAbertura, programadoPara, isUrgent, dataFinalizacao, dataInicioProducao, tempoGastoProducaoSegundos, dataInicioProducaoAtual, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
+    const insertQueryValues = [
         osDataForDB.numero, osDataForDB.cliente_id, osDataForDB.parceiro_id, osDataForDB.created_by_partner_id,
         osDataForDB.projeto, osDataForDB.tarefa, osDataForDB.observacoes, osDataForDB.checklist_json,
         osDataForDB.status, osDataForDB.dataAbertura, osDataForDB.programadoPara, osDataForDB.isUrgent,
         osDataForDB.dataFinalizacao, osDataForDB.dataInicioProducao, osDataForDB.tempoGastoProducaoSegundos,
         osDataForDB.dataInicioProducaoAtual, osDataForDB.created_at, osDataForDB.updated_at
-      ]
+    ];
+    console.log('[createOSInDB DEBUG] Values for insert:', insertQueryValues);
+
+
+    const [result] = await connection.execute<ResultSetHeader>(
+      `INSERT INTO os_table (numero, cliente_id, parceiro_id, created_by_partner_id, projeto, tarefa, observacoes, checklist_json, status, dataAbertura, programadoPara, isUrgent, dataFinalizacao, dataInicioProducao, tempoGastoProducaoSegundos, dataInicioProducaoAtual, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      insertQueryValues
     );
 
     if (!result.insertId) {
@@ -316,9 +324,9 @@ export async function updateOSInDB(osData: OS): Promise<OS | null> {
     let programadoParaSQL: string | null = null;
     if (osData.programadoPara && osData.programadoPara.trim() !== '') {
       if (/^\d{4}-\d{2}-\d{2}$/.test(osData.programadoPara)) {
-        const parsedDate = parseISO(osData.programadoPara); // Não precisa de + "T00:00:00Z" se já é YYYY-MM-DD
+        const parsedDate = parseISO(osData.programadoPara); 
         if (isValid(parsedDate)) {
-             programadoParaSQL = osData.programadoPara; // Armazena como YYYY-MM-DD
+             programadoParaSQL = osData.programadoPara; 
         }
       }
     }
@@ -584,10 +592,4 @@ export async function toggleOSProductionTimerInDB(osId: string, action: 'play' |
     if (updatedOSRowsAgain.length === 0) throw new Error('Falha ao buscar OS atualizada pós-toggle do timer.');
     return mapDbRowToOS(updatedOSRowsAgain[0]);
 
-  } catch (error: any) {
-    if (connection) await connection.rollback();
-    return null;
-  } finally {
-    if (connection) connection.release();
-  }
-}
+  } catch (error: any)
