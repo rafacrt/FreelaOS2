@@ -1,4 +1,4 @@
-
+// src/lib/actions/os-actions.ts
 'use server';
 
 import db from '@/lib/db';
@@ -8,7 +8,7 @@ import { findOrCreateClientByName } from './client-actions';
 import { findOrCreatePartnerByName } from './partner-actions';
 import type { ResultSetHeader, RowDataPacket, PoolConnection } from 'mysql2/promise';
 import { parseISO, differenceInSeconds, format as formatDateFns, isValid } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
+// import { ptBR } from 'date-fns/locale'; // ptBR não é usado diretamente aqui
 
 const generateNewOSNumero = async (connection: PoolConnection): Promise<string> => {
   const [rows] = await connection.query<RowDataPacket[]>("SELECT MAX(CAST(numero AS UNSIGNED)) as maxNumero FROM os_table");
@@ -18,7 +18,6 @@ const generateNewOSNumero = async (connection: PoolConnection): Promise<string> 
   return newNumeroStr;
 };
 
-// Helper function to map a DB row to an OS object
 const mapDbRowToOS = (row: RowDataPacket): OS => {
   let parsedChecklist: ChecklistItem[] = [];
   if (row.checklist_json) {
@@ -26,7 +25,7 @@ const mapDbRowToOS = (row: RowDataPacket): OS => {
       const rawChecklist = JSON.parse(row.checklist_json);
       if (Array.isArray(rawChecklist)) {
         parsedChecklist = rawChecklist.map((item, index) => ({
-          id: `db-item-${row.id}-${index}`, 
+          id: `db-item-${row.id}-${index}`,
           text: item.text || '',
           completed: item.completed || false,
         }));
@@ -41,7 +40,7 @@ const mapDbRowToOS = (row: RowDataPacket): OS => {
   if (isValid(dataAberturaParsed)) {
     dataAberturaISO = dataAberturaParsed.toISOString();
   } else {
-    dataAberturaISO = new Date(0).toISOString(); 
+    dataAberturaISO = new Date(0).toISOString();
   }
 
   let dataFinalizacaoISO: string | undefined = undefined;
@@ -53,18 +52,17 @@ const mapDbRowToOS = (row: RowDataPacket): OS => {
   let programadoParaFormatted: string | undefined = undefined;
   if (row.programadoPara && typeof row.programadoPara === 'string') {
      if (/^\d{4}-\d{2}-\d{2}$/.test(row.programadoPara)) {
-        const parsed = parseISO(row.programadoPara + "T00:00:00Z"); 
-        if (isValid(parsed)) {
-            programadoParaFormatted = formatDateFns(parsed, 'yyyy-MM-dd');
+        const parsedDate = parseISO(row.programadoPara + "T00:00:00Z");
+        if (isValid(parsedDate)) {
+            programadoParaFormatted = formatDateFns(parsedDate, 'yyyy-MM-dd');
         }
-    } else { 
-        const parsed = parseISO(row.programadoPara);
-        if (isValid(parsed)) {
-             programadoParaFormatted = formatDateFns(parsed, 'yyyy-MM-dd');
+    } else {
+        const parsedDate = parseISO(row.programadoPara);
+        if (isValid(parsedDate)) {
+             programadoParaFormatted = formatDateFns(parsedDate, 'yyyy-MM-dd');
         }
     }
   }
-
 
   let dataInicioProducaoISO: string | undefined = undefined;
   if (row.dataInicioProducao) {
@@ -72,7 +70,7 @@ const mapDbRowToOS = (row: RowDataPacket): OS => {
     if (isValid(parsed)) dataInicioProducaoISO = parsed.toISOString();
   }
 
-  let dataInicioProducaoAtualISO: string | null = null; 
+  let dataInicioProducaoAtualISO: string | null = null;
   if (row.dataInicioProducaoAtual) {
     const parsed = new Date(row.dataInicioProducaoAtual);
     if (isValid(parsed)) dataInicioProducaoAtualISO = parsed.toISOString();
@@ -81,12 +79,12 @@ const mapDbRowToOS = (row: RowDataPacket): OS => {
   return {
     id: String(row.id),
     numero: row.numero,
-    cliente: row.cliente_name, 
-    parceiro: row.execution_partner_name || undefined, 
+    cliente: row.cliente_name,
+    parceiro: row.execution_partner_name || undefined,
     clientId: String(row.cliente_id),
     partnerId: row.parceiro_id ? String(row.parceiro_id) : undefined,
     createdByPartnerId: row.created_by_partner_id ? String(row.created_by_partner_id) : undefined,
-    createdByPartnerName: row.creator_partner_name || undefined, 
+    createdByPartnerName: row.creator_partner_name || undefined,
     projeto: row.projeto,
     tarefa: row.tarefa,
     observacoes: row.observacoes,
@@ -101,7 +99,6 @@ const mapDbRowToOS = (row: RowDataPacket): OS => {
     dataInicioProducaoAtual: dataInicioProducaoAtualISO,
   };
 };
-
 
 export async function createOSInDB(data: CreateOSData, createdByPartnerId?: string): Promise<OS | null> {
   const connection = await db.getConnection();
@@ -135,14 +132,13 @@ export async function createOSInDB(data: CreateOSData, createdByPartnerId?: stri
 
     let programadoParaDate: string | null = null;
     if (data.programadoPara && data.programadoPara.trim() !== '') {
-      if (/^\d{4}-\d{2}-\d{2}$/.test(data.programadoPara)) { 
-          const parsedDate = parseISO(data.programadoPara + "T00:00:00.000Z"); 
+      if (/^\d{4}-\d{2}-\d{2}$/.test(data.programadoPara)) {
+          const parsedDate = parseISO(data.programadoPara + "T00:00:00.000Z");
           if (isValid(parsedDate)) {
-            programadoParaDate = data.programadoPara; 
+            programadoParaDate = data.programadoPara;
           }
       }
     }
-
 
     let checklistJsonForDB: string | null = null;
     if (data.checklistItems && data.checklistItems.length > 0) {
@@ -155,25 +151,22 @@ export async function createOSInDB(data: CreateOSData, createdByPartnerId?: stri
     }
 
     const now = new Date();
-    let initialStatus = data.status || OSStatus.NA_FILA;
+    let initialStatus = data.status || OSStatus.NA_FILA; // Default status
     let createdByPartnerIdSQL: number | null = null;
 
     if (createdByPartnerId) {
-        const parsedCreatorId = parseInt(createdByPartnerId, 10);
-        if (!isNaN(parsedCreatorId) && parsedCreatorId > 0) {
-            createdByPartnerIdSQL = parsedCreatorId;
-            
-            // Sempre definir como AGUARDANDO_APROVACAO se criado por parceiro
+        const parsedId = parseInt(createdByPartnerId, 10);
+        if (!isNaN(parsedId) && parsedId > 0) {
+            createdByPartnerIdSQL = parsedId;
+            // Se criado por parceiro, SEMPRE inicia como AGUARDANDO_APROVACAO
             initialStatus = OSStatus.AGUARDANDO_APROVACAO;
         } else {
-            // console.warn(`[os-actions createOSInDB] ID do parceiro criador inválido: ${createdByPartnerId}. OS será criada sem associação direta.`);
+             // Se o ID do parceiro criador for inválido, não associe e crie como admin faria
         }
-    } else { // Admin está criando
+    } else {
+        // Admin criando, ou `data.status` foi explicitamente fornecido e não é por parceiro
         initialStatus = data.status || OSStatus.NA_FILA;
     }
-    
-    console.log(`[createOSInDB DEBUG] received createdByPartnerId: ${createdByPartnerId}, parsed to SQL: ${createdByPartnerIdSQL}, initialStatus: ${initialStatus}`);
-
 
     const clienteIdSQL = parseInt(client.id, 10);
     if (isNaN(clienteIdSQL)) {
@@ -184,8 +177,8 @@ export async function createOSInDB(data: CreateOSData, createdByPartnerId?: stri
     const osDataForDB = {
       numero: newOsNumero,
       cliente_id: clienteIdSQL,
-      parceiro_id: executionPartnerIdSQL, 
-      created_by_partner_id: createdByPartnerIdSQL, 
+      parceiro_id: executionPartnerIdSQL,
+      created_by_partner_id: createdByPartnerIdSQL,
       projeto: data.projeto,
       tarefa: data.tarefa,
       observacoes: data.observacoes || '',
@@ -209,8 +202,6 @@ export async function createOSInDB(data: CreateOSData, createdByPartnerId?: stri
         osDataForDB.dataFinalizacao, osDataForDB.dataInicioProducao, osDataForDB.tempoGastoProducaoSegundos,
         osDataForDB.dataInicioProducaoAtual, osDataForDB.created_at, osDataForDB.updated_at
     ];
-    console.log('[createOSInDB DEBUG] Values for insert:', insertQueryValues);
-
 
     const [result] = await connection.execute<ResultSetHeader>(
       `INSERT INTO os_table (numero, cliente_id, parceiro_id, created_by_partner_id, projeto, tarefa, observacoes, checklist_json, status, dataAbertura, programadoPara, isUrgent, dataFinalizacao, dataInicioProducao, tempoGastoProducaoSegundos, dataInicioProducaoAtual, created_at, updated_at)
@@ -306,8 +297,8 @@ export async function updateOSInDB(osData: OS): Promise<OS | null> {
           newDataInicioProducaoAtualSQL = now;
           if (!newDataInicioProducaoHistoricoSQL) newDataInicioProducaoHistoricoSQL = now;
         }
-      } else { 
-        if (newDataInicioProducaoAtualSQL) { 
+      } else {
+        if (newDataInicioProducaoAtualSQL) {
           const currentSessionSeconds = differenceInSeconds(now, newDataInicioProducaoAtualSQL);
           newTempoGastoProducaoSegundosSQL += currentSessionSeconds;
           newDataInicioProducaoAtualSQL = null;
@@ -316,7 +307,7 @@ export async function updateOSInDB(osData: OS): Promise<OS | null> {
       if (newStatus === OSStatus.FINALIZADO && !newDataFinalizacaoSQL) {
         newDataFinalizacaoSQL = now;
       } else if (currentOSFromDB.status === OSStatus.FINALIZADO && newStatus !== OSStatus.FINALIZADO) {
-        newDataFinalizacaoSQL = null; 
+        newDataFinalizacaoSQL = null;
       }
     }
 
@@ -324,9 +315,9 @@ export async function updateOSInDB(osData: OS): Promise<OS | null> {
     let programadoParaSQL: string | null = null;
     if (osData.programadoPara && osData.programadoPara.trim() !== '') {
       if (/^\d{4}-\d{2}-\d{2}$/.test(osData.programadoPara)) {
-        const parsedDate = parseISO(osData.programadoPara); 
+        const parsedDate = parseISO(osData.programadoPara);
         if (isValid(parsedDate)) {
-             programadoParaSQL = osData.programadoPara; 
+             programadoParaSQL = osData.programadoPara;
         }
       }
     }
@@ -395,7 +386,7 @@ export async function updateOSInDB(osData: OS): Promise<OS | null> {
     if (connection) {
         await connection.rollback();
     }
-    return null; 
+    return null;
   } finally {
     if (connection) {
         connection.release();
@@ -419,12 +410,12 @@ export async function getAllOSFromDB(): Promise<OS[]> {
       JOIN clients c ON os.cliente_id = c.id
       LEFT JOIN partners exec_p ON os.parceiro_id = exec_p.id
       LEFT JOIN partners creator_p ON os.created_by_partner_id = creator_p.id
-      ORDER BY os.isUrgent DESC, 
-               CASE os.status 
+      ORDER BY os.isUrgent DESC,
+               CASE os.status
                  WHEN '${OSStatus.AGUARDANDO_APROVACAO}' THEN 1
                  WHEN '${OSStatus.RECUSADA}' THEN 3
-                 ELSE 2 
-               END, 
+                 ELSE 2
+               END,
                os.dataAbertura DESC
     `;
     const [rows] = await connection.query<RowDataPacket[]>(query);
@@ -463,8 +454,8 @@ export async function updateOSStatusInDB(osId: string, newStatus: OSStatus): Pro
         newDataInicioProducaoAtualSQL = now;
         if (!newDataInicioProducaoHistoricoSQL) newDataInicioProducaoHistoricoSQL = now;
       }
-    } else { 
-      if (newDataInicioProducaoAtualSQL) { 
+    } else {
+      if (newDataInicioProducaoAtualSQL) {
         newTempoGastoProducaoSegundosSQL = (currentOSFromDB.tempoGastoProducaoSegundos || 0) + differenceInSeconds(now, newDataInicioProducaoAtualSQL);
         newDataInicioProducaoAtualSQL = null;
       }
@@ -540,7 +531,7 @@ export async function toggleOSProductionTimerInDB(osId: string, action: 'play' |
     const currentOSFromDB = currentOSRows[0];
 
     if ((currentOSFromDB.status === OSStatus.FINALIZADO || currentOSFromDB.status === OSStatus.AGUARDANDO_APROVACAO || currentOSFromDB.status === OSStatus.RECUSADA) && action === 'play') {
-      await connection.rollback(); 
+      await connection.rollback();
       return mapDbRowToOS(currentOSFromDB);
     }
 
@@ -551,22 +542,22 @@ export async function toggleOSProductionTimerInDB(osId: string, action: 'play' |
     let newDataInicioProducaoHistoricoSQL: Date | null = currentOSFromDB.dataInicioProducao ? new Date(currentOSFromDB.dataInicioProducao) : null;
 
     if (action === 'play') {
-      if (!newDataInicioProducaoAtualSQL) { 
+      if (!newDataInicioProducaoAtualSQL) {
         newDataInicioProducaoAtualSQL = now;
-        newStatus = OSStatus.EM_PRODUCAO; 
-        if (!newDataInicioProducaoHistoricoSQL) newDataInicioProducaoHistoricoSQL = now; 
+        newStatus = OSStatus.EM_PRODUCAO;
+        if (!newDataInicioProducaoHistoricoSQL) newDataInicioProducaoHistoricoSQL = now;
       } else {
-          await connection.rollback(); 
-          return mapDbRowToOS(currentOSFromDB); 
+          await connection.rollback();
+          return mapDbRowToOS(currentOSFromDB);
       }
     } else if (action === 'pause') {
-      if (newDataInicioProducaoAtualSQL) { 
+      if (newDataInicioProducaoAtualSQL) {
         newTempoGastoProducaoSegundosSQL = (currentOSFromDB.tempoGastoProducaoSegundos || 0) + differenceInSeconds(now, newDataInicioProducaoAtualSQL);
         newDataInicioProducaoAtualSQL = null;
-        if (newStatus === OSStatus.EM_PRODUCAO) newStatus = OSStatus.NA_FILA; 
+        if (newStatus === OSStatus.EM_PRODUCAO) newStatus = OSStatus.NA_FILA;
       } else {
-         await connection.rollback(); 
-         return mapDbRowToOS(currentOSFromDB); 
+         await connection.rollback();
+         return mapDbRowToOS(currentOSFromDB);
       }
     }
 
@@ -592,4 +583,12 @@ export async function toggleOSProductionTimerInDB(osId: string, action: 'play' |
     if (updatedOSRowsAgain.length === 0) throw new Error('Falha ao buscar OS atualizada pós-toggle do timer.');
     return mapDbRowToOS(updatedOSRowsAgain[0]);
 
-  } catch (error: any)
+  } catch (error: any) {
+    if (connection) await connection.rollback();
+    return null;
+  } finally {
+    if (connection) connection.release();
+  }
+}
+
+    

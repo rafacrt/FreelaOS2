@@ -1,4 +1,3 @@
-
 // src/app/partner/dashboard/page.tsx
 'use client';
 
@@ -24,7 +23,6 @@ export default function PartnerDashboardPage() {
   }, []);
 
   useEffect(() => {
-    // Ensure store is initialized if not already
     if (session && !isStoreInitialized) {
         initializeStore();
     }
@@ -34,17 +32,15 @@ export default function PartnerDashboardPage() {
     if (!session || session.sessionType !== 'partner' || !isStoreInitialized) {
       return [];
     }
-    
+
     const filtered = osList.filter(os => {
-      const match = os.createdByPartnerId === session.id;
-      return match;
+      return os.createdByPartnerId === session.id;
     });
-    
-    // Sort by most recent first, then by urgent
+
     return filtered.sort((a, b) => {
         if (a.isUrgent && !b.isUrgent) return -1;
         if (!a.isUrgent && b.isUrgent) return 1;
-        return new Date(b.dataAbertura).getTime() - new Date(a.dataAbertura).getTime()
+        return new Date(b.dataAbertura).getTime() - new Date(a.dataAbertura).getTime();
     });
   }, [osList, session, isStoreInitialized]);
 
@@ -53,7 +49,7 @@ export default function PartnerDashboardPage() {
     if (!isClient) loadingMessage = "Aguardando renderização do cliente...";
     else if (!session) loadingMessage = "Verificando sessão do parceiro...";
     else if (!isStoreInitialized) loadingMessage = "Carregando dados das Ordens de Serviço...";
-    
+
     return (
         <div className="d-flex flex-column align-items-center justify-content-center text-center p-4" style={{ minHeight: 'calc(100vh - 200px)' }}>
            <div className="spinner-border text-primary mb-3" role="status" style={{ width: '3rem', height: '3rem' }}>
@@ -74,7 +70,7 @@ export default function PartnerDashboardPage() {
     );
   }
 
-  const partnerSession = session; // Now we know it's a partner session
+  const partnerSession = session;
 
   return (
     <div>
@@ -120,3 +116,5 @@ export default function PartnerDashboardPage() {
     </div>
   );
 }
+
+    
