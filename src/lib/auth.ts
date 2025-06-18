@@ -9,14 +9,12 @@ export * from './auth-edge';
 export async function getUserByUsername(username: string): Promise<(User & { password_hash: string }) | null> {
   const connection = await db.getConnection();
   try {
-    console.log(`[Auth getUserByUsername] Fetching user from DB: ${username}`);
     const [rows] = await connection.query<RowDataPacket[]>(
       'SELECT id, username, password_hash, is_admin, is_approved FROM users WHERE username = ?',
       [username]
     );
     if (rows.length > 0) {
       const userRow = rows[0];
-      console.log(`[Auth getUserByUsername] User found: ${username}`);
       return {
         id: String(userRow.id),
         username: userRow.username,
@@ -25,10 +23,8 @@ export async function getUserByUsername(username: string): Promise<(User & { pas
         isApproved: Boolean(userRow.is_approved),
       };
     }
-    console.log(`[Auth getUserByUsername] User not found: ${username}`);
     return null;
   } catch (error) {
-    console.error('[Auth getUserByUsername] Error fetching user:', error);
     throw new Error('Database error while fetching user.');
   } finally {
     if (connection) connection.release();
@@ -40,7 +36,6 @@ export async function getUserByUsername(username: string): Promise<(User & { pas
 export async function getPartnerByUsernameOrEmail(identifier: string): Promise<(PartnerSessionData & { password_hash: string }) | null> {
   const connection = await db.getConnection();
   try {
-    console.log(`[Auth getPartnerByUsernameOrEmail] Fetching partner from DB by identifier: ${identifier}`);
     // Assumes 'username' and 'email' columns exist in 'partners' table for login
     const [rows] = await connection.query<RowDataPacket[]>(
       'SELECT id, name, username, email, password_hash, is_approved FROM partners WHERE (username = ? OR email = ?) AND password_hash IS NOT NULL',
@@ -48,7 +43,6 @@ export async function getPartnerByUsernameOrEmail(identifier: string): Promise<(
     );
     if (rows.length > 0) {
       const partnerRow = rows[0];
-      console.log(`[Auth getPartnerByUsernameOrEmail] Partner found: ${partnerRow.name} (Username: ${partnerRow.username})`);
       return {
         id: String(partnerRow.id),
         username: partnerRow.username, // Login username
@@ -58,10 +52,8 @@ export async function getPartnerByUsernameOrEmail(identifier: string): Promise<(
         isApproved: Boolean(partnerRow.is_approved),
       };
     }
-    console.log(`[Auth getPartnerByUsernameOrEmail] Partner not found or no password set for: ${identifier}`);
     return null;
   } catch (error) {
-    console.error('[Auth getPartnerByUsernameOrEmail] Error fetching partner:', error);
     throw new Error('Database error while fetching partner.');
   } finally {
     if (connection) connection.release();

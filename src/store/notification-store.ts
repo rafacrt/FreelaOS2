@@ -36,7 +36,6 @@ export const useNotificationStore = create<NotificationStoreState>((set, get) =>
     set((state) => ({
       notifications: [newNotification, ...state.notifications].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
     }));
-    console.log('[NotificationStore] Notification added:', newNotification);
   },
   getNotificationsForRecipient: (recipientType, recipientId) => {
     return get().notifications.filter(

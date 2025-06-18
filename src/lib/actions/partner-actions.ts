@@ -77,7 +77,6 @@ export async function createPartner(data: CreatePartnerData): Promise<Partner> {
       throw new Error('Falha ao criar parceiro no banco de dados.');
     }
     await connection.commit();
-    console.log(`[PartnerAction createPartner] Parceiro "${name}" (User: ${username}) criado com ID: ${result.insertId}`);
     return {
       id: String(result.insertId),
       name,
@@ -88,7 +87,6 @@ export async function createPartner(data: CreatePartnerData): Promise<Partner> {
     };
   } catch (error: any) {
     if (connection) await connection.rollback();
-    console.error('[PartnerAction createPartner] Erro:', error);
     throw error;
   } finally {
     if (connection) connection.release();
@@ -135,7 +133,6 @@ export async function updatePartnerDetails(data: UpdatePartnerDetailsData): Prom
       throw new Error('Parceiro não encontrado ou nenhum dado alterado.');
     }
     await connection.commit();
-    console.log(`[PartnerAction updatePartnerDetails] Detalhes do Parceiro ID ${id} atualizados.`);
      return { // Retorna os dados como foram passados para atualização (exceto senha)
       id: String(id),
       name,
@@ -146,7 +143,6 @@ export async function updatePartnerDetails(data: UpdatePartnerDetailsData): Prom
     };
   } catch (error: any) {
     if (connection) await connection.rollback();
-    console.error('[PartnerAction updatePartnerDetails] Erro:', error);
     throw error;
   } finally {
     if (connection) connection.release();
@@ -189,7 +185,6 @@ export async function findOrCreatePartnerByName(partnerName: string, existingCon
       throw new Error('Failed to create partner: No valid insertId returned.');
     }
   } catch (error: any) {
-    console.error('[PartnerAction findOrCreateByName] Original DB error:', error);
     throw new Error(`Failed to find or create partner "${partnerName}".`);
   } finally {
     if (!existingConnection && connection) {
@@ -207,7 +202,6 @@ export async function getAllPartnersFromDB(): Promise<Partner[]> {
     );
     return rows.map(mapPartnerRowToPartner);
   } catch (error: any) {
-    console.error('[PartnerAction getAllPartnersFromDB] Original DB error:', error);
     throw new Error('Failed to fetch partners from database.');
   } finally {
     if (connection) connection.release();
@@ -220,7 +214,6 @@ export async function deletePartnerById(partnerId: string): Promise<boolean> {
   }
   const connection = await db.getConnection();
   try {
-    console.log(`[PartnerAction deletePartnerById] Tentando excluir parceiro com ID: ${partnerId}`);
     
     // As constraints ON DELETE SET NULL em `os_table` para `parceiro_id` e `created_by_partner_id`
     // devem desassociar automaticamente as OSs.
@@ -232,14 +225,11 @@ export async function deletePartnerById(partnerId: string): Promise<boolean> {
     );
 
     if (result.affectedRows > 0) {
-      console.log(`[PartnerAction deletePartnerById] Parceiro com ID: ${partnerId} excluído com sucesso.`);
       return true;
     } else {
-      console.warn(`[PartnerAction deletePartnerById] Nenhum parceiro encontrado com ID: ${partnerId} para excluir.`);
       return false; 
     }
   } catch (error: any) {
-    console.error(`[PartnerAction deletePartnerById] Erro ao excluir parceiro com ID: ${partnerId}. Detalhes:`, error);
     // Verificar se o erro é de constraint de chave estrangeira (embora ON DELETE SET NULL deva prevenir isso)
     if (error.code === 'ER_ROW_IS_REFERENCED_2' || (error.message && error.message.includes('foreign key constraint fails'))) {
       throw new Error('Não é possível excluir este parceiro pois ele ainda está vinculado a outros registros importantes, apesar das tentativas de desassociação automática.');

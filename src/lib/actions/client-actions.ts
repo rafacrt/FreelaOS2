@@ -19,7 +19,6 @@ export async function findOrCreateClientByName(clientName: string, sourcePartner
   const connection = existingConnection || await db.getConnection();
   try {
     const trimmedClientName = clientName.trim();
-    console.log(`[ClientAction] Attempting to find client: "${trimmedClientName}" with sourcePartnerId: ${sourcePartnerId} using ${existingConnection ? 'existing' : 'new'} connection.`);
     
     // Check if client exists
     const [existingClients] = await connection.query<RowDataPacket[]>(
@@ -34,7 +33,6 @@ export async function findOrCreateClientByName(clientName: string, sourcePartner
       const existingClient = existingClients[0];
       // If found, and sourcePartnerId is provided, update it if different
       if (sourcePartnerId !== undefined && String(existingClient.source_partner_id || '') !== String(sourcePartnerId || '')) {
-         console.log(`[ClientAction] Updating source_partner_id for existing client ID ${existingClient.id} from "${existingClient.source_partner_id}" to "${sourcePartnerId}".`);
          await connection.execute('UPDATE clients SET source_partner_id = ? WHERE id = ?', [sourcePartnerId || null, existingClient.id]);
          existingClient.source_partner_id = sourcePartnerId || null;
          // Re-fetch partner name if source partner changed
@@ -45,7 +43,6 @@ export async function findOrCreateClientByName(clientName: string, sourcePartner
             existingClient.source_partner_name = null;
          }
       }
-      console.log(`[ClientAction] Found/Updated existing client: ID ${existingClient.id}, Name ${existingClient.name}, SourcePartnerID ${existingClient.source_partner_id}`);
       return { 
           id: String(existingClient.id), 
           name: existingClient.name, 
@@ -55,7 +52,6 @@ export async function findOrCreateClientByName(clientName: string, sourcePartner
     }
 
     // Client does not exist, create new
-    console.log(`[ClientAction] Client "${trimmedClientName}" not found, creating new with sourcePartnerId: ${sourcePartnerId}.`);
     const [result] = await connection.execute<ResultSetHeader>(
       'INSERT INTO clients (name, source_partner_id) VALUES (?, ?)',
       [trimmedClientName, sourcePartnerId || null]
@@ -67,7 +63,6 @@ export async function findOrCreateClientByName(clientName: string, sourcePartner
         const [partnerNameResult] = await connection.query<RowDataPacket[]>('SELECT name FROM partners WHERE id = ?', [sourcePartnerId]);
         newClientSourcePartnerName = partnerNameResult[0]?.name || null;
       }
-      console.log(`[ClientAction] Successfully created client: ID ${result.insertId}, Name ${trimmedClientName}, SourcePartnerID ${sourcePartnerId}`);
       return { 
           id: String(result.insertId), 
           name: trimmedClientName, 
@@ -75,15 +70,12 @@ export async function findOrCreateClientByName(clientName: string, sourcePartner
           sourcePartnerName: newClientSourcePartnerName
         };
     } else {
-      console.error('[ClientAction] Failed to create client: insertId is 0 or not returned.', result);
       throw new Error('Failed to create client: No valid insertId returned.');
     }
   } catch (error: any) {
-    console.error('[ClientAction] Original DB error in findOrCreateClientByName:', error);
     if (error.message.includes('No valid insertId returned')) {
         throw error;
     }
-    console.error(`[ClientAction] Failed to find or create client "${clientName}". Details: ${error.message}`);
     throw new Error(`Failed to find or create client "${clientName}".`);
   } finally {
     if (!existingConnection && connection) {
@@ -98,14 +90,12 @@ export async function findOrCreateClientByName(clientName: string, sourcePartner
 export async function getAllClientsFromDB(): Promise<Client[]> {
   const connection = await db.getConnection();
   try {
-    console.log('[ClientAction] Fetching all clients from DB with source partner info.');
     const [rows] = await connection.query<RowDataPacket[]>(`
       SELECT c.id, c.name, c.source_partner_id, p.name as source_partner_name
       FROM clients c
       LEFT JOIN partners p ON c.source_partner_id = p.id
       ORDER BY c.name ASC
     `);
-    console.log(`[ClientAction] Found ${rows.length} clients.`);
     return rows.map(row => ({ 
         id: String(row.id), 
         name: row.name,
@@ -113,8 +103,6 @@ export async function getAllClientsFromDB(): Promise<Client[]> {
         sourcePartnerName: row.source_partner_name || null,
     }));
   } catch (error: any) {
-    console.error('[ClientAction] Original DB error in getAllClientsFromDB:', error);
-    console.error(`[ClientAction] Failed to fetch clients. Details: ${error.message}`);
     throw new Error('Failed to fetch clients from database.');
   } finally {
     if (connection) connection.release();
@@ -131,7 +119,6 @@ export async function updateClientInDB(client: Client): Promise<Client | null> {
   }
   const connection = await db.getConnection();
   try {
-    console.log(`[ClientAction updateClientInDB] Updating client ID: ${id} to name: "${name.trim()}", sourcePartnerId: "${sourcePartnerId}"`);
     
     // Check for duplicate name if name is being changed
     const [existingClient] = await connection.query<RowDataPacket[]>('SELECT name FROM clients WHERE id = ?', [id]);
@@ -151,7 +138,6 @@ export async function updateClientInDB(client: Client): Promise<Client | null> {
     );
 
     if (result.affectedRows > 0) {
-      console.log(`[ClientAction updateClientInDB] Client ID: ${id} updated successfully.`);
       let updatedSourcePartnerName: string | null = null;
       if (sourcePartnerId) {
           const [partnerRow] = await connection.query<RowDataPacket[]>('SELECT name FROM partners WHERE id = ?', [sourcePartnerId]);
@@ -159,7 +145,6 @@ export async function updateClientInDB(client: Client): Promise<Client | null> {
       }
       return { id: id, name: name.trim(), sourcePartnerId: sourcePartnerId || null, sourcePartnerName: updatedSourcePartnerName };
     } else {
-      console.warn(`[ClientAction updateClientInDB] No client found with ID: ${id} to update, or data was the same.`);
       const [currentClients] = await connection.query<RowDataPacket[]>(
         `SELECT c.id, c.name, c.source_partner_id, p.name as source_partner_name 
          FROM clients c LEFT JOIN partners p ON c.source_partner_id = p.id 
@@ -176,7 +161,6 @@ export async function updateClientInDB(client: Client): Promise<Client | null> {
       return null; // Client not found
     }
   } catch (error: any) {
-    console.error(`[ClientAction updateClientInDB] Error updating client ID ${id}:`, error);
     if (error.code === 'ER_DUP_ENTRY' || error.message.includes('Já existe um cliente com o nome')) {
         throw error; // Re-throw specific errors
     }
@@ -196,7 +180,6 @@ export async function deleteClientFromDB(clientId: string): Promise<boolean> {
   }
   const connection = await db.getConnection();
   try {
-    console.log(`[ClientAction deleteClientFromDB] Attempting to delete client ID: ${clientId}`);
 
     // Check if client is associated with any OS
     const [osCountResult] = await connection.query<RowDataPacket[]>(
@@ -206,7 +189,6 @@ export async function deleteClientFromDB(clientId: string): Promise<boolean> {
     const osCount = osCountResult[0].count;
 
     if (osCount > 0) {
-      console.warn(`[ClientAction deleteClientFromDB] Client ID: ${clientId} is associated with ${osCount} OS(s). Deletion aborted.`);
       throw new Error(`Não é possível excluir este cliente pois ele está vinculado a ${osCount} Ordem(ns) de Serviço. Desassocie-o das OSs primeiro.`);
     }
 
@@ -216,10 +198,8 @@ export async function deleteClientFromDB(clientId: string): Promise<boolean> {
     );
 
     if (result.affectedRows > 0) {
-      console.log(`[ClientAction deleteClientFromDB] Client ID: ${clientId} deleted successfully.`);
       return true;
     } else {
-      console.warn(`[ClientAction deleteClientFromDB] No client found with ID: ${clientId} to delete.`);
       return false; // Client not found
     }
   } catch (error: any) {
@@ -227,7 +207,6 @@ export async function deleteClientFromDB(clientId: string): Promise<boolean> {
     if (error.message.startsWith('Não é possível excluir este cliente pois ele está vinculado')) {
         throw error;
     }
-    console.error(`[ClientAction deleteClientFromDB] Error deleting client ID ${clientId}:`, error);
     // Check for other potential foreign key errors if any exist (though unlikely for clients table beyond OS)
     if (error.code === 'ER_ROW_IS_REFERENCED_2') {
          throw new Error('Não é possível excluir este cliente pois ele está referenciado em outros registros.');

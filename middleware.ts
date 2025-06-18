@@ -2,68 +2,97 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import { getSessionFromToken } from '@/lib/auth-edge'; // Import from Edge-safe auth file
-import { AUTH_COOKIE_NAME } from '@/lib/constants'; 
+import { AUTH_COOKIE_NAME } from '@/lib/constants';
+import type { SessionPayload } from '@/lib/types';
+
+// Explicitly set the runtime to experimental-edge
+export const config = {
+  runtime: 'experimental-edge', // Alterado de 'edge' para 'experimental-edge'
+  matcher: ['/((?!api|_next/static|_next/image|favicon.ico).*)'],
+};
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  console.log(`[Middleware] Processing request for path: ${pathname}`);
-  
-  const allCookies = request.cookies.getAll();
-  console.log('[Middleware] All cookies received:', allCookies.map(c => ({name: c.name, value: c.value.substring(0,10)+'...'})));
 
+  const publicPaths = ['/login', '/register', '/health', '/partner-login'];
 
-  const publicPaths = ['/login', '/register', '/health'];
-
-  // Avoid processing for static assets and API routes
   if (
     pathname.startsWith('/_next/') ||
     pathname.startsWith('/api/') ||
-    pathname.includes('.') // Heuristic for files like favicon.ico, image.png
+    pathname.includes('.')
   ) {
-    // console.log(`[Middleware] Allowing request to proceed for path: ${pathname}`);
     return NextResponse.next();
   }
 
   const tokenValue = request.cookies.get(AUTH_COOKIE_NAME)?.value;
-  console.log(`[Middleware] Token value from cookie '${AUTH_COOKIE_NAME}': ${tokenValue ? tokenValue.substring(0,20)+'...' : 'undefined'}`);
-  
-  const session = await getSessionFromToken(tokenValue);
-  console.log(`[Middleware] Session from token:`, session);
+  const session: SessionPayload | null = await getSessionFromToken(tokenValue);
 
+  // Handle public paths
   if (publicPaths.includes(pathname)) {
-    if (session && pathname !== '/health') {
-      // If user is on a public path (login/register) and is logged in, redirect to dashboard
-      // (unless it's /health which should always be accessible)
-      console.log(`[Middleware] User authenticated (${session.username}), redirecting from public path ${pathname} to /dashboard`);
-      return NextResponse.redirect(new URL('/dashboard', request.url));
+    if (session) {
+      if (session.sessionType === 'admin' && pathname !== '/health') {
+        return NextResponse.redirect(new URL('/dashboard', request.url));
+      } else if (session.sessionType === 'partner' && pathname !== '/health' && pathname !== '/partner-login') {
+        // If partner is on /login or /register, redirect them to their dashboard
+        return NextResponse.redirect(new URL('/partner/dashboard', request.url));
+      }
     }
-    // console.log(`[Middleware] Allowing access to public path: ${pathname}`);
+    return NextResponse.next(); // Allow access to public paths if no conflicting session
+  }
+
+  // Handle protected admin routes (e.g., /dashboard, /entities, /reports)
+  if (pathname.startsWith('/dashboard') || pathname.startsWith('/entities') || pathname.startsWith('/reports') || pathname.startsWith('/calendar') || pathname.startsWith('/os/')) {
+    if (!session || session.sessionType !== 'admin') {
+      const loginUrl = new URL('/login', request.url);
+      return NextResponse.redirect(loginUrl);
+    }
+    if (!session.isApproved) { // Admin users must be approved (though usually they are by default)
+      const loginUrl = new URL('/login', request.url);
+      loginUrl.searchParams.set('status', 'not_approved');
+      const response = NextResponse.redirect(loginUrl);
+      response.cookies.delete(AUTH_COOKIE_NAME);
+      return response;
+    }
     return NextResponse.next();
   }
 
-  // For all other paths (protected routes)
-  if (!session) {
-    // If no session, redirect to login
-    console.log(`[Middleware] No session, redirecting from protected path ${pathname} to /login`);
-    const loginUrl = new URL('/login', request.url);
-    return NextResponse.redirect(loginUrl);
-  }
-  
-  // Check if user is approved
-  if (!session.isApproved) {
-     console.log(`[Middleware] User ${session.username} is not approved. Redirecting to /login with status.`);
-     const loginUrl = new URL('/login', request.url);
-     loginUrl.searchParams.set('status', 'not_approved'); // Add status for user feedback
-     const response = NextResponse.redirect(loginUrl);
-     response.cookies.delete(AUTH_COOKIE_NAME); // Clear the cookie
-     return response;
+  // Handle protected partner routes (e.g., /partner/**)
+  if (pathname.startsWith('/partner')) {
+    if (!session || session.sessionType !== 'partner') {
+      // If an admin is trying to access /partner, redirect them to their own dashboard
+      if (session && session.sessionType === 'admin') {
+        return NextResponse.redirect(new URL('/dashboard', request.url));
+      }
+      const partnerLoginUrl = new URL('/partner-login', request.url);
+      return NextResponse.redirect(partnerLoginUrl);
+    }
+    if (!session.isApproved) {
+      const partnerLoginUrl = new URL('/partner-login', request.url);
+      partnerLoginUrl.searchParams.set('status', 'not_approved');
+      const response = NextResponse.redirect(partnerLoginUrl);
+      response.cookies.delete(AUTH_COOKIE_NAME);
+      return response;
+    }
+    return NextResponse.next();
   }
 
-  // If session exists and user is approved, allow access
-  console.log(`[Middleware] Session found for approved user ${session.username}, allowing access to ${pathname}`);
+  // Fallback for any other routes - if not public and no session, redirect to admin login.
+  // This also handles the root path ('/') if not covered by other conditions.
+  if (!session) {
+    return NextResponse.redirect(new URL('/login', request.url));
+  }
+
+  // If a session exists but doesn't match any specific route protection rules above,
+  // decide where to send them based on session type.
+  if (session.sessionType === 'admin') {
+    if (pathname === '/') { // If admin lands on root, send to admin dashboard
+        return NextResponse.redirect(new URL('/dashboard', request.url));
+    }
+  } else if (session.sessionType === 'partner') {
+     if (pathname === '/') { // If partner lands on root, send to partner dashboard
+        return NextResponse.redirect(new URL('/partner/dashboard', request.url));
+    }
+  }
+
   return NextResponse.next();
 }
-
-export const config = {
-  matcher: ['/((?!api|_next/static|_next/image|favicon.ico).*)'],
-};

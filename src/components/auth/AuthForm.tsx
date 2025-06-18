@@ -46,7 +46,6 @@ export default function AuthForm({ initialMessage, initialMessageType }: AuthFor
   const [displayMessageType, setDisplayMessageType] = useState(initialState.type);
 
   useEffect(() => {
-    console.log("[AuthForm] Message useEffect. state.message:", state?.message, "state.type:", state?.type);
     if (state?.message) {
       setDisplayMessage(state.message);
       setDisplayMessageType(state.type);
@@ -61,9 +60,7 @@ export default function AuthForm({ initialMessage, initialMessageType }: AuthFor
 
 
   useEffect(() => {
-    console.log("[AuthForm] Redirection useEffect. state.type:", state?.type, "state.redirect:", state?.redirect);
     if (state?.type === 'success' && state?.redirect) {
-      console.log(`[AuthForm] Success state detected. Attempting redirect with window.location.assign to: ${state.redirect}`);
       if (state.redirect) {
         window.location.assign(state.redirect);
       }

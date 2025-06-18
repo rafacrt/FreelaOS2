@@ -84,7 +84,7 @@ export function CreateOSDialog() {
         if (modalInstanceRef.current) {
              currentModalElement.addEventListener('hidden.bs.modal', resetFormAndStates);
         }
-    }).catch(error => console.error("Failed to initialize Bootstrap modal:", error));
+    }).catch(error => {});
 
     return () => {
       if (currentModalElement) {
@@ -97,7 +97,6 @@ export function CreateOSDialog() {
              }
             modalInstanceRef.current.dispose();
         } catch (e) {
-            console.warn("Error disposing modal instance on cleanup:", e);
         }
         modalInstanceRef.current = null;
       }
@@ -147,7 +146,6 @@ export function CreateOSDialog() {
     if (modalInstanceRef.current && typeof modalInstanceRef.current.show === 'function') {
         modalInstanceRef.current.show();
     } else {
-        console.warn('Modal instance not available to show.');
     }
   };
 
@@ -192,7 +190,6 @@ export function CreateOSDialog() {
         programadoPara: values.programadoPara || undefined,
         checklistItems: checklistActive ? checklistItems.map(item => item.trim()).filter(item => item !== '') : undefined,
       };
-      console.log('[CreateOSDialog onSubmit] Data para addOS:', JSON.stringify(dataToSubmit, null, 2));
       await addOS(dataToSubmit);
       
       if (modalInstanceRef.current && typeof modalInstanceRef.current.hide === 'function') {
@@ -201,7 +198,6 @@ export function CreateOSDialog() {
         resetFormAndStates(); 
       }
     } catch (error) {
-      console.error("[CreateOSDialog] Failed to create OS:", error);
       alert('Falha ao criar OS. Por favor, tente novamente.');
     } finally {
       // setIsSubmitting will be reset by resetFormAndStates when modal hides
@@ -492,5 +488,4 @@ export function CreateOSDialog() {
     </>
   );
 }
-
     

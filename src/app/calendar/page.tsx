@@ -74,10 +74,8 @@ export default function CalendarPage() {
                 scheduled.add(dateStr);
                 addOsToMap(dateStr, os);
             } else {
-                 console.warn(`[Calendar] Invalid programadoPara date format for OS ${os.numero}: ${os.programadoPara}`);
             }
         } catch (e) {
-          console.warn(`[Calendar] Error parsing programadoPara date for OS ${os.numero}: ${os.programadoPara}`, e);
         }
       }
       // Handle finalized date (ISO string)
@@ -89,10 +87,8 @@ export default function CalendarPage() {
             finalized.add(dateStr);
             addOsToMap(dateStr, os);
           } else {
-            console.warn(`[Calendar] Invalid dataFinalizacao date for OS ${os.numero}: ${os.dataFinalizacao}`);
           }
         } catch (e) {
-          console.warn(`[Calendar] Error parsing dataFinalizacao date for OS ${os.numero}: ${os.dataFinalizacao}`, e);
         }
       }
     });

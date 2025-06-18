@@ -152,7 +152,7 @@ export default function AddEditPartnerModal({ partner, isOpen, onClose }: AddEdi
            // Não chame dispose aqui, pois pode ser chamado muitas vezes.
            // O dispose deve ser chamado quando o componente AddEditPartnerModal é desmontado.
         };
-      }).catch(err => console.error("Failed to load Bootstrap modal:", err));
+      }).catch(err => {});
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, onClose]); 
@@ -182,7 +182,6 @@ export default function AddEditPartnerModal({ partner, isOpen, onClose }: AddEdi
             }
             bootstrapModal.dispose();
         } catch (error) {
-            console.warn("Error disposing Bootstrap modal on component unmount:", error);
         }
       }
     };

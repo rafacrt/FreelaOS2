@@ -15,8 +15,6 @@ export default async function HomePage() {
   const currentSession = await getSessionFromToken(tokenValue);
 
   if (devLoginEnabled && nextPublicDevMode && !currentSession) {
-    console.log('[HomePage] DEV_LOGIN_ENABLED and NEXT_PUBLIC_DEV_MODE are true, and no session. Auto-logging in as dev admin.');
-
     const devAdminSession: SessionPayload = {
       sessionType: 'admin',
       id: 'dev-admin-001',
@@ -39,27 +37,21 @@ export default async function HomePage() {
         sameSite: 'lax' as 'lax' | 'strict' | 'none' | undefined,
       };
       cookieStore.set(cookieOptions);
-      console.log(`[HomePage] Dev admin session cookie created for ${devAdminSession.username}. Redirecting to /dashboard.`);
       redirect('/dashboard');
     } catch (error) {
-      console.error('[HomePage] Failed to create dev admin session cookie:', error);
       redirect('/login');
     }
   }
 
   if (currentSession) {
     if (currentSession.sessionType === 'admin') {
-      console.log('[HomePage] Admin session found, redirecting to /dashboard.');
       redirect('/dashboard');
     } else if (currentSession.sessionType === 'partner') {
-      console.log('[HomePage] Partner session found, redirecting to /partner/dashboard.');
       redirect('/partner/dashboard');
     } else {
-      console.warn('[HomePage] Unknown session type found, redirecting to /login.');
       redirect('/login');
     }
   } else {
-    console.log('[HomePage] No session found, redirecting to /login.');
     redirect('/login');
   }
   return null;

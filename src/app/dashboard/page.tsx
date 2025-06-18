@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -33,7 +34,7 @@ export default function DashboardPage() {
         setShowAnimation(false);
       }
     } catch (error) {
-      console.warn("Session storage not available or error accessing it:", error);
+      // console.warn("Session storage not available or error accessing it:", error);
       setShowAnimation(false); // Default to no animation if sessionStorage fails
     }
   }, []);
@@ -43,7 +44,7 @@ export default function DashboardPage() {
     try {
       sessionStorage.setItem(ANIMATION_PLAYED_KEY, 'true');
     } catch (error) {
-      console.warn("Error setting session storage:", error);
+      // console.warn("Error setting session storage:", error);
     }
   };
   

@@ -40,14 +40,11 @@ export default function DevLoginButton() {
 
   useEffect(() => {
     // Apenas logamos o estado para depuração. O redirecionamento é feito pelo Next.js.
-    console.log("[DevLoginButton] State from devLoginAction:", state);
     if (state?.type === 'error' && state?.message) {
-      console.error(`[DevLoginButton] Dev login failed: ${state.message}`);
       // Poderia exibir state.message em um alerta ou toast se desejado
     }
     // Não é mais necessário chamar router.push() aqui
     // if (state?.type === 'success' && state?.redirect) {
-    //   console.log(`[DevLoginButton] Success! Next.js should handle redirect to ${state.redirect}`);
     //   // router.push(state.redirect); // Removido
     // }
   }, [state]);

@@ -1,3 +1,4 @@
+
 // src/components/layout/AuthenticatedLayout.tsx
 'use client';
 
@@ -21,7 +22,6 @@ export default function AuthenticatedLayout({ children }: AuthenticatedLayoutPro
   const pathname = usePathname();
 
   useEffect(() => {
-    console.log('[AuthenticatedLayout] Main useEffect triggered. Attempting to fetch session.');
     let isMounted = true;
 
     async function fetchSessionData() {
@@ -33,11 +33,9 @@ export default function AuthenticatedLayout({ children }: AuthenticatedLayoutPro
         }
         const sessionData: SessionPayload | null = await response.json();
         if (isMounted) {
-          console.log('[AuthenticatedLayout] Session data fetched from API:', JSON.stringify(sessionData));
           setSession(sessionData);
         }
       } catch (error) {
-        console.error('[AuthenticatedLayout] Error fetching session:', error);
         if (isMounted) {
           setSession(null);
         }
@@ -57,11 +55,8 @@ export default function AuthenticatedLayout({ children }: AuthenticatedLayoutPro
 
   useEffect(() => {
     if (!isLoadingSession && !isStoreInitialized) {
-      console.log('[AuthenticatedLayout] Session loaded and store not initialized. Initializing OS store...');
       initializeStore().then(() => {
-        console.log('[AuthenticatedLayout] OS Store initialization complete.');
       }).catch(err => {
-        console.error('[AuthenticatedLayout] Error initializing OS Store:', err);
       });
     }
   }, [isLoadingSession, isStoreInitialized, initializeStore, session]); // Add session as dependency

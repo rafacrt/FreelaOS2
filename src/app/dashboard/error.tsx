@@ -12,7 +12,7 @@ export default function DashboardError({
   reset: () => void;
 }) {
   useEffect(() => {
-    console.error("Dashboard Error Boundary Caught:", error);
+    // console.error("Dashboard Error Boundary Caught:", error); // Log the error to an error reporting service
   }, [error]);
 
   return (

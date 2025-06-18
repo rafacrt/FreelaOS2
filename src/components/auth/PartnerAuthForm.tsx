@@ -58,7 +58,6 @@ export default function PartnerAuthForm({ initialMessage, initialMessageType }: 
 
   useEffect(() => {
     if (state?.type === 'success' && state?.redirect) {
-      console.log(`[PartnerAuthForm] Success state detected. Redirecting to: ${state.redirect} using window.location.assign.`);
       // Using window.location.assign for a more forceful client-side redirect
       // as Next.js server action redirects might not always be picked up immediately
       // if the page isn't fully reloaded or if there's client-side navigation interference.

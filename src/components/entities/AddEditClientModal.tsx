@@ -88,7 +88,7 @@ export default function AddEditClientModal({ client, isOpen, onClose }: AddEditC
               (currentModalNode as any)._eventListenerAttached = false;
           }
         };
-      }).catch(err => console.error("Failed to load Bootstrap modal:", err));
+      }).catch(err => {});
     }
   }, [isOpen, onClose]);
 
@@ -115,7 +115,6 @@ export default function AddEditClientModal({ client, isOpen, onClose }: AddEditC
             }
             bootstrapModal.dispose();
         } catch (error) {
-            console.warn("Error disposing Bootstrap modal on component unmount:", error);
         }
       }
     };
@@ -137,17 +136,14 @@ export default function AddEditClientModal({ client, isOpen, onClose }: AddEditC
             name: dataToSave.name, 
             sourcePartnerId: dataToSave.sourcePartnerId 
         });
-        console.log(`Cliente "${dataToSave.name}" atualizado.`);
       } else {
         await addClient({ 
             name: dataToSave.name, 
             sourcePartnerId: dataToSave.sourcePartnerId 
         });
-        console.log(`Cliente "${dataToSave.name}" adicionado.`);
       }
       onClose(); 
     } catch (error: any) {
-      console.error('Failed to save client:', error);
       setServerError(error.message || 'Falha ao salvar cliente. Por favor, tente novamente.');
     } finally {
       setIsSubmitting(false);

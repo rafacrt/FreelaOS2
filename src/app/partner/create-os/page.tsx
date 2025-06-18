@@ -1,3 +1,4 @@
+
 // src/app/partner/create-os/page.tsx
 'use client';
 
@@ -60,7 +61,6 @@ export default function PartnerCreateOSPage() {
 
   useEffect(() => {
     if (session && !isStoreInitialized) {
-      console.log('[PartnerCreateOSPage] Session available, ensuring store is initialized.');
       initializeStore();
     }
   }, [session, isStoreInitialized, initializeStore]);
@@ -124,7 +124,7 @@ export default function PartnerCreateOSPage() {
       const dataToSubmit: CreateOSData = {
         ...values,
         cliente: clientInput.trim(),
-        status: session.isApproved ? OSStatus.NA_FILA : OSStatus.AGUARDANDO_APROVACAO,
+        status: OSStatus.NA_FILA, // Logic to set AGUARDANDO_APROVACAO if partner not approved is in os-actions.ts
         observacoes: values.observacoes || '',
         programadoPara: values.programadoPara || undefined,
         checklistItems: checklistActive ? checklistItems.map(item => item.trim()).filter(item => item !== '') : undefined,
@@ -139,7 +139,6 @@ export default function PartnerCreateOSPage() {
         alert('Falha ao criar OS. Verifique os dados e tente novamente.');
       }
     } catch (error: any) {
-      console.error("[PartnerCreateOSPage] Failed to create OS:", error);
       alert(`Falha ao criar OS: ${error.message || 'Erro desconhecido.'}`);
     } finally {
       setIsSubmitting(false);

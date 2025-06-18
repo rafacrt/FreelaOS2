@@ -57,7 +57,6 @@ export default function EntitiesPage() {
         await deleteClient(client.id); // Uses the renamed store action
         alert(`Cliente "${client.name}" excluído com sucesso.`);
       } catch (error: any) {
-         console.error("Falha ao excluir cliente:", error);
          alert(`Falha ao excluir cliente "${client.name}": ${error.message}`);
       }
     }
@@ -84,7 +83,6 @@ export default function EntitiesPage() {
         await deletePartnerEntity(partner.id);
         alert(`Parceiro "${partner.name}" excluído com sucesso.`);
       } catch (error: any) {
-        console.error("Falha ao excluir parceiro:", error);
         alert(`Falha ao excluir parceiro "${partner.name}": ${error.message}`);
       }
     }

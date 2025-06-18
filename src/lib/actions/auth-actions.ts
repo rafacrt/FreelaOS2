@@ -13,7 +13,6 @@ import { redirect as nextRedirect } from 'next/navigation'; // Renomeado para ev
 
 // Updated to handle different session types
 async function createSessionCookie(sessionData: SessionPayload) {
-  console.log(`[AuthAction createSessionCookie] Attempting to create session for type: ${sessionData.sessionType}, User/Partner ID: ${sessionData.id}`);
   const cookieStore = cookies();
   const expires = new Date(Date.now() + SESSION_MAX_AGE * 1000);
 
@@ -31,11 +30,8 @@ async function createSessionCookie(sessionData: SessionPayload) {
       path: '/',
       sameSite: 'lax' as 'lax' | 'strict' | 'none' | undefined,
     };
-    console.log('[AuthAction createSessionCookie] Cookie options:', cookieOptions);
     cookieStore.set(cookieOptions);
-    console.log(`[AuthAction createSessionCookie] Session cookie SET for type: ${sessionData.sessionType}. Token (first 20 chars): ${token ? token.substring(0,20)+'...' : 'N/A'}`);
   } catch (error: any) {
-    console.error('[AuthAction createSessionCookie] CRITICAL ERROR encrypting payload or setting cookie:', error);
     throw new Error('Falha ao criar cookie de sessão: ' + error.message);
   }
 }
@@ -44,7 +40,6 @@ export async function loginAction(
   prevState: AuthActionState,
   formData: FormData
 ): Promise<AuthActionState> {
-  console.log('[LoginAction Admin/Internal] Initiated.');
   const username = formData.get('username') as string;
   const password = formData.get('password') as string;
 
@@ -54,7 +49,6 @@ export async function loginAction(
 
   if (devLoginEnabledEnv === "true") {
     if (username === devUsernameEnv && password === devPasswordEnv) {
-      console.log(`[LoginAction Admin/Internal] Dev credentials MATCH for user: ${devUsernameEnv}.`);
       try {
         const adminSession: SessionPayload = {
           sessionType: 'admin',
@@ -64,18 +58,14 @@ export async function loginAction(
           isApproved: true,
         };
         await createSessionCookie(adminSession);
-        console.log(`[LoginAction Admin/Internal] Dev session cookie created for ${devUsernameEnv}.`);
         return { message: 'Login de desenvolvimento (admin) bem-sucedido!', type: 'success', redirect: '/dashboard' };
       } catch (error: any) {
-        console.error('[LoginAction Admin/Internal] EXCEPTION during DEV login session creation:', error.message, error.stack);
         return { message: `Erro ao criar sessão de desenvolvimento (admin): ${error.message}`, type: 'error' };
       }
     } else {
-      console.warn(`[LoginAction Admin/Internal] Dev login mode active, but DEV credentials did NOT match. Provided user: ${username}. Expected dev user: ${devUsernameEnv}.`);
     }
   }
 
-  console.log(`[LoginAction Admin/Internal] Attempting DB login for user: ${username}`);
   if (!username || !password) {
     return { message: 'Usuário e senha são obrigatórios.', type: 'error' };
   }
@@ -84,18 +74,15 @@ export async function loginAction(
     const user = await getUserByUsername(username);
 
     if (!user) {
-      console.log(`[LoginAction Admin/Internal] User not found in DB: ${username}`);
       return { message: 'Credenciais inválidas ou usuário não encontrado.', type: 'error' };
     }
 
     if (!user.isApproved) {
-      console.log(`[LoginAction Admin/Internal] User not approved: ${username}`);
       return { message: 'Sua conta ainda não foi aprovada por um administrador.', type: 'error' };
     }
 
     const passwordsMatch = await bcrypt.compare(password, user.password_hash);
     if (!passwordsMatch) {
-      console.log(`[LoginAction Admin/Internal] Password mismatch for user: ${username}`);
       return { message: 'Credenciais inválidas.', type: 'error' };
     }
 
@@ -107,11 +94,9 @@ export async function loginAction(
         isApproved: user.isApproved,
     };
     await createSessionCookie(adminSessionData);
-    console.log(`[LoginAction Admin/Internal] DB Login successful for user: ${username}. Preparing success state.`);
     return { message: 'Login bem-sucedido!', type: 'success', redirect: '/dashboard' };
 
   } catch (error: any) {
-    console.error('[LoginAction Admin/Internal] EXCEPTION during DB login process for user:', username, error);
     let errorMessage = 'Ocorreu um erro inesperado durante o login. Tente novamente.';
     if (error.code === 'ECONNREFUSED' || error.message?.includes('ECONNREFUSED')) {
       errorMessage = 'Falha na conexão com o banco de dados.';
@@ -126,7 +111,6 @@ export async function partnerLoginAction(
   prevState: AuthActionState,
   formData: FormData
 ): Promise<AuthActionState> {
-  console.log('[PartnerLoginAction] Initiated.');
   const identifier = formData.get('identifier') as string; // Can be username or email
   const password = formData.get('password') as string;
 
@@ -138,23 +122,19 @@ export async function partnerLoginAction(
     const partner = await getPartnerByUsernameOrEmail(identifier);
 
     if (!partner) {
-      console.log(`[PartnerLoginAction] Partner not found in DB: ${identifier}`);
       return { message: 'Credenciais inválidas ou parceiro não encontrado.', type: 'error' };
     }
 
     if (!partner.isApproved) {
-      console.log(`[PartnerLoginAction] Partner account not approved: ${partner.username}`);
       return { message: 'Sua conta de parceiro ainda não foi aprovada.', type: 'error' };
     }
 
     if (!partner.password_hash) {
-        console.log(`[PartnerLoginAction] Partner account ${partner.username} does not have a password set.`);
         return { message: 'Conta de parceiro não configurada para login. Contate o administrador.', type: 'error' };
     }
 
     const passwordsMatch = await bcrypt.compare(password, partner.password_hash);
     if (!passwordsMatch) {
-      console.log(`[PartnerLoginAction] Password mismatch for partner: ${partner.username}`);
       return { message: 'Credenciais inválidas.', type: 'error' };
     }
 
@@ -167,11 +147,9 @@ export async function partnerLoginAction(
         isApproved: partner.isApproved,
     };
     await createSessionCookie(partnerSessionData);
-    console.log(`[PartnerLoginAction] Partner login successful for: ${partner.username}. Redirecting to /partner/dashboard.`);
     return { message: 'Login de parceiro bem-sucedido!', type: 'success', redirect: '/partner/dashboard' };
 
   } catch (error: any) {
-    console.error('[PartnerLoginAction] EXCEPTION during partner login process for:', identifier, error);
     let errorMessage = 'Ocorreu um erro inesperado durante o login do parceiro. Tente novamente.';
      if (error.code === 'ECONNREFUSED' || error.message?.includes('ECONNREFUSED')) {
       errorMessage = 'Falha na conexão com o banco de dados.';
@@ -184,12 +162,9 @@ export async function partnerLoginAction(
 
 
 export async function devLoginAction(prevState: AuthActionState, formData: FormData): Promise<AuthActionState> {
-  console.log('[DevLoginAction] Initiated.');
   const devLoginEnabledEnv = process.env.DEV_LOGIN_ENABLED;
-  console.log(`[DevLoginAction] Raw DEV_LOGIN_ENABLED from env: "${devLoginEnabledEnv}"`);
 
   if (devLoginEnabledEnv !== "true" && process.env.NODE_ENV !== 'development') { // Allow in dev even if not explicitly "true" for easier local dev
-    console.warn(`[DevLoginAction] Attempted dev login, but DEV_LOGIN_ENABLED is not "true" in a non-development environment.`);
     // return { message: 'Login de desenvolvimento não está habilitado neste ambiente.', type: 'error' };
   }
 
@@ -203,7 +178,6 @@ export async function devLoginAction(prevState: AuthActionState, formData: FormD
 
   try {
     await createSessionCookie(adminSession);
-    console.log(`[DevLoginAction] Mock admin session cookie created. Redirecting to /dashboard.`);
     // Using Next.js redirect function. It works by throwing an error that Next.js catches.
     // Ensure this action is called from a Server Component or a form action handler.
     nextRedirect('/dashboard');
@@ -211,7 +185,6 @@ export async function devLoginAction(prevState: AuthActionState, formData: FormD
     if (error.message === 'NEXT_REDIRECT') { // This is expected if redirect() is called
         throw error;
     }
-    console.error('[DevLoginAction] EXCEPTION during mock admin session creation:', error.message, error.stack);
     return { message: `Erro ao criar sessão de desenvolvimento (admin): ${error.message}`, type: 'error' };
   }
 }
@@ -220,7 +193,6 @@ export async function simulatePartnerLoginAction(
   prevState: AuthActionState,
   formData: FormData // formData won't be used but is part of the action signature
 ): Promise<AuthActionState> {
-  console.log('[SimulatePartnerLoginAction] Initiated.');
 
   const partnerSession: SessionPayload = {
     sessionType: 'partner',
@@ -233,13 +205,11 @@ export async function simulatePartnerLoginAction(
 
   try {
     await createSessionCookie(partnerSession);
-    console.log(`[SimulatePartnerLoginAction] Simulated partner session cookie created for ${partnerSession.partnerName} (ID: ${partnerSession.id}). Redirecting to /partner/dashboard.`);
     nextRedirect('/partner/dashboard');
   } catch (error: any) { 
     if (error.message === 'NEXT_REDIRECT') { 
         throw error;
     }
-    console.error('[SimulatePartnerLoginAction] EXCEPTION during simulated partner session creation:', error.message, error.stack);
     return { message: `Erro ao criar sessão de parceiro simulada: ${error.message}`, type: 'error' };
   }
 }
@@ -249,7 +219,6 @@ export async function registerUserAction(
   prevState: AuthActionState,
   formData: FormData
 ): Promise<AuthActionState> {
-  console.log('[RegisterAction Admin/Internal] Initiated.');
   const username = formData.get('username') as string;
   const password = formData.get('password') as string;
 
@@ -305,7 +274,6 @@ export async function registerUserAction(
         await createSessionCookie(adminSession);
         return { message: 'Registro e login bem-sucedidos como administrador!', type: 'success', redirect: '/dashboard' };
       } catch (error: any) {
-         console.error('[RegisterAction Admin/Internal] Failed to create session for first user:', error.message);
          return { message: `Conta de administrador criada, mas erro ao iniciar sessão (${error.message}). Tente fazer login.`, type: 'error', redirect: '/login' };
       }
     } else if (isFirstUser && devLoginEnabled) {
@@ -315,7 +283,6 @@ export async function registerUserAction(
     }
   } catch (error: any) {
     if (connection) await connection.rollback();
-    console.error('[RegisterAction Admin/Internal] EXCEPTION:', username, error);
     return { message: 'Erro inesperado durante o registro.', type: 'error' };
   } finally {
     if (connection) connection.release();
@@ -323,15 +290,12 @@ export async function registerUserAction(
 }
 
 export async function logoutAction(): Promise<AuthActionState> {
-  console.log('[LogoutAction] Initiated.');
   const cookieStore = cookies();
   const token = cookieStore.get(AUTH_COOKIE_NAME)?.value;
 
   if (token) {
     cookieStore.delete(AUTH_COOKIE_NAME);
-    console.log('[LogoutAction] Session cookie deleted.');
   } else {
-    console.log('[LogoutAction] No session cookie found to delete.');
   }
   // Determine redirect based on previous path or a default
   // For simplicity, always redirect to login after admin logout.
