@@ -240,3 +240,63 @@ export async function deletePartnerById(partnerId: string): Promise<boolean> {
   }
 }
       
+// Constants for the simulated partner
+const SIMULATED_PARTNER_USERNAME = 'sim_partner_user';
+const SIMULATED_PARTNER_NAME = 'Parceiro Simulado Inc.';
+const SIMULATED_PARTNER_EMAIL = 'sim.partner@example.com';
+const SIMULATED_PARTNER_DUMMY_PASSWORD = 'sim_password_auto_123'; // Dummy password for hashing
+
+/**
+ * Ensures that a simulated partner record exists in the database.
+ * If not, it creates one with default details and a dummy hashed password.
+ * Returns the partner details (including its actual database ID).
+ */
+export async function ensureSimulatedPartnerExists(): Promise<Partner> {
+  const connection = await db.getConnection();
+  try {
+    const [existingPartners] = await connection.query<RowDataPacket[]>(
+      'SELECT id, name, username, email, contact_person, is_approved FROM partners WHERE username = ?',
+      [SIMULATED_PARTNER_USERNAME]
+    );
+
+    if (existingPartners.length > 0) {
+      const p = existingPartners[0];
+      // console.log(`SERVER LOG: [ensureSimulatedPartnerExists] Found existing simulated partner ID: ${p.id}`);
+      return mapPartnerRowToPartner(p);
+    }
+
+    // console.log(`SERVER LOG: [ensureSimulatedPartnerExists] Simulated partner not found, creating...`);
+    const hashedPassword = await bcrypt.hash(SIMULATED_PARTNER_DUMMY_PASSWORD, 10);
+
+    const [result] = await connection.execute<ResultSetHeader>(
+      'INSERT INTO partners (name, username, email, password_hash, is_approved, contact_person, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())',
+      [
+        SIMULATED_PARTNER_NAME,
+        SIMULATED_PARTNER_USERNAME,
+        SIMULATED_PARTNER_EMAIL,
+        hashedPassword,
+        true, // is_approved for simulated partner
+        'Contato Simulado' // contact_person
+      ]
+    );
+
+    if (result.insertId) {
+      // console.log(`SERVER LOG: [ensureSimulatedPartnerExists] Created simulated partner with ID: ${result.insertId}`);
+      return {
+        id: String(result.insertId),
+        name: SIMULATED_PARTNER_NAME,
+        username: SIMULATED_PARTNER_USERNAME,
+        email: SIMULATED_PARTNER_EMAIL,
+        contact_person: 'Contato Simulado',
+        is_approved: true,
+      };
+    } else {
+      throw new Error('Failed to create simulated partner: No valid insertId returned.');
+    }
+  } catch (error: any) {
+    // console.error(`SERVER LOG: [ensureSimulatedPartnerExists] Error: ${error.message}`);
+    throw new Error(`Failed to ensure simulated partner exists: ${error.message}`);
+  } finally {
+    if (connection) connection.release();
+  }
+}
