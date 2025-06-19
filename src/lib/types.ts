@@ -61,7 +61,7 @@ export interface PartnerSessionData {
   id: string; // This is the partner's ID from the 'partners' table
   username: string; // Partner's login username
   partnerName: string; // Actual name of the partner company/individual
-  email?: string;
+  email?: string; // Partner's email
   isApproved: boolean; // Partner login account approval status
   // Add any other partner-specific session data you might need
 }

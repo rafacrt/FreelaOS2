@@ -12,16 +12,11 @@ import { AlertCircle } from 'lucide-react';
 
 const strongPasswordSchema = z.string()
   .min(6, { message: "Senha deve ter no mínimo 6 caracteres." });
-  // .regex(/[a-z]/, { message: "Senha deve conter ao menos uma letra minúscula." })
-  // .regex(/[A-Z]/, { message: "Senha deve conter ao menos uma letra maiúscula." })
-  // .regex(/[0-9]/, { message: "Senha deve conter ao menos um número." })
-  // .regex(/[^a-zA-Z0-9]/, { message: "Senha deve conter ao menos um caractere especial." });
-
 
 const createPartnerSchema = z.object({
   name: z.string().min(1, { message: 'Nome do parceiro é obrigatório.' }),
   username: z.string().min(3, { message: 'Nome de usuário é obrigatório (mín. 3 caracteres).' }).regex(/^[a-zA-Z0-9_]+$/, { message: 'Nome de usuário pode conter apenas letras, números e underscore (_).' }),
-  email: z.string().email({ message: 'Email inválido.' }).optional().or(z.literal('')),
+  email: z.string().email({ message: 'Email inválido.' }).optional().or(z.literal('')), // Email is optional, but must be valid if provided
   password: strongPasswordSchema,
   confirmPassword: strongPasswordSchema,
   contact_person: z.string().optional(),
@@ -34,13 +29,13 @@ const createPartnerSchema = z.object({
 const editPartnerSchema = z.object({
     name: z.string().min(1, { message: 'Nome do parceiro é obrigatório.' }),
     username: z.string().min(3, { message: 'Nome de usuário é obrigatório (mín. 3 caracteres).' }).regex(/^[a-zA-Z0-9_]+$/, { message: 'Nome de usuário pode conter apenas letras, números e underscore (_).' }),
-    email: z.string().email({ message: 'Email inválido.' }).optional().or(z.literal('')),
+    email: z.string().email({ message: 'Email inválido.' }).optional().or(z.literal('')), // Email is optional
     contact_person: z.string().optional(),
     is_approved: z.boolean().default(false),
-    password: z.string().optional(), // Nova senha é opcional
-    confirmPassword: z.string().optional(), // Confirmação também
+    password: z.string().optional(), 
+    confirmPassword: z.string().optional(), 
 }).superRefine((data, ctx) => {
-    if (data.password) { // Se uma nova senha for fornecida
+    if (data.password) { 
       if (!data.confirmPassword) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
@@ -54,7 +49,6 @@ const editPartnerSchema = z.object({
           path: ["confirmPassword"],
         });
       } else {
-        // Validar força da nova senha
         const passwordValidation = strongPasswordSchema.safeParse(data.password);
         if (!passwordValidation.success) {
             passwordValidation.error.errors.forEach(err => {
@@ -66,10 +60,6 @@ const editPartnerSchema = z.object({
             });
         }
       }
-    } else if (data.confirmPassword && !data.password) {
-        // Se confirmPassword for preenchido mas password não, geralmente não é um erro,
-        // mas podemos adicionar uma issue se quisermos que ambos sejam limpos ou preenchidos juntos.
-        // Por ora, vamos permitir isso, a lógica principal é se data.password existe.
     }
 });
 
@@ -98,10 +88,10 @@ export default function AddEditPartnerModal({ partner, isOpen, onClose }: AddEdi
     defaultValues: {
       name: '',
       username: '',
-      email: '',
+      email: '', // Initialize email
       contact_person: '',
       is_approved: false,
-      password: '', // Sempre inicializa password (e confirmPassword) como string vazia
+      password: '', 
       confirmPassword: '',
     },
     mode: 'onChange',
@@ -109,18 +99,18 @@ export default function AddEditPartnerModal({ partner, isOpen, onClose }: AddEdi
   
   useEffect(() => {
     if (isOpen) {
-      reset({ // Usar o reset do useForm
+      reset({ 
         name: partner?.name || '',
         username: partner?.username || '',
-        email: partner?.email || '',
+        email: partner?.email || '', // Reset email
         contact_person: partner?.contact_person || '',
         is_approved: partner?.is_approved || false,
-        password: '', // Limpa campos de senha ao abrir para edição
+        password: '', 
         confirmPassword: '',
       });
       setServerError(null);
     }
-  }, [isOpen, partner, reset]); // Incluir reset na lista de dependências
+  }, [isOpen, partner, reset]); 
 
   useEffect(() => {
     if (typeof window !== 'undefined' && modalRef.current) {
@@ -132,7 +122,7 @@ export default function AddEditPartnerModal({ partner, isOpen, onClose }: AddEdi
         }
         setBootstrapModal(modalInstance);
 
-        const currentModalNode = modalRef.current; // Evitar usar modalRef.current diretamente no cleanup
+        const currentModalNode = modalRef.current; 
         const handleHide = () => {
            if (isOpen) {
               onClose(); 
@@ -149,30 +139,26 @@ export default function AddEditPartnerModal({ partner, isOpen, onClose }: AddEdi
               currentModalNode.removeEventListener('hidden.bs.modal', handleHide);
               (currentModalNode as any)._eventListenerAttached = false;
           }
-           // Não chame dispose aqui, pois pode ser chamado muitas vezes.
-           // O dispose deve ser chamado quando o componente AddEditPartnerModal é desmontado.
         };
       }).catch(err => {});
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, onClose]); 
 
-  // Efeito para controlar a exibição do modal Bootstrap
   useEffect(() => {
     if (bootstrapModal) {
       if (isOpen) {
-        if (!(bootstrapModal as any)._isShown) { // Checa se o modal já está sendo exibido
+        if (!(bootstrapModal as any)._isShown) { 
              bootstrapModal.show();
         }
       } else {
-         if ((bootstrapModal as any)._isShown) { // Checa se o modal está sendo exibido antes de esconder
+         if ((bootstrapModal as any)._isShown) { 
              bootstrapModal.hide();
          }
       }
     }
   }, [isOpen, bootstrapModal]);
 
-   // Efeito para dispose do modal quando o componente é desmontado
    useEffect(() => {
     return () => {
       if (bootstrapModal && typeof bootstrapModal.dispose === 'function') {
@@ -201,7 +187,6 @@ export default function AddEditPartnerModal({ partner, isOpen, onClose }: AddEdi
           contact_person: (values as EditPartnerFormValues).contact_person || undefined,
           is_approved: (values as EditPartnerFormValues).is_approved,
         };
-        // Incluir senha apenas se for fornecida e válida
         if ((values as EditPartnerFormValues).password && (values as EditPartnerFormValues).password!.trim() !== '') {
             updateData.password = (values as EditPartnerFormValues).password;
         }
@@ -211,7 +196,7 @@ export default function AddEditPartnerModal({ partner, isOpen, onClose }: AddEdi
           name: values.name,
           username: (values as CreatePartnerFormValues).username,
           email: (values as CreatePartnerFormValues).email || undefined,
-          password: (values as CreatePartnerFormValues).password, // Senha é obrigatória na criação
+          password: (values as CreatePartnerFormValues).password, 
           contact_person: (values as CreatePartnerFormValues).contact_person || undefined,
           is_approved: (values as CreatePartnerFormValues).is_approved,
         };
@@ -308,8 +293,7 @@ export default function AddEditPartnerModal({ partner, isOpen, onClose }: AddEdi
                   )}
                 </div>
 
-                {/* Campos de senha */}
-                {partner ? ( // Editando parceiro
+                {partner ? ( 
                   <>
                     <div className="col-md-6">
                       <label htmlFor="partnerEditPassword" className="form-label form-label-sm">Nova Senha (opcional)</label>
@@ -338,7 +322,7 @@ export default function AddEditPartnerModal({ partner, isOpen, onClose }: AddEdi
                       )}
                     </div>
                   </>
-                ) : ( // Criando novo parceiro
+                ) : ( 
                   <>
                     <div className="col-md-6">
                       <label htmlFor="partnerPassword" className="form-label form-label-sm">Senha *</label>
@@ -407,4 +391,3 @@ export default function AddEditPartnerModal({ partner, isOpen, onClose }: AddEdi
     </div>
   );
 }
-    

@@ -31,7 +31,7 @@ const mapPartnerRowToPartner = (row: RowDataPacket): Partner => ({
     id: String(row.id),
     name: row.name,
     username: row.username,
-    email: row.email,
+    email: row.email, // Added email
     contact_person: row.contact_person,
     is_approved: Boolean(row.is_approved),
     // password_hash não é retornado ao cliente
@@ -40,7 +40,7 @@ const mapPartnerRowToPartner = (row: RowDataPacket): Partner => ({
 
 export async function createPartner(data: CreatePartnerData): Promise<Partner> {
   const { name, username, email, password, contact_person, is_approved } = data;
-  if (!password) { // Embora o tipo exija, uma verificação extra não faz mal
+  if (!password) { 
     throw new Error('Senha é obrigatória para criar um novo parceiro.');
   }
 
@@ -48,7 +48,6 @@ export async function createPartner(data: CreatePartnerData): Promise<Partner> {
   try {
     await connection.beginTransaction();
 
-    // Verificar se username ou email já existem
     const [existingByUsername] = await connection.query<RowDataPacket[]>(
       'SELECT id FROM partners WHERE username = ?',
       [username]
@@ -81,7 +80,7 @@ export async function createPartner(data: CreatePartnerData): Promise<Partner> {
       id: String(result.insertId),
       name,
       username,
-      email,
+      email: email || undefined,
       contact_person,
       is_approved,
     };
@@ -133,11 +132,11 @@ export async function updatePartnerDetails(data: UpdatePartnerDetailsData): Prom
       throw new Error('Parceiro não encontrado ou nenhum dado alterado.');
     }
     await connection.commit();
-     return { // Retorna os dados como foram passados para atualização (exceto senha)
+     return { 
       id: String(id),
       name,
       username,
-      email,
+      email: email || undefined,
       contact_person,
       is_approved,
     };
@@ -167,11 +166,11 @@ export async function findOrCreatePartnerByName(partnerName: string, existingCon
       return mapPartnerRowToPartner(p);
     }
 
-    // Se criando, username e password hash são indefinidos inicialmente
-    const defaultUsername = `parceiro_${Date.now()}`; // Username placeholder
+    const defaultUsername = `parceiro_${Date.now()}`; 
+    const defaultEmail = `${defaultUsername}@placeholder.invalid`; // Placeholder email
     const [result] = await connection.execute<ResultSetHeader>(
-      'INSERT INTO partners (name, username, is_approved, created_at, updated_at) VALUES (?, ?, ?, NOW(), NOW())',
-      [trimmedPartnerName, defaultUsername, false] 
+      'INSERT INTO partners (name, username, email, is_approved, created_at, updated_at) VALUES (?, ?, ?, ?, NOW(), NOW())',
+      [trimmedPartnerName, defaultUsername, defaultEmail, false] 
     );
 
     if (result.insertId) {
@@ -179,13 +178,14 @@ export async function findOrCreatePartnerByName(partnerName: string, existingCon
           id: String(result.insertId), 
           name: trimmedPartnerName, 
           username: defaultUsername,
+          email: defaultEmail,
           is_approved: false 
         };
     } else {
       throw new Error('Failed to create partner: No valid insertId returned.');
     }
   } catch (error: any) {
-    throw new Error(`Failed to find or create partner "${partnerName}".`);
+    throw new Error(`Failed to find or create partner "${partnerName}". Error: ${error instanceof Error ? error.message : String(error)}`);
   } finally {
     if (!existingConnection && connection) {
       connection.release();
@@ -215,10 +215,6 @@ export async function deletePartnerById(partnerId: string): Promise<boolean> {
   const connection = await db.getConnection();
   try {
     
-    // As constraints ON DELETE SET NULL em `os_table` para `parceiro_id` e `created_by_partner_id`
-    // devem desassociar automaticamente as OSs.
-    // Portanto, não precisamos verificar explicitamente aqui antes de deletar.
-
     const [result] = await connection.execute<ResultSetHeader>(
       'DELETE FROM partners WHERE id = ?',
       [partnerId]
@@ -230,7 +226,6 @@ export async function deletePartnerById(partnerId: string): Promise<boolean> {
       return false; 
     }
   } catch (error: any) {
-    // Verificar se o erro é de constraint de chave estrangeira (embora ON DELETE SET NULL deva prevenir isso)
     if (error.code === 'ER_ROW_IS_REFERENCED_2' || (error.message && error.message.includes('foreign key constraint fails'))) {
       throw new Error('Não é possível excluir este parceiro pois ele ainda está vinculado a outros registros importantes, apesar das tentativas de desassociação automática.');
     }
@@ -240,17 +235,11 @@ export async function deletePartnerById(partnerId: string): Promise<boolean> {
   }
 }
       
-// Constants for the simulated partner
 const SIMULATED_PARTNER_USERNAME = 'sim_partner_user';
 const SIMULATED_PARTNER_NAME = 'Parceiro Simulado Inc.';
-const SIMULATED_PARTNER_EMAIL = 'sim.partner@example.com';
-const SIMULATED_PARTNER_DUMMY_PASSWORD = 'sim_password_auto_123'; // Dummy password for hashing
+const SIMULATED_PARTNER_EMAIL = 'sim.partner@example.com'; 
+const SIMULATED_PARTNER_DUMMY_PASSWORD = 'sim_password_auto_123';
 
-/**
- * Ensures that a simulated partner record exists in the database.
- * If not, it creates one with default details and a dummy hashed password.
- * Returns the partner details (including its actual database ID).
- */
 export async function ensureSimulatedPartnerExists(): Promise<Partner> {
   const connection = await db.getConnection();
   try {
@@ -261,11 +250,9 @@ export async function ensureSimulatedPartnerExists(): Promise<Partner> {
 
     if (existingPartners.length > 0) {
       const p = existingPartners[0];
-      // console.log(`SERVER LOG: [ensureSimulatedPartnerExists] Found existing simulated partner ID: ${p.id}`);
       return mapPartnerRowToPartner(p);
     }
 
-    // console.log(`SERVER LOG: [ensureSimulatedPartnerExists] Simulated partner not found, creating...`);
     const hashedPassword = await bcrypt.hash(SIMULATED_PARTNER_DUMMY_PASSWORD, 10);
 
     const [result] = await connection.execute<ResultSetHeader>(
@@ -275,13 +262,12 @@ export async function ensureSimulatedPartnerExists(): Promise<Partner> {
         SIMULATED_PARTNER_USERNAME,
         SIMULATED_PARTNER_EMAIL,
         hashedPassword,
-        true, // is_approved for simulated partner
-        'Contato Simulado' // contact_person
+        true, 
+        'Contato Simulado' 
       ]
     );
 
     if (result.insertId) {
-      // console.log(`SERVER LOG: [ensureSimulatedPartnerExists] Created simulated partner with ID: ${result.insertId}`);
       return {
         id: String(result.insertId),
         name: SIMULATED_PARTNER_NAME,
@@ -294,7 +280,6 @@ export async function ensureSimulatedPartnerExists(): Promise<Partner> {
       throw new Error('Failed to create simulated partner: No valid insertId returned.');
     }
   } catch (error: any) {
-    // console.error(`SERVER LOG: [ensureSimulatedPartnerExists] Error: ${error.message}`);
     throw new Error(`Failed to ensure simulated partner exists: ${error.message}`);
   } finally {
     if (connection) connection.release();

@@ -9,19 +9,16 @@ import { AUTH_COOKIE_NAME, SESSION_MAX_AGE } from '../constants';
 import { encryptPayload } from '../auth-edge';
 import { getUserByUsername, getPartnerByUsernameOrEmail } from '../auth';
 import type { AuthActionState, User, PartnerSessionData, SessionPayload } from '../types';
-import { redirect as nextRedirect } from 'next/navigation'; // Renomeado para evitar conflito de nome
-import { ensureSimulatedPartnerExists } from './partner-actions'; // Import the new function
+import { redirect as nextRedirect } from 'next/navigation'; 
+import { ensureSimulatedPartnerExists } from './partner-actions'; 
 
-// Updated to handle different session types
 async function createSessionCookie(sessionData: SessionPayload) {
   const cookieStore = cookies();
   const expires = new Date(Date.now() + SESSION_MAX_AGE * 1000);
-
-  // The sessionData itself is now the full payload including sessionType
   const sessionPayloadWithExpiry = { ...sessionData, expires: expires.toISOString() };
 
   try {
-    const token = await encryptPayload(sessionPayloadWithExpiry as SessionPayload); // Cast because TS might not infer expires correctly here
+    const token = await encryptPayload(sessionPayloadWithExpiry as SessionPayload); 
     const cookieOptions = {
       name: AUTH_COOKIE_NAME,
       value: token,
@@ -43,30 +40,6 @@ export async function loginAction(
 ): Promise<AuthActionState> {
   const username = formData.get('username') as string;
   const password = formData.get('password') as string;
-
-  const devLoginEnabledEnv = process.env.DEV_LOGIN_ENABLED;
-  const devUsernameEnv = process.env.DEV_USERNAME || "dev";
-  const devPasswordEnv = process.env.DEV_PASSWORD || "dev";
-
-  if (devLoginEnabledEnv === "true") {
-    if (username === devUsernameEnv && password === devPasswordEnv) {
-      try {
-        const adminSession: SessionPayload = {
-          sessionType: 'admin',
-          id: 'dev-admin-001',
-          username: devUsernameEnv,
-          isAdmin: true,
-          isApproved: true,
-        };
-        await createSessionCookie(adminSession);
-        return { message: 'Login de desenvolvimento (admin) bem-sucedido!', type: 'success', redirect: '/dashboard' };
-      } catch (error: any) {
-        return { message: `Erro ao criar sessão de desenvolvimento (admin): ${error.message}`, type: 'error' };
-      }
-    } else {
-      // console.log("Dev login enabled, but credentials didn't match dev credentials.");
-    }
-  }
 
   if (!username || !password) {
     return { message: 'Usuário e senha são obrigatórios.', type: 'error' };
@@ -105,7 +78,6 @@ export async function loginAction(
     } else if (error.message?.includes('Falha ao criar cookie de sessão')) {
       errorMessage = error.message;
     }
-    // console.error("[Login Action Error]", error);
     return { message: errorMessage, type: 'error' };
   }
 }
@@ -114,7 +86,7 @@ export async function partnerLoginAction(
   prevState: AuthActionState,
   formData: FormData
 ): Promise<AuthActionState> {
-  const identifier = formData.get('identifier') as string; // Can be username or email
+  const identifier = formData.get('identifier') as string; 
   const password = formData.get('password') as string;
 
   if (!identifier || !password) {
@@ -143,10 +115,10 @@ export async function partnerLoginAction(
 
     const partnerSessionData: SessionPayload = {
         sessionType: 'partner',
-        id: partner.id, // Partner's own ID from 'partners' table
-        username: partner.username, // Partner's login username
-        partnerName: partner.partnerName, // Actual name of the partner
-        email: partner.email,
+        id: partner.id, 
+        username: partner.username, 
+        partnerName: partner.partnerName, 
+        email: partner.email, // Include email in session
         isApproved: partner.isApproved,
     };
     await createSessionCookie(partnerSessionData);
@@ -159,67 +131,53 @@ export async function partnerLoginAction(
     } else if (error.message?.includes('Falha ao criar cookie de sessão')) {
       errorMessage = error.message;
     }
-    // console.error("[Partner Login Action Error]", error);
     return { message: errorMessage, type: 'error' };
   }
 }
 
 
+// devLoginAction and simulatePartnerLoginAction can be kept for testing but won't be directly accessible from UI
 export async function devLoginAction(prevState: AuthActionState, formData: FormData): Promise<AuthActionState> {
-  const devLoginEnabledEnv = process.env.DEV_LOGIN_ENABLED;
-
-  if (devLoginEnabledEnv !== "true" && process.env.NODE_ENV !== 'development') { // Allow in dev even if not explicitly "true" for easier local dev
-    // return { message: 'Login de desenvolvimento não está habilitado neste ambiente.', type: 'error' };
-  }
-
   const adminSession: SessionPayload = {
     sessionType: 'admin',
-    id: 'dev-admin-001', // Using a fixed ID for dev admin
-    username: 'Dev Admin (Botão)',
+    id: 'dev-admin-001', 
+    username: 'Dev Admin',
     isAdmin: true,
     isApproved: true,
   };
 
   try {
     await createSessionCookie(adminSession);
-    // Using Next.js redirect function. It works by throwing an error that Next.js catches.
-    // Ensure this action is called from a Server Component or a form action handler.
     nextRedirect('/dashboard');
   } catch (error: any) {
-    if (error.message === 'NEXT_REDIRECT') { // This is expected if redirect() is called
+    if (error.message === 'NEXT_REDIRECT') { 
         throw error;
     }
-    // console.error(`[Dev Login Admin Error] ${error.message}`);
     return { message: `Erro ao criar sessão de desenvolvimento (admin): ${error.message}`, type: 'error' };
   }
 }
 
 export async function simulatePartnerLoginAction(
   prevState: AuthActionState,
-  formData: FormData // formData won't be used but is part of the action signature
+  formData: FormData 
 ): Promise<AuthActionState> {
   try {
-    // console.log("SERVER LOG: [simulatePartnerLoginAction] Ensuring simulated partner exists...");
-    const simulatedPartner = await ensureSimulatedPartnerExists(); // This function now creates if not exists
-    // console.log("SERVER LOG: [simulatePartnerLoginAction] Simulated partner ensured/retrieved:", simulatedPartner);
+    const simulatedPartner = await ensureSimulatedPartnerExists(); 
 
     const partnerSession: SessionPayload = {
       sessionType: 'partner',
-      id: simulatedPartner.id, // Use the actual ID from DB (which will be auto-generated if new)
-      username: simulatedPartner.username!, // Username will be defined from ensureSimulatedPartnerExists
+      id: simulatedPartner.id, 
+      username: simulatedPartner.username!, 
       partnerName: simulatedPartner.name,
-      email: simulatedPartner.email,
-      isApproved: simulatedPartner.is_approved!, // is_approved will be defined
+      email: simulatedPartner.email, // Ensure email from simulated partner is included
+      isApproved: simulatedPartner.is_approved!, 
     };
-
-    // console.log("SERVER LOG: [simulatePartnerLoginAction] Creating session cookie with payload:", partnerSession);
     await createSessionCookie(partnerSession);
     nextRedirect('/partner/dashboard');
   } catch (error: any) { 
     if (error.message === 'NEXT_REDIRECT') { 
         throw error;
     }
-    // console.error(`SERVER LOG: [simulatePartnerLoginAction] Error: ${error.message}`);
     return { message: `Erro ao simular login de parceiro: ${error.message}`, type: 'error' };
   }
 }
@@ -270,9 +228,7 @@ export async function registerUserAction(
     }
     await connection.commit();
 
-    const devLoginEnabled = process.env.DEV_LOGIN_ENABLED === "true";
-
-    if (isFirstUser && !devLoginEnabled) {
+    if (isFirstUser) {
       try {
         const adminSession: SessionPayload = {
           sessionType: 'admin',
@@ -284,17 +240,13 @@ export async function registerUserAction(
         await createSessionCookie(adminSession);
         return { message: 'Registro e login bem-sucedidos como administrador!', type: 'success', redirect: '/dashboard' };
       } catch (error: any) {
-         // console.error(`[Register Action Error - First User Session] ${error.message}`);
          return { message: `Conta de administrador criada, mas erro ao iniciar sessão (${error.message}). Tente fazer login.`, type: 'error', redirect: '/login' };
       }
-    } else if (isFirstUser && devLoginEnabled) {
-       return { message: 'Conta de administrador criada! Faça login.', type: 'success', redirect: '/login' };
     } else {
       return { message: 'Registro bem-sucedido! Sua conta aguarda aprovação.', type: 'success', redirect: '/login?status=pending_approval' };
     }
   } catch (error: any) {
     if (connection) await connection.rollback();
-    // console.error("[Register Action Error]", error);
     return { message: 'Erro inesperado durante o registro.', type: 'error' };
   } finally {
     if (connection) connection.release();
@@ -306,15 +258,7 @@ export async function logoutAction(): Promise<AuthActionState> {
   const token = cookieStore.get(AUTH_COOKIE_NAME)?.value;
 
   if (token) {
-    // console.log(`[Logout Action] Deleting cookie ${AUTH_COOKIE_NAME}`);
     cookieStore.delete(AUTH_COOKIE_NAME);
-  } else {
-    // console.log(`[Logout Action] No session cookie found to delete.`);
-  }
-  // Determine redirect based on previous path or a default
-  // For simplicity, always redirect to login after admin logout.
-  // Partner logout might redirect to /partner-login?status=logged_out if we differentiate.
-  // For now, a generic /login?status=logged_out is fine.
+  } 
   return { message: 'Você foi desconectado.', type: 'success', redirect: '/login?status=logged_out' };
 }
-    

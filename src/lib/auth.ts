@@ -1,6 +1,6 @@
 
 // src/lib/auth.ts
-import type { User, PartnerSessionData } from './types'; // PartnerSessionData for return type
+import type { User, PartnerSessionData } from './types'; 
 import type { RowDataPacket } from 'mysql2/promise';
 import db from './db'; 
 export * from './auth-edge'; 
@@ -25,6 +25,7 @@ export async function getUserByUsername(username: string): Promise<(User & { pas
     }
     return null;
   } catch (error) {
+    console.error("[getUserByUsername] DB Error:", error);
     throw new Error('Database error while fetching user.');
   } finally {
     if (connection) connection.release();
@@ -32,11 +33,9 @@ export async function getUserByUsername(username: string): Promise<(User & { pas
 }
 
 // For Partner Users
-// Partners will login with their own username/email from the 'partners' table
 export async function getPartnerByUsernameOrEmail(identifier: string): Promise<(PartnerSessionData & { password_hash: string }) | null> {
   const connection = await db.getConnection();
   try {
-    // Assumes 'username' and 'email' columns exist in 'partners' table for login
     const [rows] = await connection.query<RowDataPacket[]>(
       'SELECT id, name, username, email, password_hash, is_approved FROM partners WHERE (username = ? OR email = ?) AND password_hash IS NOT NULL',
       [identifier, identifier]
@@ -45,15 +44,16 @@ export async function getPartnerByUsernameOrEmail(identifier: string): Promise<(
       const partnerRow = rows[0];
       return {
         id: String(partnerRow.id),
-        username: partnerRow.username, // Login username
-        partnerName: partnerRow.name,  // Actual partner name for display
-        email: partnerRow.email,
+        username: partnerRow.username, 
+        partnerName: partnerRow.name,  
+        email: partnerRow.email, // Ensure email is selected and returned
         password_hash: partnerRow.password_hash,
         isApproved: Boolean(partnerRow.is_approved),
       };
     }
     return null;
   } catch (error) {
+    console.error("[getPartnerByUsernameOrEmail] DB Error:", error);
     throw new Error('Database error while fetching partner.');
   } finally {
     if (connection) connection.release();

@@ -24,13 +24,14 @@ import {
     type UpdatePartnerDetailsData
 } from '@/lib/actions/partner-actions';
 import { notify } from './notification-store'; // Import notification helper
+import { sendOSStatusUpdateEmail } from '@/lib/email-service';
 
 
 export interface Partner {
     id: string;
     name: string;
     username?: string;
-    email?: string;
+    email?: string; // Added email field
     contact_person?: string;
     is_approved?: boolean;
 }
@@ -118,7 +119,7 @@ export const useOSStore = create<OSState>()(
               }),
             }));
 
-            if (createdByPartnerId && newOSWithDefaults.createdByPartnerName) {
+            if (createdByPartnerId && newOSWithDefaults.createdByPartnerName && newOSWithDefaults.status === OSStatus.AGUARDANDO_APROVACAO) {
                 notify.admin(
                     `Nova OS #${newOSWithDefaults.numero} (${newOSWithDefaults.projeto}) criada por ${newOSWithDefaults.createdByPartnerName} e aguarda sua aprovação.`,
                     'os_created_by_partner',
@@ -198,7 +199,8 @@ export const useOSStore = create<OSState>()(
                             id: updatedOSWithDefaults.partnerId, 
                             name: updatedOSWithDefaults.parceiro,
                             username: partnerInStore?.username || `parceiro_${updatedOSWithDefaults.partnerId}`,
-                            is_approved: partnerInStore?.is_approved || false
+                            is_approved: partnerInStore?.is_approved || false,
+                            email: partnerInStore?.email // Include email if found
                         };
                         set(state => ({ partners: [...state.partners.filter(p => p.id !== updatedOSWithDefaults.partnerId), partnerEntry].sort((a,b) => a.name.localeCompare(b.name)) }));
                     }
@@ -234,22 +236,29 @@ export const useOSStore = create<OSState>()(
 
             // Notification Logic
             if (originalOS && originalOS.createdByPartnerId) {
+                const creatorPartner = get().getPartnerEntityById(originalOS.createdByPartnerId);
+                const partnerEmail = creatorPartner?.email;
+
                 if (originalOS.status === OSStatus.AGUARDANDO_APROVACAO) {
-                    if (newStatus === OSStatus.NA_FILA) { // Implies approved
-                         notify.partner(
-                            originalOS.createdByPartnerId,
-                            `Sua OS #${originalOS.numero} (${originalOS.projeto}) foi APROVADA por ${adminApproverName || 'um admin'} e está Na Fila.`,
-                            'os_approved',
-                            `/os/${originalOS.id}`
-                        );
-                    } else if (newStatus === OSStatus.RECUSADA) {
-                        notify.partner(
-                            originalOS.createdByPartnerId,
-                            `Sua OS #${originalOS.numero} (${originalOS.projeto}) foi RECUSADA por ${adminApproverName || 'um admin'}.`,
-                            'os_refused',
-                            `/os/${originalOS.id}`
-                        );
+                    const notificationMessage = `Sua OS #${originalOS.numero} (${originalOS.projeto}) foi ${newStatus === OSStatus.NA_FILA ? 'APROVADA' : 'RECUSADA'} por ${adminApproverName || 'um admin'}.`;
+                    const notificationType = newStatus === OSStatus.NA_FILA ? 'os_approved' : 'os_refused';
+                    
+                    notify.partner(
+                        originalOS.createdByPartnerId,
+                        notificationMessage,
+                        notificationType,
+                        `/os/${originalOS.id}`
+                    );
+                    if (partnerEmail) {
+                        sendOSStatusUpdateEmail(
+                            partnerEmail, 
+                            originalOS.createdByPartnerName || 'Parceiro', 
+                            originalOS, 
+                            newStatus, 
+                            adminApproverName || 'um administrador'
+                        ).catch(err => console.error("Falha ao enviar email de status da OS:", err));
                     }
+
                 } else if (newStatus !== originalOS.status) { // General status change by admin
                      notify.partner(
                         originalOS.createdByPartnerId,
@@ -259,7 +268,6 @@ export const useOSStore = create<OSState>()(
                      );
                 }
             }
-
             return updatedOSWithDefaults;
           }
           return null;
@@ -316,7 +324,10 @@ export const useOSStore = create<OSState>()(
             isUrgent: false, 
             checklistItems: osToDuplicate.checklist ? osToDuplicate.checklist.map(item => item.text) : undefined,
         };
-        return get().addOS(duplicatedOSData, osToDuplicate.createdByPartnerId);
+        // Quando um admin duplica uma OS que foi criada por um parceiro, a nova OS não deve ter createdByPartnerId.
+        // Se um parceiro duplicasse (não implementado), aí sim manteria.
+        const createdBy = osToDuplicate.createdByPartnerId ? undefined : undefined; // Força a duplicata a ser 'do admin'
+        return get().addOS(duplicatedOSData, createdBy);
       },
 
       toggleUrgent: async (osId: string) => {
@@ -442,8 +453,3 @@ export const useOSStore = create<OSState>()(
       getClientByName: (clientName) => get().clients.find(c => c.name.toLowerCase() === clientName.toLowerCase()),
     })
 );
-
-// Adicionar uuid ao package.json se ainda não estiver lá.
-// Vou assumir que você fará isso manualmente ou que já está lá.
-// Se não estiver, precisará de: npm install uuid && npm install --save-dev @types/uuid
-// E depois reiniciar o servidor de desenvolvimento.

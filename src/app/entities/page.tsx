@@ -2,9 +2,8 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-// import AuthenticatedLayout from '@/components/layout/AuthenticatedLayout'; // Removido
 import Link from 'next/link';
-import { ArrowLeft, Building, Users, PlusCircle, Edit, Trash2, ShieldCheck, ShieldOff, UserPlus, Link2 } from 'lucide-react';
+import { ArrowLeft, Building, Users, PlusCircle, Edit, Trash2, ShieldCheck, ShieldOff, UserPlus, Link2, Mail } from 'lucide-react';
 import { useOSStore } from '@/store/os-store';
 import type { Client } from '@/lib/types';
 import type { Partner } from '@/store/os-store';
@@ -188,8 +187,8 @@ export default function EntitiesPage() {
                                 </div>
                             </div>
                             <div className="small text-muted">
-                                {partner.username && <div>Usuário: {partner.username}</div>}
-                                {partner.email && <div>Email: {partner.email}</div>}
+                                {partner.username && <div><UserPlus size={12} className="me-1 text-muted"/> {partner.username}</div>}
+                                {partner.email && <div><Mail size={12} className="me-1 text-muted"/> {partner.email}</div>}
                                 {partner.contact_person && <div>Contato: {partner.contact_person}</div>}
                                 <div>
                                     Status Login: {(partner.is_approved === undefined ? true : partner.is_approved) ? 
