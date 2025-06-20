@@ -24,7 +24,6 @@ import {
     type UpdatePartnerDetailsData
 } from '@/lib/actions/partner-actions';
 import { notify } from './notification-store'; // Import notification helper
-import { sendOSStatusUpdateEmail } from '@/lib/email-service';
 
 
 export interface Partner {
@@ -216,7 +215,9 @@ export const useOSStore = create<OSState>()(
       updateOSStatus: async (osId, newStatus, adminApproverName?: string) => {
         const originalOS = get().getOSById(osId);
         try {
-          const updatedOS = await updateOSStatusInDB(osId, newStatus);
+          // The Server Action `updateOSStatusInDB` will now handle the email sending
+          const updatedOS = await updateOSStatusInDB(osId, newStatus, adminApproverName);
+          
           if (updatedOS) {
             const updatedOSWithDefaults = {
                 ...updatedOS,
@@ -234,39 +235,24 @@ export const useOSStore = create<OSState>()(
               }),
             }));
 
-            // Notification Logic
-            if (originalOS && originalOS.createdByPartnerId) {
-                const creatorPartner = get().getPartnerEntityById(originalOS.createdByPartnerId);
-                const partnerEmail = creatorPartner?.email;
-
-                if (originalOS.status === OSStatus.AGUARDANDO_APROVACAO) {
-                    const notificationMessage = `Sua OS #${originalOS.numero} (${originalOS.projeto}) foi ${newStatus === OSStatus.NA_FILA ? 'APROVADA' : 'RECUSADA'} por ${adminApproverName || 'um admin'}.`;
-                    const notificationType = newStatus === OSStatus.NA_FILA ? 'os_approved' : 'os_refused';
-                    
-                    notify.partner(
-                        originalOS.createdByPartnerId,
-                        notificationMessage,
-                        notificationType,
-                        `/os/${originalOS.id}`
-                    );
-                    if (partnerEmail) {
-                        sendOSStatusUpdateEmail(
-                            partnerEmail, 
-                            originalOS.createdByPartnerName || 'Parceiro', 
-                            originalOS, 
-                            newStatus, 
-                            adminApproverName || 'um administrador'
-                        ).catch(err => console.error("Falha ao enviar email de status da OS:", err));
-                    }
-
-                } else if (newStatus !== originalOS.status) { // General status change by admin
-                     notify.partner(
-                        originalOS.createdByPartnerId,
-                        `O status da OS #${originalOS.numero} (${originalOS.projeto}) foi alterado para ${newStatus} por ${adminApproverName || 'um admin'}.`,
-                        'os_status_changed',
-                        `/os/${originalOS.id}`
-                     );
-                }
+            // Client-side notification logic remains here. It triggers after the server is done.
+            if (originalOS && originalOS.createdByPartnerId && originalOS.status === OSStatus.AGUARDANDO_APROVACAO) {
+                const notificationMessage = `Sua OS #${originalOS.numero} (${originalOS.projeto}) foi ${newStatus === OSStatus.NA_FILA ? 'APROVADA' : 'RECUSADA'} por ${adminApproverName || 'um admin'}.`;
+                const notificationType = newStatus === OSStatus.NA_FILA ? 'os_approved' : 'os_refused';
+                
+                notify.partner(
+                    originalOS.createdByPartnerId,
+                    notificationMessage,
+                    notificationType,
+                    `/os/${originalOS.id}`
+                );
+            } else if (originalOS && originalOS.createdByPartnerId && newStatus !== originalOS.status) { // General status change by admin
+                 notify.partner(
+                    originalOS.createdByPartnerId,
+                    `O status da OS #${originalOS.numero} (${originalOS.projeto}) foi alterado para ${newStatus} por ${adminApproverName || 'um admin'}.`,
+                    'os_status_changed',
+                    `/os/${originalOS.id}`
+                 );
             }
             return updatedOSWithDefaults;
           }
