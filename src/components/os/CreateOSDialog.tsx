@@ -6,7 +6,7 @@ import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { PlusCircle, Trash2, CheckSquare, Square } from 'lucide-react';
-
+import { useSession } from '@/hooks/useSession';
 import { useOSStore } from '@/store/os-store';
 import { OSStatus, ALL_OS_STATUSES, type CreateOSData, type ChecklistItem as OSChecklistItem } from '@/lib/types'; // Renamed ChecklistItem to avoid conflict
 
@@ -25,6 +25,7 @@ type CreateOSFormValues = z.infer<typeof formSchema>;
 
 export function CreateOSDialog() {
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const session = useSession();
   const { addOS, partners, clients } = useOSStore((state) => ({
       addOS: state.addOS,
       partners: state.partners,
@@ -179,6 +180,10 @@ export function CreateOSDialog() {
 
 
   async function onSubmit(values: CreateOSFormValues) {
+    if (!session || session.sessionType !== 'admin') {
+      alert('Apenas administradores podem criar OS a partir deste diálogo.');
+      return;
+    }
     setIsSubmitting(true);
     try {
       const dataToSubmit: CreateOSData = {
@@ -190,7 +195,9 @@ export function CreateOSDialog() {
         programadoPara: values.programadoPara || undefined,
         checklistItems: checklistActive ? checklistItems.map(item => item.trim()).filter(item => item !== '') : undefined,
       };
-      await addOS(dataToSubmit);
+      
+      const creatorInfo = { name: session.username, type: 'admin' as const, id: session.id };
+      await addOS(dataToSubmit, creatorInfo);
       
       if (modalInstanceRef.current && typeof modalInstanceRef.current.hide === 'function') {
         modalInstanceRef.current.hide(); 
@@ -488,4 +495,3 @@ export function CreateOSDialog() {
     </>
   );
 }
-    

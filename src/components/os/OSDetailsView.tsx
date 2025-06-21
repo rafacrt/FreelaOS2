@@ -89,7 +89,7 @@ const DetailItem = ({ label, value, icon, name, isEditableField, children, class
       <dd className="col-sm-8 col-lg-9 mb-0">
         {canEditThisField ? (
           (children && React.isValidElement(children))
-            ? React.cloneElement(children, { disabled: children.props.disabled || isPendingOrRefused })
+            ? React.cloneElement(children, { disabled: (children.props.disabled || isPendingOrRefused) })
             : children
         ) : (
           valueIsReactNode ? displayValue : (
@@ -643,7 +643,7 @@ export default function OSDetailsView({ initialOs, viewMode }: OSDetailsViewProp
                 </DetailItem>
 
                 <DetailItem
-                  label="Parceiro de Execução"
+                  label="Parceiro"
                   icon={<Users size={16} className="me-2 text-primary" />}
                   name="parceiro"
                   isEditableField={true}
@@ -678,18 +678,6 @@ export default function OSDetailsView({ initialOs, viewMode }: OSDetailsViewProp
                     )}
                   </div>
                 </DetailItem>
-                
-                {initialOs.createdByPartnerName && (
-                     <DetailItem
-                        label="Criado Por (Parceiro)"
-                        icon={<UserCheck size={16} className="me-2 text-info" />}
-                        value={initialOs.createdByPartnerName}
-                        isEditableField={false}
-                        isEditingMode={isEditing}
-                        viewMode={viewMode}
-                        currentOsStatus={initialOs.status}
-                    />
-                )}
 
                 <DetailItem
                   label="Status"
@@ -709,7 +697,7 @@ export default function OSDetailsView({ initialOs, viewMode }: OSDetailsViewProp
                     disabled={!canAdminEditFields && isEditing || isFinalized || isAwaitingApproval || isRefused}
                   >
                     {ALL_OS_STATUSES.filter(s => s !== OSStatus.AGUARDANDO_APROVACAO && s !== OSStatus.RECUSADA || s === initialOs.status).map(s => (
-                      <option key={s} value={s} disabled={(isFinalized && s !== OSStatus.FINALIZADO) || ((isAwaitingApproval || isRefused) && s !== os.status)}>
+                      <option key={s} value={s} disabled={(isFinalized && s !== OSStatus.FINALIZADO) || ((isAwaitingApproval || isRefused) && s !== initialOs.status)}>
                         {s}
                       </option>
                     ))}
@@ -1002,6 +990,9 @@ export default function OSDetailsView({ initialOs, viewMode }: OSDetailsViewProp
               </dl>
             </div>
           </div>
+        </div>
+        <div className="card-footer text-muted small text-center">
+            OS criada por {initialOs.creatorName || 'N/A'} ({initialOs.creatorType === 'admin' ? 'Admin' : 'Parceiro'}) em {isValidDate(parseISO(initialOs.dataAbertura)) ? format(parseISO(initialOs.dataAbertura), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR }) : 'Data inválida'}
         </div>
       </div>
     </div>

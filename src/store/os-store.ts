@@ -43,11 +43,11 @@ interface OSState {
 
   initializeStore: () => Promise<void>;
 
-  addOS: (data: CreateOSData, createdByPartnerId?: string) => Promise<OS | null>;
+  addOS: (data: CreateOSData, creator: { name: string; type: 'admin' | 'partner'; id?: string }) => Promise<OS | null>;
   updateOS: (updatedOS: OS) => Promise<OS | null>;
   updateOSStatus: (osId: string, newStatus: OSStatus, adminApproverName?: string) => Promise<OS | null>; 
   getOSById: (osId: string) => OS | undefined;
-  duplicateOS: (osId: string) => Promise<OS | null>;
+  duplicateOS: (osId: string, adminUsername: string) => Promise<OS | null>;
   toggleUrgent: (osId: string) => Promise<void>;
   toggleProductionTimer: (osId: string, action: 'play' | 'pause') => Promise<OS | null>;
 
@@ -86,7 +86,7 @@ export const useOSStore = create<OSState>()(
             const processedOSList = osListFromDB.map(os => ({
                 ...os,
                 checklist: os.checklist || [], 
-                createdByPartnerName: os.createdByPartnerName || undefined,
+                creatorName: os.creatorName || undefined,
             }));
 
             set({
@@ -100,9 +100,9 @@ export const useOSStore = create<OSState>()(
         }
       },
 
-      addOS: async (data, createdByPartnerId?: string) => {
+      addOS: async (data, creator) => {
         try {
-          const createdOS = await createOSInDB(data, createdByPartnerId); 
+          const createdOS = await createOSInDB(data, creator); 
           if (createdOS) {
             const newOSWithDefaults = {
                 ...createdOS,
@@ -118,9 +118,9 @@ export const useOSStore = create<OSState>()(
               }),
             }));
 
-            if (createdByPartnerId && newOSWithDefaults.createdByPartnerName && newOSWithDefaults.status === OSStatus.AGUARDANDO_APROVACAO) {
+            if (creator.type === 'partner' && newOSWithDefaults.status === OSStatus.AGUARDANDO_APROVACAO) {
                 notify.admin(
-                    `Nova OS #${newOSWithDefaults.numero} (${newOSWithDefaults.projeto}) criada por ${newOSWithDefaults.createdByPartnerName} e aguarda sua aprovação.`,
+                    `Nova OS #${newOSWithDefaults.numero} (${newOSWithDefaults.projeto}) criada por ${creator.name} e aguarda sua aprovação.`,
                     'os_created_by_partner',
                     `/os/${newOSWithDefaults.id}`
                 );
@@ -294,7 +294,7 @@ export const useOSStore = create<OSState>()(
         return os;
       },
 
-      duplicateOS: async (osId: string) => {
+      duplicateOS: async (osId: string, adminUsername: string) => {
         const osToDuplicate = get().osList.find(os => os.id === osId);
         if (!osToDuplicate) {
             return null;
@@ -310,10 +310,8 @@ export const useOSStore = create<OSState>()(
             isUrgent: false, 
             checklistItems: osToDuplicate.checklist ? osToDuplicate.checklist.map(item => item.text) : undefined,
         };
-        // Quando um admin duplica uma OS que foi criada por um parceiro, a nova OS não deve ter createdByPartnerId.
-        // Se um parceiro duplicasse (não implementado), aí sim manteria.
-        const createdBy = osToDuplicate.createdByPartnerId ? undefined : undefined; // Força a duplicata a ser 'do admin'
-        return get().addOS(duplicatedOSData, createdBy);
+        const creator = { name: adminUsername, type: 'admin' as const };
+        return get().addOS(duplicatedOSData, creator);
       },
 
       toggleUrgent: async (osId: string) => {

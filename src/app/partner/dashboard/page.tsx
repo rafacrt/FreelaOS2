@@ -1,3 +1,4 @@
+
 // src/app/partner/dashboard/page.tsx
 'use client';
 
@@ -32,9 +33,10 @@ export default function PartnerDashboardPage() {
     if (!session || session.sessionType !== 'partner' || !isStoreInitialized) {
       return [];
     }
-
+    
     const filtered = osList.filter(os => {
-      return os.createdByPartnerId === session.id;
+      // Show OS if the partner created it OR is assigned as the execution partner
+      return os.createdByPartnerId === session.id || os.partnerId === session.id;
     });
 
     return filtered.sort((a, b) => {
@@ -99,9 +101,10 @@ export default function PartnerDashboardPage() {
 
       {partnerOSList.length === 0 ? (
         <div className="text-center py-5 bg-light rounded shadow-sm p-4">
-          <p className="fs-5 text-muted">Você ainda não criou nenhuma Ordem de Serviço.</p>
+          <p className="fs-5 text-muted">Nenhuma Ordem de Serviço associada a você.</p>
+          <p className="text-muted small">Crie uma nova OS ou aguarde um admin associar uma OS a você.</p>
           <Link href="/partner/create-os" className="btn btn-primary mt-3">
-            <PlusCircle size={18} className="me-1" /> Criar sua primeira OS
+            <PlusCircle size={18} className="me-1" /> Criar Nova OS
           </Link>
         </div>
       ) : (
@@ -116,5 +119,3 @@ export default function PartnerDashboardPage() {
     </div>
   );
 }
-
-    

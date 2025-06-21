@@ -84,8 +84,6 @@ const mapDbRowToOS = (row: RowDataPacket): OS => {
     parceiro: row.execution_partner_name || undefined,
     clientId: String(row.cliente_id),
     partnerId: row.parceiro_id ? String(row.parceiro_id) : undefined,
-    createdByPartnerId: row.created_by_partner_id ? String(row.created_by_partner_id) : undefined,
-    createdByPartnerName: row.creator_partner_name || undefined,
     projeto: row.projeto,
     tarefa: row.tarefa,
     observacoes: row.observacoes,
@@ -98,10 +96,22 @@ const mapDbRowToOS = (row: RowDataPacket): OS => {
     dataInicioProducao: dataInicioProducaoISO,
     tempoGastoProducaoSegundos: row.tempoGastoProducaoSegundos || 0,
     dataInicioProducaoAtual: dataInicioProducaoAtualISO,
+    createdByPartnerId: row.created_by_partner_id ? String(row.created_by_partner_id) : undefined,
+    creatorName: row.creator_name,
+    creatorType: row.creator_type,
   };
 };
 
-export async function createOSInDB(data: CreateOSData, createdByPartnerId?: string): Promise<OS | null> {
+const OS_SELECT_QUERY_FIELDS = `
+  os.id, os.numero, os.projeto, os.tarefa, os.observacoes, os.checklist_json, os.status,
+  os.dataAbertura, os.dataFinalizacao, os.programadoPara, os.isUrgent,
+  os.dataInicioProducao, os.tempoGastoProducaoSegundos, os.dataInicioProducaoAtual,
+  os.cliente_id, c.name as cliente_name,
+  os.parceiro_id, exec_p.name as execution_partner_name,
+  os.created_by_partner_id, os.creator_name, os.creator_type
+`;
+
+export async function createOSInDB(data: CreateOSData, creator: { name: string, type: 'admin' | 'partner', id?: string }): Promise<OS | null> {
   const connection = await db.getConnection();
   try {
     await connection.beginTransaction();
@@ -154,18 +164,13 @@ export async function createOSInDB(data: CreateOSData, createdByPartnerId?: stri
     const now = new Date();
     let initialStatus = data.status || OSStatus.NA_FILA;
     let createdByPartnerIdSQL: number | null = null;
-
-    if (createdByPartnerId) {
-        const parsedId = parseInt(createdByPartnerId, 10);
-        if (!isNaN(parsedId) && parsedId > 0) {
-            createdByPartnerIdSQL = parsedId;
-            // Partner created OS always starts as Awaiting Approval
-            initialStatus = OSStatus.AGUARDANDO_APROVACAO;
-        } else {
-            initialStatus = data.status || OSStatus.NA_FILA;
-        }
-    } else {
-        initialStatus = data.status || OSStatus.NA_FILA;
+    
+    if (creator.type === 'partner' && creator.id) {
+      initialStatus = OSStatus.AGUARDANDO_APROVACAO;
+      const parsedId = parseInt(creator.id, 10);
+      if (!isNaN(parsedId)) {
+        createdByPartnerIdSQL = parsedId;
+      }
     }
 
     const clienteIdSQL = parseInt(client.id, 10);
@@ -179,6 +184,8 @@ export async function createOSInDB(data: CreateOSData, createdByPartnerId?: stri
       cliente_id: clienteIdSQL,
       parceiro_id: executionPartnerIdSQL,
       created_by_partner_id: createdByPartnerIdSQL,
+      creator_name: creator.name,
+      creator_type: creator.type,
       projeto: data.projeto,
       tarefa: data.tarefa,
       observacoes: data.observacoes || '',
@@ -197,17 +204,19 @@ export async function createOSInDB(data: CreateOSData, createdByPartnerId?: stri
 
     const insertQueryValues = [
         osDataForDB.numero, osDataForDB.cliente_id, osDataForDB.parceiro_id, osDataForDB.created_by_partner_id,
+        osDataForDB.creator_name, osDataForDB.creator_type,
         osDataForDB.projeto, osDataForDB.tarefa, osDataForDB.observacoes, osDataForDB.checklist_json,
         osDataForDB.status, osDataForDB.dataAbertura, osDataForDB.programadoPara, osDataForDB.isUrgent,
         osDataForDB.dataFinalizacao, osDataForDB.dataInicioProducao, osDataForDB.tempoGastoProducaoSegundos,
         osDataForDB.dataInicioProducaoAtual, osDataForDB.created_at, osDataForDB.updated_at
     ];
-
+    
     const [result] = await connection.execute<ResultSetHeader>(
-      `INSERT INTO os_table (numero, cliente_id, parceiro_id, created_by_partner_id, projeto, tarefa, observacoes, checklist_json, status, dataAbertura, programadoPara, isUrgent, dataFinalizacao, dataInicioProducao, tempoGastoProducaoSegundos, dataInicioProducaoAtual, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO os_table (numero, cliente_id, parceiro_id, created_by_partner_id, creator_name, creator_type, projeto, tarefa, observacoes, checklist_json, status, dataAbertura, programadoPara, isUrgent, dataFinalizacao, dataInicioProducao, tempoGastoProducaoSegundos, dataInicioProducaoAtual, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       insertQueryValues
     );
+
 
     if (!result.insertId) {
       await connection.rollback();
@@ -216,17 +225,10 @@ export async function createOSInDB(data: CreateOSData, createdByPartnerId?: stri
     await connection.commit();
 
     const [createdOSRows] = await connection.query<RowDataPacket[]>(
-      `SELECT
-         os.id, os.numero, os.projeto, os.tarefa, os.observacoes, os.checklist_json, os.status,
-         os.dataAbertura, os.dataFinalizacao, os.programadoPara, os.isUrgent,
-         os.dataInicioProducao, os.tempoGastoProducaoSegundos, os.dataInicioProducaoAtual,
-         os.cliente_id, c.name as cliente_name,
-         os.parceiro_id, exec_p.name as execution_partner_name,
-         os.created_by_partner_id, creator_p.name as creator_partner_name
+      `SELECT ${OS_SELECT_QUERY_FIELDS}
        FROM os_table os
        JOIN clients c ON os.cliente_id = c.id
        LEFT JOIN partners exec_p ON os.parceiro_id = exec_p.id
-       LEFT JOIN partners creator_p ON os.created_by_partner_id = creator_p.id
        WHERE os.id = ?`,
       [result.insertId]
     );
@@ -362,17 +364,10 @@ export async function updateOSInDB(osData: OS): Promise<OS | null> {
 
 
     const [updatedOSRows] = await connection.query<RowDataPacket[]>(
-      `SELECT
-         os.id, os.numero, os.projeto, os.tarefa, os.observacoes, os.checklist_json, os.status,
-         os.dataAbertura, os.dataFinalizacao, os.programadoPara, os.isUrgent,
-         os.dataInicioProducao, os.tempoGastoProducaoSegundos, os.dataInicioProducaoAtual,
-         os.cliente_id, c.name as cliente_name,
-         os.parceiro_id, exec_p.name as execution_partner_name,
-         os.created_by_partner_id, creator_p.name as creator_partner_name
+      `SELECT ${OS_SELECT_QUERY_FIELDS}
        FROM os_table os
        JOIN clients c ON os.cliente_id = c.id
        LEFT JOIN partners exec_p ON os.parceiro_id = exec_p.id
-       LEFT JOIN partners creator_p ON os.created_by_partner_id = creator_p.id
        WHERE os.id = ?`,
       [osData.id]
     );
@@ -401,17 +396,10 @@ export async function getAllOSFromDB(): Promise<OS[]> {
   const connection = await db.getConnection();
   try {
     const query = `
-      SELECT
-        os.id, os.numero, os.projeto, os.tarefa, os.observacoes, os.checklist_json, os.status,
-        os.dataAbertura, os.dataFinalizacao, os.programadoPara, os.isUrgent,
-        os.dataInicioProducao, os.tempoGastoProducaoSegundos, os.dataInicioProducaoAtual,
-        os.cliente_id, c.name as cliente_name,
-        os.parceiro_id, exec_p.name as execution_partner_name,
-        os.created_by_partner_id, creator_p.name as creator_partner_name
+      SELECT ${OS_SELECT_QUERY_FIELDS}
       FROM os_table os
       JOIN clients c ON os.cliente_id = c.id
       LEFT JOIN partners exec_p ON os.parceiro_id = exec_p.id
-      LEFT JOIN partners creator_p ON os.created_by_partner_id = creator_p.id
       ORDER BY os.isUrgent DESC,
                CASE os.status
                  WHEN '${OSStatus.AGUARDANDO_APROVACAO}' THEN 1
@@ -490,36 +478,31 @@ export async function updateOSStatusInDB(osId: string, newStatus: OSStatus, admi
     ];
 
     await connection.execute<ResultSetHeader>(sql, values);
+    
+    // Send email notification if it was an approval/rejection BEFORE committing
+    if (originalStatus === OSStatus.AGUARDANDO_APROVACAO && (newStatus === OSStatus.NA_FILA || newStatus === OSStatus.RECUSADA)) {
+        const partnerEmail = currentOSFromDB.creator_partner_email;
+        const partnerName = currentOSFromDB.creator_partner_name;
+        if (partnerEmail && partnerName) {
+            const tempOSData = mapDbRowToOS(currentOSFromDB);
+            await sendOSStatusUpdateEmail(partnerEmail, partnerName, tempOSData, newStatus, adminApproverName || 'um administrador');
+        }
+    }
+
     await connection.commit();
     
     // Fetch the fully updated OS to return
     const [updatedOSRows] = await connection.query<RowDataPacket[]>(
-        `SELECT
-           os.id, os.numero, os.projeto, os.tarefa, os.observacoes, os.checklist_json, os.status,
-           os.dataAbertura, os.dataFinalizacao, os.programadoPara, os.isUrgent,
-           os.dataInicioProducao, os.tempoGastoProducaoSegundos, os.dataInicioProducaoAtual,
-           os.cliente_id, c.name as cliente_name,
-           os.parceiro_id, exec_p.name as execution_partner_name,
-           os.created_by_partner_id, creator_p.name as creator_partner_name
+        `SELECT ${OS_SELECT_QUERY_FIELDS}
          FROM os_table os
          JOIN clients c ON os.cliente_id = c.id
          LEFT JOIN partners exec_p ON os.parceiro_id = exec_p.id
-         LEFT JOIN partners creator_p ON os.created_by_partner_id = creator_p.id
          WHERE os.id = ?`,
         [osId]
     );
     if (updatedOSRows.length === 0) throw new Error('Falha ao buscar OS atualizada após mudança de status.');
     
     const updatedOSForReturn = mapDbRowToOS(updatedOSRows[0]);
-
-    // Send email notification if it was an approval/rejection
-    if (originalStatus === OSStatus.AGUARDANDO_APROVACAO && (newStatus === OSStatus.NA_FILA || newStatus === OSStatus.RECUSADA)) {
-        const partnerEmail = currentOSFromDB.creator_partner_email;
-        const partnerName = currentOSFromDB.creator_partner_name;
-        if (partnerEmail && partnerName) {
-            await sendOSStatusUpdateEmail(partnerEmail, partnerName, updatedOSForReturn, newStatus, adminApproverName || 'um administrador');
-        }
-    }
 
     return updatedOSForReturn;
 
@@ -536,17 +519,10 @@ export async function toggleOSProductionTimerInDB(osId: string, action: 'play' |
   try {
     await connection.beginTransaction();
     const [currentOSRows] = await connection.query<RowDataPacket[]>(
-      `SELECT
-         os.id, os.numero, os.projeto, os.tarefa, os.observacoes, os.checklist_json, os.status,
-         os.dataAbertura, os.dataFinalizacao, os.programadoPara, os.isUrgent,
-         os.dataInicioProducao, os.tempoGastoProducaoSegundos, os.dataInicioProducaoAtual,
-         os.cliente_id, c.name as cliente_name,
-         os.parceiro_id, exec_p.name as execution_partner_name,
-         os.created_by_partner_id, creator_p.name as creator_partner_name
+      `SELECT ${OS_SELECT_QUERY_FIELDS}
        FROM os_table os
        JOIN clients c ON os.cliente_id = c.id
        LEFT JOIN partners exec_p ON os.parceiro_id = exec_p.id
-       LEFT JOIN partners creator_p ON os.created_by_partner_id = creator_p.id
        WHERE os.id = ? FOR UPDATE`, [osId]
     );
     if (currentOSRows.length === 0) {
@@ -599,17 +575,10 @@ export async function toggleOSProductionTimerInDB(osId: string, action: 'play' |
     await connection.commit();
 
     const [updatedOSRowsAgain] = await connection.query<RowDataPacket[]>(
-        `SELECT
-           os.id, os.numero, os.projeto, os.tarefa, os.observacoes, os.checklist_json, os.status,
-           os.dataAbertura, os.dataFinalizacao, os.programadoPara, os.isUrgent,
-           os.dataInicioProducao, os.tempoGastoProducaoSegundos, os.dataInicioProducaoAtual,
-           os.cliente_id, c.name as cliente_name,
-           os.parceiro_id, exec_p.name as execution_partner_name,
-           os.created_by_partner_id, creator_p.name as creator_partner_name
+        `SELECT ${OS_SELECT_QUERY_FIELDS}
          FROM os_table os
          JOIN clients c ON os.cliente_id = c.id
          LEFT JOIN partners exec_p ON os.parceiro_id = exec_p.id
-         LEFT JOIN partners creator_p ON os.created_by_partner_id = creator_p.id
          WHERE os.id = ?`, [osId]
       );
     if (updatedOSRowsAgain.length === 0) throw new Error('Falha ao buscar OS atualizada pós-toggle do timer.');
@@ -622,5 +591,3 @@ export async function toggleOSProductionTimerInDB(osId: string, action: 'play' |
     if (connection) connection.release();
   }
 }
-
-    

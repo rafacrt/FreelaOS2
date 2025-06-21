@@ -124,13 +124,14 @@ export default function PartnerCreateOSPage() {
       const dataToSubmit: CreateOSData = {
         ...values,
         cliente: clientInput.trim(),
-        status: OSStatus.NA_FILA, // Logic to set AGUARDANDO_APROVACAO if partner not approved is in os-actions.ts
+        status: OSStatus.AGUARDANDO_APROVACAO, 
         observacoes: values.observacoes || '',
         programadoPara: values.programadoPara || undefined,
         checklistItems: checklistActive ? checklistItems.map(item => item.trim()).filter(item => item !== '') : undefined,
       };
       
-      const createdOS = await addOS(dataToSubmit, session.id); 
+      const creatorInfo = { name: session.partnerName, type: 'partner' as const, id: session.id };
+      const createdOS = await addOS(dataToSubmit, creatorInfo); 
 
       if (createdOS) {
         alert(`OS "${createdOS.projeto}" (Nº ${createdOS.numero}) criada com sucesso! Status: ${createdOS.status}.`);
@@ -193,9 +194,7 @@ export default function PartnerCreateOSPage() {
 
       <div className="card shadow-sm">
         <div className="card-header bg-light-subtle">
-          <p className="mb-0 small text-muted">Preencha os detalhes abaixo.
-            {!session.isApproved && " Suas OSs ficarão com status 'Aguardando Aprovação'."}
-          </p>
+          <p className="mb-0 small text-muted">Preencha os detalhes abaixo. Todas as OSs criadas por parceiros aguardam aprovação de um administrador.</p>
         </div>
         <div className="card-body p-lg-4 p-3">
           <form onSubmit={form.handleSubmit(onSubmit)} noValidate>

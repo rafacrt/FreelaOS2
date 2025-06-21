@@ -45,7 +45,8 @@ export interface OS {
   dataInicioProducaoAtual: string | null; // ISO string, timestamp of the CURRENT production session start, null if paused/not in production
   checklist?: ChecklistItem[]; // Array of checklist items
   createdByPartnerId?: string; // ID of the partner who created this OS
-  createdByPartnerName?: string; // Name of the partner who created this OS (for display)
+  creatorName?: string; // Name of the creator (admin or partner)
+  creatorType?: 'admin' | 'partner'; // Type of creator
 }
 
 // User (Admin/Internal) Session Data

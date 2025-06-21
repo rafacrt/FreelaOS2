@@ -9,6 +9,7 @@ import { format, parseISO, isValid } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useOSStore } from '@/store/os-store';
 import { useTheme } from '@/hooks/useTheme';
+import { useSession } from '@/hooks/useSession';
 import React, { useMemo, useState } from 'react';
 import ChronometerDisplay from '@/components/os/ChronometerDisplay';
 
@@ -66,6 +67,7 @@ const getStatusIcon = (status: OSStatus) => {
 export default function OSCard({ os, viewMode = 'admin' }: OSCardProps) {
   const { updateOSStatus, toggleUrgent, duplicateOS, toggleProductionTimer } = useOSStore();
   const { theme } = useTheme();
+  const session = useSession();
   const [isUpdating, setIsUpdating] = useState(false);
 
   const statusCardClasses = getStatusClass(os.status, os.isUrgent, theme);
@@ -90,10 +92,10 @@ export default function OSCard({ os, viewMode = 'admin' }: OSCardProps) {
   
   const handleApprovalAction = async (e: React.MouseEvent, approved: boolean) => {
     e.preventDefault(); e.stopPropagation();
-    if (os.status !== OSStatus.AGUARDANDO_APROVACAO) return;
+    if (os.status !== OSStatus.AGUARDANDO_APROVACAO || !session || session.sessionType !== 'admin') return;
     setIsUpdating(true);
     const newStatus = approved ? OSStatus.NA_FILA : OSStatus.RECUSADA;
-    await updateOSStatus(os.id, newStatus);
+    await updateOSStatus(os.id, newStatus, session.username);
     setIsUpdating(false);
   };
 
@@ -107,8 +109,9 @@ export default function OSCard({ os, viewMode = 'admin' }: OSCardProps) {
 
   const handleDuplicateOS = async (e: React.MouseEvent) => {
     e.preventDefault(); e.stopPropagation();
+    if (!session || session.sessionType !== 'admin') return;
     setIsUpdating(true);
-    await duplicateOS(os.id);
+    await duplicateOS(os.id, session.username);
     setIsUpdating(false);
   };
 
@@ -178,11 +181,6 @@ export default function OSCard({ os, viewMode = 'admin' }: OSCardProps) {
                 <div className={`card-header p-2 pb-1 d-flex justify-content-between align-items-center ${headerBgClass()}`}>
                     <div className="d-flex flex-column">
                         <span className={`fw-bold small font-monospace ${osNumeroColorClass}`}>OS: {os.numero}</span>
-                        {os.createdByPartnerName && (
-                            <span className="badge bg-secondary-subtle text-dark-emphasis mt-1 d-flex align-items-center" style={{ fontSize: '0.65em', width: 'fit-content' }}>
-                                <UserCheck size={10} className="me-1" /> Aberta por: {truncateText(os.createdByPartnerName, 20)}
-                            </span>
-                        )}
                     </div>
                     {viewMode === 'admin' && os.isUrgent && !isAwaitingApproval && !isRefused && (
                         <span className={`badge bg-danger text-white rounded-pill px-2 py-1 small d-flex align-items-center ms-auto`} style={{fontSize: '0.7em'}}>
@@ -201,7 +199,7 @@ export default function OSCard({ os, viewMode = 'admin' }: OSCardProps) {
                         <span className="fw-medium small text-break">{truncateText(os.cliente, 30)}</span>
                     </div>
                     {os.parceiro && viewMode === 'admin' && ( 
-                        <div className="mb-1" title={`Parceiro de Execução: ${os.parceiro}`}>
+                        <div className="mb-1" title={`Parceiro: ${os.parceiro}`}>
                             <Users size={14} className="me-1 text-muted align-middle" />
                             <span className="text-muted small text-break">{truncateText(os.parceiro, 30)}</span>
                         </div>
