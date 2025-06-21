@@ -88,7 +88,9 @@ const DetailItem = ({ label, value, icon, name, isEditableField, children, class
       <dt className="col-sm-4 col-lg-3 text-muted d-flex align-items-center small fw-medium">{icon}{label}</dt>
       <dd className="col-sm-8 col-lg-9 mb-0">
         {canEditThisField ? (
-          React.cloneElement(children as React.ReactElement<any>, { disabled: (children as React.ReactElement<any>).props.disabled || isPendingOrRefused })
+          (children && React.isValidElement(children))
+            ? React.cloneElement(children, { disabled: children.props.disabled || isPendingOrRefused })
+            : children
         ) : (
           valueIsReactNode ? displayValue : (
             <span className={`form-control-plaintext p-0 text-break small ${name === 'observacoes' || name === 'tarefa' || name === 'tempoTrabalhado' || name === 'checklist' ? 'text-pre-wrap' : ''}`}>
@@ -369,7 +371,6 @@ export default function OSDetailsView({ initialOs, viewMode }: OSDetailsViewProp
         alert('Falha ao atualizar OS. Verifique os logs.');
       }
     } catch (error) {
-      console.error("[OSDetailsView handleSave] Erro ao salvar OS:", error);
       alert('Erro ao tentar salvar OS. Verifique os logs.');
     } finally {
       setIsSaving(false);
@@ -708,7 +709,7 @@ export default function OSDetailsView({ initialOs, viewMode }: OSDetailsViewProp
                     disabled={!canAdminEditFields && isEditing || isFinalized || isAwaitingApproval || isRefused}
                   >
                     {ALL_OS_STATUSES.filter(s => s !== OSStatus.AGUARDANDO_APROVACAO && s !== OSStatus.RECUSADA || s === initialOs.status).map(s => (
-                      <option key={s} value={s} disabled={(isFinalized && s !== OSStatus.FINALIZADO) || (isAwaitingApproval && s !== OSStatus.AGUARDANDO_APROVACAO) || (isRefused && s !== OSStatus.RECUSADA)}>
+                      <option key={s} value={s} disabled={(isFinalized && s !== OSStatus.FINALIZADO) || ((isAwaitingApproval || isRefused) && s !== os.status)}>
                         {s}
                       </option>
                     ))}
