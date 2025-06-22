@@ -417,23 +417,13 @@ export async function getAllOSFromDB(): Promise<OS[]> {
 }
 
 export async function updateOSStatusInDB(osId: string, newStatus: OSStatus, adminApproverName?: string): Promise<OS | null> {
-  const connection = await db.getConnection();
+  let connection: PoolConnection | undefined;
   try {
+    connection = await db.getConnection();
     await connection.beginTransaction();
 
     const [currentOSRows] = await connection.query<RowDataPacket[]>(
-        `SELECT
-            os.*,
-            c.name as cliente_name,
-            creator_p.name as creator_partner_name,
-            creator_p.email as creator_partner_email,
-            exec_p.name as execution_partner_name,
-            exec_p.email as execution_partner_email
-        FROM os_table os
-        JOIN clients c ON os.cliente_id = c.id
-        LEFT JOIN partners creator_p ON os.created_by_partner_id = creator_p.id
-        LEFT JOIN partners exec_p ON os.parceiro_id = exec_p.id
-        WHERE os.id = ? FOR UPDATE`,
+        `SELECT os.*, c.name as cliente_name FROM os_table os JOIN clients c ON os.cliente_id = c.id WHERE os.id = ? FOR UPDATE`,
         [osId]
     );
 
@@ -445,9 +435,8 @@ export async function updateOSStatusInDB(osId: string, newStatus: OSStatus, admi
     const originalStatus = currentOSFromDB.status as OSStatus;
 
     if (originalStatus === newStatus) {
-        await connection.rollback(); // No change needed
-        const osToReturn = mapDbRowToOS(currentOSFromDB);
-        return osToReturn;
+        await connection.rollback();
+        return mapDbRowToOS(currentOSFromDB);
     }
 
     const now = new Date();
@@ -459,9 +448,7 @@ export async function updateOSStatusInDB(osId: string, newStatus: OSStatus, admi
     if (newStatus === OSStatus.EM_PRODUCAO) {
       if (!newDataInicioProducaoAtualSQL) {
         newDataInicioProducaoAtualSQL = now;
-        if (!newDataInicioProducaoHistoricoSQL) {
-          newDataInicioProducaoHistoricoSQL = now;
-        }
+        if (!newDataInicioProducaoHistoricoSQL) newDataInicioProducaoHistoricoSQL = now;
       }
     } else {
       if (newDataInicioProducaoAtualSQL) {
@@ -471,64 +458,69 @@ export async function updateOSStatusInDB(osId: string, newStatus: OSStatus, admi
     }
 
     if (newStatus === OSStatus.FINALIZADO) {
-        if (!newDataFinalizacaoSQL) {
-            newDataFinalizacaoSQL = now;
-        }
+        if (!newDataFinalizacaoSQL) newDataFinalizacaoSQL = now;
     } else if (currentOSFromDB.status === OSStatus.FINALIZADO && newStatus !== OSStatus.FINALIZADO) {
       newDataFinalizacaoSQL = null;
     }
 
-
     const sql = `
-      UPDATE os_table SET
-        status = ?, dataFinalizacao = ?, dataInicioProducao = ?,
+      UPDATE os_table SET status = ?, dataFinalizacao = ?, dataInicioProducao = ?,
         tempoGastoProducaoSegundos = ?, dataInicioProducaoAtual = ?, updated_at = NOW()
       WHERE id = ?`;
     const values = [
       newStatus, newDataFinalizacaoSQL, newDataInicioProducaoHistoricoSQL,
       newTempoGastoProducaoSegundosSQL, newDataInicioProducaoAtualSQL, parseInt(osId, 10)
     ];
-
     await connection.execute<ResultSetHeader>(sql, values);
     
-    // DB changes are saved. Now, commit.
     await connection.commit();
 
-    // After successful commit, try to send email without blocking the return.
-    try {
-        const osDataForEmail = {
-            id: String(currentOSFromDB.id),
-            numero: currentOSFromDB.numero,
-            cliente: currentOSFromDB.cliente_name, // Use name fetched in query
-            projeto: currentOSFromDB.projeto,
-            status: newStatus,
-            dataAbertura: new Date(currentOSFromDB.dataAbertura).toISOString(),
-            isUrgent: Boolean(currentOSFromDB.isUrgent),
-            tempoGastoProducaoSegundos: newTempoGastoProducaoSegundosSQL, // use updated time
-            dataInicioProducaoAtual: newDataInicioProducaoAtualSQL ? newDataInicioProducaoAtualSQL.toISOString() : null,
-            clientId: String(currentOSFromDB.cliente_id),
-            tarefa: currentOSFromDB.tarefa,
-            observacoes: currentOSFromDB.observacoes
-        };
-        
-        if (originalStatus === OSStatus.AGUARDANDO_APROVACAO && (newStatus === OSStatus.NA_FILA || newStatus === OSStatus.RECUSADA)) {
-            const partnerEmail = currentOSFromDB.creator_partner_email;
-            const partnerName = currentOSFromDB.creator_partner_name;
-            if (partnerEmail && partnerName) {
-                sendOSApprovalEmail(partnerEmail, partnerName, osDataForEmail, newStatus, adminApproverName || 'um administrador');
-            }
-        } else if (originalStatus !== newStatus) {
-            const partnerEmail = currentOSFromDB.execution_partner_email || currentOSFromDB.creator_partner_email;
-            const partnerName = currentOSFromDB.execution_partner_name || currentOSFromDB.creator_partner_name;
-            if (partnerEmail && partnerName) {
-                sendGeneralStatusUpdateEmail(partnerEmail, partnerName, osDataForEmail, originalStatus, newStatus, adminApproverName || 'um administrador');
+    // After successful commit, trigger email sending in the background.
+    (async () => {
+      let bgConnection: PoolConnection | undefined;
+      try {
+        bgConnection = await db.getConnection();
+        const [partnerDetailsRows] = await bgConnection.query<RowDataPacket[]>(
+            `SELECT 
+                creator_p.name as creator_partner_name,
+                creator_p.email as creator_partner_email,
+                exec_p.name as execution_partner_name,
+                exec_p.email as execution_partner_email
+            FROM os_table os
+            LEFT JOIN partners creator_p ON os.created_by_partner_id = creator_p.id
+            LEFT JOIN partners exec_p ON os.parceiro_id = exec_p.id
+            WHERE os.id = ?`,
+            [osId]
+        );
+
+        if (partnerDetailsRows.length > 0) {
+            const partnerDetails = partnerDetailsRows[0];
+            const osDataForEmail = { ...mapDbRowToOS(currentOSFromDB), status: newStatus };
+
+            if (originalStatus === OSStatus.AGUARDANDO_APROVACAO && (newStatus === OSStatus.NA_FILA || newStatus === OSStatus.RECUSADA)) {
+                const partnerEmail = partnerDetails.creator_partner_email;
+                const partnerName = partnerDetails.creator_partner_name;
+                if (partnerEmail && partnerName) {
+                    await sendOSApprovalEmail(partnerEmail, partnerName, osDataForEmail, newStatus, adminApproverName || 'um administrador');
+                }
+            } else if (originalStatus !== newStatus) {
+                const partnerEmail = partnerDetails.execution_partner_email || partnerDetails.creator_partner_email;
+                const partnerName = partnerDetails.execution_partner_name || partnerDetails.creator_partner_name;
+                if (partnerEmail && partnerName) {
+                    console.log(`[Email Trigger] General Status Change. Notifying Partner: ${partnerName}, Email: ${partnerEmail}`);
+                    await sendGeneralStatusUpdateEmail(partnerEmail, partnerName, osDataForEmail, originalStatus, newStatus, adminApproverName || 'um administrador');
+                } else {
+                     console.log(`[Email Trigger] General Status Change. Partner email not found for OS #${osId}.`);
+                }
             }
         }
-    } catch (emailError: any) {
-        console.error(`[os-actions] DB update for OS ID ${osId} was successful, but email sending failed. Error:`, emailError.message);
-    }
+      } catch (emailError: any) {
+        console.error(`[os-actions] Background email sending failed for OS ID ${osId}. Error:`, emailError);
+      } finally {
+        if (bgConnection) bgConnection.release();
+      }
+    })();
     
-    // Fetch the updated row to return to the client.
     const [updatedOSRows] = await connection.query<RowDataPacket[]>(
         `SELECT ${OS_SELECT_QUERY_FIELDS}
          FROM os_table os
@@ -538,7 +530,6 @@ export async function updateOSStatusInDB(osId: string, newStatus: OSStatus, admi
         [osId]
     );
     if (updatedOSRows.length === 0) throw new Error('Falha ao buscar OS atualizada após mudança de status.');
-
     return mapDbRowToOS(updatedOSRows[0]);
 
   } catch (error: any) {
