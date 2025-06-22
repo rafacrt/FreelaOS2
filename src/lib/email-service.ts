@@ -11,15 +11,35 @@ interface EmailDetails {
   html: string;
 }
 
-const transporter = nodemailer.createTransport({
+// 1. Create a detailed configuration object
+const smtpConfig = {
   host: env.SMTP_HOST,
   port: Number(env.SMTP_PORT || 587),
-  secure: env.SMTP_SECURE === "true", // true for 465, false for other ports
+  secure: env.SMTP_SECURE === "true", // Use true for port 465, false for other ports (like 587 that use STARTTLS)
   auth: {
     user: env.SMTP_USER,
     pass: env.SMTP_PASS,
   },
-});
+  // --- DIAGNOSTIC OPTIONS ---
+  // The 'tls' option can help bypass issues with self-signed or misconfigured SSL certificates on the mail server.
+  // 'rejectUnauthorized: false' is NOT recommended for production environments but is a crucial diagnostic tool.
+  // If this setting makes emails work, the issue is with the mail server's SSL/TLS certificate chain.
+  tls: {
+    rejectUnauthorized: false
+  }
+};
+
+// 2. Log the configuration being used (masking the password) for easier debugging
+const loggableConfig = {
+    ...smtpConfig,
+    auth: {
+        user: smtpConfig.auth.user,
+        pass: smtpConfig.auth.pass ? '********' : '(not set)'
+    }
+};
+console.log('[Email Service] Initializing with SMTP config:', loggableConfig);
+
+const transporter = nodemailer.createTransport(smtpConfig);
 
 export async function sendEmail(details: EmailDetails): Promise<void> {
   if (!env.SMTP_HOST || !env.SMTP_USER || !env.SMTP_PASS) {
@@ -44,48 +64,13 @@ export async function sendEmail(details: EmailDetails): Promise<void> {
   }
 }
 
-export async function sendOSApprovalEmail(
+export async function sendGeneralStatusUpdateEmail(
   partnerEmail: string,
   partnerName: string,
   os: OS,
+  oldStatus: OSStatus,
   newStatus: OSStatus,
   adminName: string
-): Promise<void> {
-  let subject = '';
-  let messageText = '';
-  let messageHtml = '';
-
-  const osLink = `${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:9002'}/os/${os.id}`;
-
-  if (newStatus === OSStatus.NA_FILA) { // Approved
-    subject = `OS #${os.numero} Aprovada - FreelaOS`;
-    messageText = `Olá ${partnerName},\n\nSua Ordem de Serviço #${os.numero} ("${os.projeto}") foi APROVADA por ${adminName} e agora está na fila de produção.\n\nDetalhes da OS: ${osLink}\n\nAtenciosamente,\nEquipe FreelaOS`;
-    messageHtml = `<p>Olá ${partnerName},</p><p>Sua Ordem de Serviço #${os.numero} ("${os.projeto}") foi <strong>APROVADA</strong> por ${adminName} e agora está na fila de produção.</p><p><a href="${osLink}">Ver OS #${os.numero}</a></p><p>Atenciosamente,<br/>Equipe FreelaOS</p>`;
-  } else if (newStatus === OSStatus.RECUSADA) { // Refused
-    subject = `OS #${os.numero} Recusada - FreelaOS`;
-    messageText = `Olá ${partnerName},\n\nSua Ordem de Serviço #${os.numero} ("${os.projeto}") foi RECUSADA por ${adminName}.\n\nEntre em contato com o administrador para mais detalhes ou acesse a OS para verificar observações.\n\nDetalhes da OS: ${osLink}\n\nAtenciosamente,\nEquipe FreelaOS`;
-    messageHtml = `<p>Olá ${partnerName},</p><p>Sua Ordem de Serviço #${os.numero} ("${os.projeto}") foi <strong>RECUSADA</strong> por ${adminName}.</p><p>Entre em contato com o administrador para mais detalhes ou acesse a OS para verificar observações.</p><p><a href="${osLink}">Ver OS #${os.numero}</a></p><p>Atenciosamente,<br/>Equipe FreelaOS</p>`;
-  } else {
-    return;
-  }
-
-  if (subject && partnerEmail) {
-    await sendEmail({
-      to: partnerEmail,
-      subject,
-      text: messageText,
-      html: messageHtml,
-    });
-  }
-}
-
-export async function sendGeneralStatusUpdateEmail(
-    partnerEmail: string,
-    partnerName: string,
-    os: OS,
-    oldStatus: OSStatus,
-    newStatus: OSStatus,
-    adminName: string
 ): Promise<void> {
     const osLink = `${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:9002'}/os/${os.id}`;
     const subject = `Atualização na OS #${os.numero}: ${newStatus}`;
