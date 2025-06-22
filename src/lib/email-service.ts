@@ -1,4 +1,3 @@
-
 // src/lib/email-service.ts
 import nodemailer from 'nodemailer';
 import type { OS } from './types';
@@ -95,4 +94,29 @@ export async function sendGeneralStatusUpdateEmail(
         text: messageText,
         html: messageHtml,
     });
+}
+
+export async function sendOSCreationConfirmationEmail(
+  partnerEmail: string,
+  partnerName: string,
+  os: OS
+): Promise<void> {
+  const osLink = `${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:9002'}/os/${os.id}`;
+  const subject = `OS #${os.numero} Recebida - FreelaOS`;
+  const messageText = `Olá ${partnerName},\n\nSua solicitação de Ordem de Serviço foi recebida com sucesso e registrada com o número #${os.numero}.\n\nProjeto: ${os.projeto}\n\nEla está agora aguardando aprovação de um administrador. Você será notificado sobre qualquer atualização.\n\nDetalhes da OS: ${osLink}\n\nAtenciosamente,\nEquipe FreelaOS`;
+  const messageHtml = `
+    <p>Olá ${partnerName},</p>
+    <p>Sua solicitação de Ordem de Serviço foi recebida com sucesso e registrada com o número <strong>#${os.numero}</strong>.</p>
+    <p><strong>Projeto:</strong> ${os.projeto}</p>
+    <p>Ela está agora aguardando aprovação de um administrador. Você será notificado sobre qualquer atualização.</p>
+    <p><a href="${osLink}">Ver OS #${os.numero}</a></p>
+    <p>Atenciosamente,<br/>Equipe FreelaOS</p>
+  `;
+
+  await sendEmail({
+    to: partnerEmail,
+    subject,
+    text: messageText,
+    html: messageHtml,
+  });
 }

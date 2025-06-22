@@ -1,4 +1,3 @@
-
 // src/lib/auth.ts
 import type { User, PartnerSessionData } from './types'; 
 import type { RowDataPacket } from 'mysql2/promise';
@@ -25,7 +24,6 @@ export async function getUserByUsername(username: string): Promise<(User & { pas
     }
     return null;
   } catch (error) {
-    console.error("[getUserByUsername] DB Error:", error);
     throw new Error('Database error while fetching user.');
   } finally {
     if (connection) connection.release();
@@ -53,8 +51,35 @@ export async function getPartnerByUsernameOrEmail(identifier: string): Promise<(
     }
     return null;
   } catch (error) {
-    console.error("[getPartnerByUsernameOrEmail] DB Error:", error);
     throw new Error('Database error while fetching partner.');
+  } finally {
+    if (connection) connection.release();
+  }
+}
+
+// Get Partner specifically by Email
+export async function getPartnerByEmail(email: string): Promise<(PartnerSessionData & { password_hash: string | null }) | null> {
+  if (!email) return null;
+  const connection = await db.getConnection();
+  try {
+    const [rows] = await connection.query<RowDataPacket[]>(
+      'SELECT id, name, username, email, password_hash, is_approved FROM partners WHERE email = ?',
+      [email]
+    );
+    if (rows.length > 0) {
+      const partnerRow = rows[0];
+      return {
+        id: String(partnerRow.id),
+        username: partnerRow.username,
+        partnerName: partnerRow.name,
+        email: partnerRow.email,
+        password_hash: partnerRow.password_hash,
+        isApproved: Boolean(partnerRow.is_approved),
+      };
+    }
+    return null;
+  } catch (error) {
+    throw new Error('Database error while fetching partner by email.');
   } finally {
     if (connection) connection.release();
   }
