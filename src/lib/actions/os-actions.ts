@@ -424,11 +424,13 @@ export async function updateOSStatusInDB(osId: string, newStatus: OSStatus, admi
     const [currentOSRows] = await connection.query<RowDataPacket[]>(
         `SELECT
             os.*,
+            c.name as cliente_name,
             creator_p.name as creator_partner_name,
             creator_p.email as creator_partner_email,
             exec_p.name as execution_partner_name,
             exec_p.email as execution_partner_email
         FROM os_table os
+        JOIN clients c ON os.cliente_id = c.id
         LEFT JOIN partners creator_p ON os.created_by_partner_id = creator_p.id
         LEFT JOIN partners exec_p ON os.parceiro_id = exec_p.id
         WHERE os.id = ? FOR UPDATE`,
@@ -488,33 +490,45 @@ export async function updateOSStatusInDB(osId: string, newStatus: OSStatus, admi
     ];
 
     await connection.execute<ResultSetHeader>(sql, values);
-    const osDataForEmail = mapDbRowToOS(currentOSFromDB);
-
-    // --- Start Email Logic ---
-    if (originalStatus === OSStatus.AGUARDANDO_APROVACAO && (newStatus === OSStatus.NA_FILA || newStatus === OSStatus.RECUSADA)) {
-        const partnerEmail = currentOSFromDB.creator_partner_email;
-        const partnerName = currentOSFromDB.creator_partner_name;
-        console.log(`[Email Trigger] OS Approval/Refusal. Partner: ${partnerName}, Email: ${partnerEmail}`);
-        if (partnerEmail && partnerName) {
-            await sendOSApprovalEmail(partnerEmail, partnerName, osDataForEmail, newStatus, adminApproverName || 'um administrador');
-        } else {
-            console.log(`[Email Trigger] Skipped: Partner or email not found for approval notification.`);
-        }
-    } else { // Handle general status changes
-        // Prioritize notifying the execution partner, fallback to creator partner
-        const partnerEmail = currentOSFromDB.execution_partner_email || currentOSFromDB.creator_partner_email;
-        const partnerName = currentOSFromDB.execution_partner_name || currentOSFromDB.creator_partner_name;
-        console.log(`[Email Trigger] General Status Change. Notifying Partner: ${partnerName}, Email: ${partnerEmail}`);
-        if(partnerEmail && partnerName) {
-             await sendGeneralStatusUpdateEmail(partnerEmail, partnerName, osDataForEmail, originalStatus, newStatus, adminApproverName || 'um administrador');
-        } else {
-            console.log(`[Email Trigger] Skipped: Partner or email not found for general status update notification.`);
-        }
-    }
-    // --- End Email Logic ---
-
+    
+    // DB changes are saved. Now, commit.
     await connection.commit();
 
+    // After successful commit, try to send email without blocking the return.
+    try {
+        const osDataForEmail = {
+            id: String(currentOSFromDB.id),
+            numero: currentOSFromDB.numero,
+            cliente: currentOSFromDB.cliente_name, // Use name fetched in query
+            projeto: currentOSFromDB.projeto,
+            status: newStatus,
+            dataAbertura: new Date(currentOSFromDB.dataAbertura).toISOString(),
+            isUrgent: Boolean(currentOSFromDB.isUrgent),
+            tempoGastoProducaoSegundos: newTempoGastoProducaoSegundosSQL, // use updated time
+            dataInicioProducaoAtual: newDataInicioProducaoAtualSQL ? newDataInicioProducaoAtualSQL.toISOString() : null,
+            clientId: String(currentOSFromDB.cliente_id),
+            tarefa: currentOSFromDB.tarefa,
+            observacoes: currentOSFromDB.observacoes
+        };
+        
+        if (originalStatus === OSStatus.AGUARDANDO_APROVACAO && (newStatus === OSStatus.NA_FILA || newStatus === OSStatus.RECUSADA)) {
+            const partnerEmail = currentOSFromDB.creator_partner_email;
+            const partnerName = currentOSFromDB.creator_partner_name;
+            if (partnerEmail && partnerName) {
+                sendOSApprovalEmail(partnerEmail, partnerName, osDataForEmail, newStatus, adminApproverName || 'um administrador');
+            }
+        } else if (originalStatus !== newStatus) {
+            const partnerEmail = currentOSFromDB.execution_partner_email || currentOSFromDB.creator_partner_email;
+            const partnerName = currentOSFromDB.execution_partner_name || currentOSFromDB.creator_partner_name;
+            if (partnerEmail && partnerName) {
+                sendGeneralStatusUpdateEmail(partnerEmail, partnerName, osDataForEmail, originalStatus, newStatus, adminApproverName || 'um administrador');
+            }
+        }
+    } catch (emailError: any) {
+        console.error(`[os-actions] DB update for OS ID ${osId} was successful, but email sending failed. Error:`, emailError.message);
+    }
+    
+    // Fetch the updated row to return to the client.
     const [updatedOSRows] = await connection.query<RowDataPacket[]>(
         `SELECT ${OS_SELECT_QUERY_FIELDS}
          FROM os_table os
@@ -525,12 +539,11 @@ export async function updateOSStatusInDB(osId: string, newStatus: OSStatus, admi
     );
     if (updatedOSRows.length === 0) throw new Error('Falha ao buscar OS atualizada após mudança de status.');
 
-    const updatedOSForReturn = mapDbRowToOS(updatedOSRows[0]);
-
-    return updatedOSForReturn;
+    return mapDbRowToOS(updatedOSRows[0]);
 
   } catch (error: any) {
     if (connection) await connection.rollback();
+    console.error(`[os-actions] DB Error during status update for OS ID ${osId}:`, error);
     return null;
   } finally {
     if (connection) connection.release();
