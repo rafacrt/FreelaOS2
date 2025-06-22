@@ -16,7 +16,7 @@ import ChronometerDisplay from '@/components/os/ChronometerDisplay';
 
 interface OSCardProps {
   os: OS;
-  viewMode?: 'admin' | 'partner'; 
+  viewMode?: 'admin' | 'partner';
 }
 
 const getStatusClass = (status: OSStatus, isUrgent: boolean, theme: 'light' | 'dark'): string => {
@@ -82,14 +82,14 @@ export default function OSCard({ os, viewMode = 'admin' }: OSCardProps) {
     event.stopPropagation();
     setIsUpdating(true);
     try {
-      await updateOSStatus(os.id, newStatus);
+      const adminUsername = session && session.sessionType === 'admin' ? session.username : undefined;
+      await updateOSStatus(os.id, newStatus, adminUsername);
     } catch (error) {
-      console.error(`[OSCard] Falha ao atualizar status da OS ${os.id}:`, error);
     } finally {
       setIsUpdating(false);
     }
   };
-  
+
   const handleApprovalAction = async (e: React.MouseEvent, approved: boolean) => {
     e.preventDefault(); e.stopPropagation();
     if (os.status !== OSStatus.AGUARDANDO_APROVACAO || !session || session.sessionType !== 'admin') return;
@@ -120,9 +120,9 @@ export default function OSCard({ os, viewMode = 'admin' }: OSCardProps) {
     if (os.status !== OSStatus.FINALIZADO && os.status !== OSStatus.AGUARDANDO_APROVACAO && os.status !== OSStatus.RECUSADA) {
       setIsUpdating(true);
       try {
-        await updateOSStatus(os.id, OSStatus.FINALIZADO);
+        const adminUsername = session && session.sessionType === 'admin' ? session.username : undefined;
+        await updateOSStatus(os.id, OSStatus.FINALIZADO, adminUsername);
       } catch (error) {
-        console.error(`[OSCard] Falha ao finalizar OS ${os.id} do card:`, error);
       } finally {
         setIsUpdating(false);
       }
@@ -153,7 +153,6 @@ export default function OSCard({ os, viewMode = 'admin' }: OSCardProps) {
               return format(date, "dd/MM/yy", { locale: ptBR });
           }
       } catch (e) {
-        console.warn(`[OSCard] Error parsing programadoPara date "${os.programadoPara}":`, e);
       }
       return os.programadoPara;
   }, [os.programadoPara]);
@@ -187,7 +186,7 @@ export default function OSCard({ os, viewMode = 'admin' }: OSCardProps) {
                             <AlertTriangle size={12} className="me-1" /> URGENTE
                         </span>
                     )}
-                     {viewMode === 'partner' && os.isUrgent && !isAwaitingApproval && !isRefused && ( 
+                     {viewMode === 'partner' && os.isUrgent && !isAwaitingApproval && !isRefused && (
                         <span className={`badge bg-danger-subtle text-danger-emphasis rounded-pill px-2 py-1 small d-flex align-items-center ms-auto`} style={{fontSize: '0.7em'}}>
                             <AlertTriangle size={12} className="me-1" /> URGENTE
                         </span>
@@ -198,13 +197,13 @@ export default function OSCard({ os, viewMode = 'admin' }: OSCardProps) {
                         <UserIcon size={14} className="me-1 text-muted align-middle" />
                         <span className="fw-medium small text-break">{truncateText(os.cliente, 30)}</span>
                     </div>
-                    {os.parceiro && viewMode === 'admin' && ( 
+                    {os.parceiro && viewMode === 'admin' && (
                         <div className="mb-1" title={`Parceiro: ${os.parceiro}`}>
                             <Users size={14} className="me-1 text-muted align-middle" />
                             <span className="text-muted small text-break">{truncateText(os.parceiro, 30)}</span>
                         </div>
                     )}
-                    <div className="mb-2" title={`Projeto: ${os.projeto}`}> 
+                    <div className="mb-2" title={`Projeto: ${os.projeto}`}>
                         <Briefcase size={14} className="me-1 text-muted align-middle" />
                         <span className="small text-muted text-break">{truncateText(os.projeto, 40)}</span>
                     </div>
@@ -233,7 +232,7 @@ export default function OSCard({ os, viewMode = 'admin' }: OSCardProps) {
                             />
                         </div>
                     </div>
-                    
+
                     {viewMode === 'admin' ? (
                         <div className="mb-2">
                             <select
@@ -254,7 +253,7 @@ export default function OSCard({ os, viewMode = 'admin' }: OSCardProps) {
                                 ))}
                             </select>
                         </div>
-                    ) : ( 
+                    ) : (
                          <div className="mb-2">
                             <div className={`form-control form-control-sm text-center disabled ${statusSelectClasses}`} style={{ fontSize: '0.75rem' }}>
                                 {getStatusIcon(os.status)} {os.status}

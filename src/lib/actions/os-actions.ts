@@ -9,8 +9,7 @@ import { findOrCreateClientByName } from './client-actions';
 import { findOrCreatePartnerByName } from './partner-actions';
 import type { ResultSetHeader, RowDataPacket, PoolConnection } from 'mysql2/promise';
 import { parseISO, differenceInSeconds, format as formatDateFns, isValid } from 'date-fns';
-import { sendOSStatusUpdateEmail } from '@/lib/email-service'; // Import email service here
-// import { ptBR } from 'date-fns/locale'; // ptBR não é usado diretamente aqui
+import { sendOSApprovalEmail, sendGeneralStatusUpdateEmail } from '@/lib/email-service';
 
 const generateNewOSNumero = async (connection: PoolConnection): Promise<string> => {
   const [rows] = await connection.query<RowDataPacket[]>("SELECT MAX(CAST(numero AS UNSIGNED)) as maxNumero FROM os_table");
@@ -164,13 +163,14 @@ export async function createOSInDB(data: CreateOSData, creator: { name: string, 
     const now = new Date();
     let initialStatus = data.status || OSStatus.NA_FILA;
     let createdByPartnerIdSQL: number | null = null;
-    
+
     if (creator.type === 'partner' && creator.id) {
-      initialStatus = OSStatus.AGUARDANDO_APROVACAO;
-      const parsedId = parseInt(creator.id, 10);
-      if (!isNaN(parsedId)) {
-        createdByPartnerIdSQL = parsedId;
-      }
+        initialStatus = OSStatus.AGUARDANDO_APROVACAO;
+        const parsedId = parseInt(creator.id, 10);
+        if (!isNaN(parsedId)) {
+            createdByPartnerIdSQL = parsedId;
+        } else {
+        }
     }
 
     const clienteIdSQL = parseInt(client.id, 10);
@@ -183,9 +183,6 @@ export async function createOSInDB(data: CreateOSData, creator: { name: string, 
       numero: newOsNumero,
       cliente_id: clienteIdSQL,
       parceiro_id: executionPartnerIdSQL,
-      created_by_partner_id: createdByPartnerIdSQL,
-      creator_name: creator.name,
-      creator_type: creator.type,
       projeto: data.projeto,
       tarefa: data.tarefa,
       observacoes: data.observacoes || '',
@@ -200,19 +197,22 @@ export async function createOSInDB(data: CreateOSData, creator: { name: string, 
       dataInicioProducaoAtual: initialStatus === OSStatus.EM_PRODUCAO ? now : null,
       created_at: now,
       updated_at: now,
+      created_by_partner_id: createdByPartnerIdSQL,
+      creator_name: creator.name,
+      creator_type: creator.type,
     };
 
     const insertQueryValues = [
-        osDataForDB.numero, osDataForDB.cliente_id, osDataForDB.parceiro_id, osDataForDB.created_by_partner_id,
-        osDataForDB.creator_name, osDataForDB.creator_type,
+        osDataForDB.numero, osDataForDB.cliente_id, osDataForDB.parceiro_id,
         osDataForDB.projeto, osDataForDB.tarefa, osDataForDB.observacoes, osDataForDB.checklist_json,
         osDataForDB.status, osDataForDB.dataAbertura, osDataForDB.programadoPara, osDataForDB.isUrgent,
         osDataForDB.dataFinalizacao, osDataForDB.dataInicioProducao, osDataForDB.tempoGastoProducaoSegundos,
-        osDataForDB.dataInicioProducaoAtual, osDataForDB.created_at, osDataForDB.updated_at
+        osDataForDB.dataInicioProducaoAtual, osDataForDB.created_at, osDataForDB.updated_at,
+        osDataForDB.created_by_partner_id, osDataForDB.creator_name, osDataForDB.creator_type
     ];
-    
+
     const [result] = await connection.execute<ResultSetHeader>(
-      `INSERT INTO os_table (numero, cliente_id, parceiro_id, created_by_partner_id, creator_name, creator_type, projeto, tarefa, observacoes, checklist_json, status, dataAbertura, programadoPara, isUrgent, dataFinalizacao, dataInicioProducao, tempoGastoProducaoSegundos, dataInicioProducaoAtual, created_at, updated_at)
+      `INSERT INTO os_table (numero, cliente_id, parceiro_id, projeto, tarefa, observacoes, checklist_json, status, dataAbertura, programadoPara, isUrgent, dataFinalizacao, dataInicioProducao, tempoGastoProducaoSegundos, dataInicioProducaoAtual, created_at, updated_at, created_by_partner_id, creator_name, creator_type)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       insertQueryValues
     );
@@ -382,7 +382,6 @@ export async function updateOSInDB(osData: OS): Promise<OS | null> {
         await connection.rollback();
     }
     // Retorne null ou lance o erro dependendo da sua estratégia de tratamento de erros no store
-    console.error(`[updateOSInDB] Erro ao atualizar OS ID ${osData.id}:`, error);
     return null;
   } finally {
     if (connection) {
@@ -424,11 +423,17 @@ export async function updateOSStatusInDB(osId: string, newStatus: OSStatus, admi
     await connection.beginTransaction();
 
     const [currentOSRows] = await connection.query<RowDataPacket[]>(
-      `SELECT os.*, p.name as creator_partner_name, p.email as creator_partner_email
-       FROM os_table os
-       LEFT JOIN partners p ON os.created_by_partner_id = p.id
-       WHERE os.id = ? FOR UPDATE`,
-      [osId]
+        `SELECT
+            os.*,
+            creator_p.name as creator_partner_name,
+            creator_p.email as creator_partner_email,
+            exec_p.name as execution_partner_name,
+            exec_p.email as execution_partner_email
+        FROM os_table os
+        LEFT JOIN partners creator_p ON os.created_by_partner_id = creator_p.id
+        LEFT JOIN partners exec_p ON os.parceiro_id = exec_p.id
+        WHERE os.id = ? FOR UPDATE`,
+        [osId]
     );
 
     if (currentOSRows.length === 0) {
@@ -437,6 +442,12 @@ export async function updateOSStatusInDB(osId: string, newStatus: OSStatus, admi
     }
     const currentOSFromDB = currentOSRows[0];
     const originalStatus = currentOSFromDB.status as OSStatus;
+
+    if (originalStatus === newStatus) {
+        await connection.rollback(); // No change needed
+        const osToReturn = mapDbRowToOS(currentOSFromDB);
+        return osToReturn;
+    }
 
     const now = new Date();
     let newDataInicioProducaoAtualSQL = currentOSFromDB.dataInicioProducaoAtual ? new Date(currentOSFromDB.dataInicioProducaoAtual) : null;
@@ -478,20 +489,27 @@ export async function updateOSStatusInDB(osId: string, newStatus: OSStatus, admi
     ];
 
     await connection.execute<ResultSetHeader>(sql, values);
-    
-    // Send email notification if it was an approval/rejection BEFORE committing
+    const osDataForEmail = mapDbRowToOS(currentOSFromDB);
+
+    // --- Start Email Logic ---
     if (originalStatus === OSStatus.AGUARDANDO_APROVACAO && (newStatus === OSStatus.NA_FILA || newStatus === OSStatus.RECUSADA)) {
         const partnerEmail = currentOSFromDB.creator_partner_email;
         const partnerName = currentOSFromDB.creator_partner_name;
         if (partnerEmail && partnerName) {
-            const tempOSData = mapDbRowToOS(currentOSFromDB);
-            await sendOSStatusUpdateEmail(partnerEmail, partnerName, tempOSData, newStatus, adminApproverName || 'um administrador');
+            await sendOSApprovalEmail(partnerEmail, partnerName, osDataForEmail, newStatus, adminApproverName || 'um administrador');
+        }
+    } else { // Handle general status changes
+        const partnerEmail = currentOSFromDB.execution_partner_email || currentOSFromDB.creator_partner_email;
+        const partnerName = currentOSFromDB.execution_partner_name || currentOSFromDB.creator_partner_name;
+
+        if(partnerEmail && partnerName) {
+             await sendGeneralStatusUpdateEmail(partnerEmail, partnerName, osDataForEmail, originalStatus, newStatus, adminApproverName || 'um administrador');
         }
     }
+    // --- End Email Logic ---
 
     await connection.commit();
-    
-    // Fetch the fully updated OS to return
+
     const [updatedOSRows] = await connection.query<RowDataPacket[]>(
         `SELECT ${OS_SELECT_QUERY_FIELDS}
          FROM os_table os
@@ -501,7 +519,7 @@ export async function updateOSStatusInDB(osId: string, newStatus: OSStatus, admi
         [osId]
     );
     if (updatedOSRows.length === 0) throw new Error('Falha ao buscar OS atualizada após mudança de status.');
-    
+
     const updatedOSForReturn = mapDbRowToOS(updatedOSRows[0]);
 
     return updatedOSForReturn;
