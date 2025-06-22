@@ -23,18 +23,22 @@ const transporter = nodemailer.createTransport({
 
 export async function sendEmail(details: EmailDetails): Promise<void> {
   if (!env.SMTP_HOST || !env.SMTP_USER || !env.SMTP_PASS) {
+    console.warn('[Email Service] SMTP environment variables not configured. Email sending is disabled.');
     return; // Silently fail if SMTP is not configured
   }
 
   try {
-    await transporter.sendMail({
-      from: env.EMAIL_FROM || '"FreelaOS" <no-reply@example.com>',
+    console.log(`[Email Service] Attempting to send email to: ${details.to} with subject: "${details.subject}"`);
+    const info = await transporter.sendMail({
+      from: env.EMAIL_FROM || '"FreelaOS" <no-reply@yourdomain.com>',
       to: details.to,
       subject: details.subject,
       text: details.text,
       html: details.html,
     });
+    console.log(`[Email Service] Email sent successfully! Message ID: ${info.messageId}`);
   } catch (error) {
+    console.error('[Email Service] Failed to send email.', error);
     // Do not re-throw here to prevent breaking the main application flow
     // if email sending fails. The failure is logged.
   }

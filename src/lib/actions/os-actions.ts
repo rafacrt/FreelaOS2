@@ -1,4 +1,3 @@
-
 // src/lib/actions/os-actions.ts
 'use server';
 
@@ -495,15 +494,21 @@ export async function updateOSStatusInDB(osId: string, newStatus: OSStatus, admi
     if (originalStatus === OSStatus.AGUARDANDO_APROVACAO && (newStatus === OSStatus.NA_FILA || newStatus === OSStatus.RECUSADA)) {
         const partnerEmail = currentOSFromDB.creator_partner_email;
         const partnerName = currentOSFromDB.creator_partner_name;
+        console.log(`[Email Trigger] OS Approval/Refusal. Partner: ${partnerName}, Email: ${partnerEmail}`);
         if (partnerEmail && partnerName) {
             await sendOSApprovalEmail(partnerEmail, partnerName, osDataForEmail, newStatus, adminApproverName || 'um administrador');
+        } else {
+            console.log(`[Email Trigger] Skipped: Partner or email not found for approval notification.`);
         }
     } else { // Handle general status changes
+        // Prioritize notifying the execution partner, fallback to creator partner
         const partnerEmail = currentOSFromDB.execution_partner_email || currentOSFromDB.creator_partner_email;
         const partnerName = currentOSFromDB.execution_partner_name || currentOSFromDB.creator_partner_name;
-
+        console.log(`[Email Trigger] General Status Change. Notifying Partner: ${partnerName}, Email: ${partnerEmail}`);
         if(partnerEmail && partnerName) {
              await sendGeneralStatusUpdateEmail(partnerEmail, partnerName, osDataForEmail, originalStatus, newStatus, adminApproverName || 'um administrador');
+        } else {
+            console.log(`[Email Trigger] Skipped: Partner or email not found for general status update notification.`);
         }
     }
     // --- End Email Logic ---
