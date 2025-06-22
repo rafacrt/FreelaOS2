@@ -94,25 +94,34 @@ export default function OSCard({ os, viewMode = 'admin' }: OSCardProps) {
     e.preventDefault(); e.stopPropagation();
     if (os.status !== OSStatus.AGUARDANDO_APROVACAO || !session || session.sessionType !== 'admin') return;
     setIsUpdating(true);
-    const newStatus = approved ? OSStatus.NA_FILA : OSStatus.RECUSADA;
-    await updateOSStatus(os.id, newStatus, session.username);
-    setIsUpdating(false);
+    try {
+        const newStatus = approved ? OSStatus.NA_FILA : OSStatus.RECUSADA;
+        await updateOSStatus(os.id, newStatus, session.username);
+    } finally {
+        setIsUpdating(false);
+    }
   };
 
 
   const handleToggleUrgent = async (e: React.MouseEvent) => {
     e.preventDefault(); e.stopPropagation();
     setIsUpdating(true);
-    await toggleUrgent(os.id);
-    setIsUpdating(false);
+    try {
+        await toggleUrgent(os.id);
+    } finally {
+        setIsUpdating(false);
+    }
   };
 
   const handleDuplicateOS = async (e: React.MouseEvent) => {
     e.preventDefault(); e.stopPropagation();
     if (!session || session.sessionType !== 'admin') return;
     setIsUpdating(true);
-    await duplicateOS(os.id, session.username);
-    setIsUpdating(false);
+    try {
+        await duplicateOS(os.id, session.username);
+    } finally {
+        setIsUpdating(false);
+    }
   };
 
   const handleFinalizeOS = async (e: React.MouseEvent) => {
@@ -133,8 +142,11 @@ export default function OSCard({ os, viewMode = 'admin' }: OSCardProps) {
     e.preventDefault(); e.stopPropagation();
     if (os.status === OSStatus.AGUARDANDO_APROVACAO || os.status === OSStatus.RECUSADA || os.status === OSStatus.FINALIZADO) return;
     setIsUpdating(true);
-    await toggleProductionTimer(os.id, action);
-    setIsUpdating(false);
+    try {
+        await toggleProductionTimer(os.id, action);
+    } finally {
+        setIsUpdating(false);
+    }
   };
 
   const truncateText = (text: string | undefined | null, maxLength: number = 50): string => {
