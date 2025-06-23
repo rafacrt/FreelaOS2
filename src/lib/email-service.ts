@@ -7,10 +7,12 @@ import { env } from '@/env.mjs';
 
 // 1. Create a detailed and robust configuration object
 const smtpConfig = {
-  // pool: true, // Removendo o pool para simplificar a depuração de conexão
   host: env.SMTP_HOST,
   port: Number(env.SMTP_PORT || 465), // Default to 465, common for direct SSL/TLS
   secure: env.SMTP_SECURE === "true", // `secure:true` is required for port 465
+  // Explicitly set the client hostname for the HELO/EHLO command.
+  // Some servers are picky and might timeout if the hostname is not what they expect.
+  name: env.SMTP_HOST, // Use the SMTP_HOST as the client name.
   auth: {
     user: env.SMTP_USER,
     pass: env.SMTP_PASS,
@@ -22,7 +24,9 @@ const smtpConfig = {
   tls: {
     // Explicitly set the servername for SNI (Server Name Indication)
     servername: env.SMTP_HOST,
-    rejectUnauthorized: false
+    rejectUnauthorized: false,
+    // Force a modern TLS version, in case the server has issues with negotiation
+    minVersion: 'TLSv1.2'
   },
   // Add Nodemailer's own debug logging
   debug: true,
