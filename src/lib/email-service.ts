@@ -1,3 +1,4 @@
+
 // src/lib/email-service.ts
 import nodemailer from 'nodemailer';
 import type { OS } from './types';
@@ -6,7 +7,7 @@ import { env } from '@/env.mjs';
 
 // 1. Create a detailed and robust configuration object
 const smtpConfig = {
-  pool: true, // Use a connection pool for better performance in server environments
+  // pool: true, // Removendo o pool para simplificar a depuração de conexão
   host: env.SMTP_HOST,
   port: Number(env.SMTP_PORT || 465), // Default to 465, common for direct SSL/TLS
   secure: env.SMTP_SECURE === "true", // `secure:true` is required for port 465
@@ -14,20 +15,22 @@ const smtpConfig = {
     user: env.SMTP_USER,
     pass: env.SMTP_PASS,
   },
-  // Set explicit timeouts (in milliseconds) - Increased for testing
+  // Set explicit timeouts (in milliseconds)
   connectionTimeout: 30000, // 30 seconds
   greetingTimeout: 30000,   // 30 seconds
   socketTimeout: 30000,     // 30 seconds
   tls: {
     // Explicitly set the servername for SNI (Server Name Indication)
     servername: env.SMTP_HOST,
-    // Keep this setting for now. Even with a valid certificate, there can be
-    // issues with the trust chain in some Node.js environments.
-    rejectUnauthorized: false 
+    rejectUnauthorized: false
   },
   // Add Nodemailer's own debug logging
-  debug: true, // This will print verbose SMTP commands to the console
-  logger: true // This will also log to the console
+  debug: true,
+  logger: true,
+  // FORÇAR USO DE IPv4 para resolver problemas de timeout
+  dns: {
+      family: 4
+  }
 };
 
 // 2. Log the configuration being used (masking the password) for easier debugging
@@ -39,7 +42,8 @@ const loggableConfig = {
     },
     tls: { ...smtpConfig.tls },
     debug: smtpConfig.debug,
-    logger: smtpConfig.logger
+    logger: smtpConfig.logger,
+    dns: { ...smtpConfig.dns }
 };
 console.log('[Email Service] Initializing with SMTP config:', loggableConfig);
 
