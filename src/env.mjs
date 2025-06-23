@@ -3,84 +3,65 @@ import { createEnv } from "@t3-oss/env-nextjs";
 import { z } from "zod";
 
 export const env = createEnv({
-  /**
-   * Specify your server-side environment variables schema here. This way you can ensure the app
-   * isn't built with invalid env vars.
+  /*
+   * Serverside Environment variables, not available on the client.
+   * Will throw error if it is not provided.
    */
   server: {
-    // Database (Required)
-    DB_HOST: z.string(),
-    DB_PORT: z.string().optional().default('3306'),
-    DB_USER: z.string(),
+    // Database
+    DB_HOST: z.string().min(1),
+    DB_PORT: z.coerce.number().default(3306),
+    DB_USER: z.string().min(1),
     DB_PASSWORD: z.string().optional(),
-    DB_DATABASE: z.string(),
-    DB_CONNECTION_LIMIT: z.string().optional().default('10'),
-    DB_SSL_ENABLED: z.string().optional().default('false'),
+    DB_DATABASE: z.string().min(1),
 
-    // Auth (Required)
-    JWT_SECRET: z.string().min(32, { message: "JWT_SECRET must be at least 32 characters long for security." }),
-    DEV_LOGIN_ENABLED: z.string().optional().default('false'),
+    // Security
+    JWT_SECRET: z.string().min(32, "JWT_SECRET must be at least 32 characters long."),
+    EMAIL_INGEST_SECRET: z.string().min(1, "EMAIL_INGEST_SECRET is required."),
 
-    // Email Service (SMTP) - All optional
-    SMTP_HOST: z.string().optional(),
-    SMTP_PORT: z.string().optional(),
-    SMTP_SECURE: z.string().optional().default('false'),
-    SMTP_USER: z.string().optional(),
-    SMTP_PASS: z.string().optional(),
-    EMAIL_FROM: z.string().optional(),
+    // Email Service (Resend)
+    RESEND_API_KEY: z.string().min(1, "RESEND_API_KEY is required."),
+    EMAIL_FROM: z.string().email("EMAIL_FROM must be a valid email address."),
 
-    // Email Ingest Webhook (Optional)
-    EMAIL_INGEST_SECRET: z.string().optional(),
+    // Development Flags
+    DEV_LOGIN_ENABLED: z.string().transform((s) => s === "true").optional(),
   },
 
-  /**
-   * Specify your client-side environment variables schema here. To expose a variable to the client,
-   * prefix it with `NEXT_PUBLIC_`.
+  /*
+   * Environment variables available on the client (and server).
+   * Must be prefixed with NEXT_PUBLIC_.
+   * Will throw error if it is not provided.
    */
   client: {
-    NEXT_PUBLIC_DEV_MODE: z.string().optional().default('false'),
-    NEXT_PUBLIC_BASE_URL: z.string().url().optional(),
+    NEXT_PUBLIC_BASE_URL: z.string().url("NEXT_PUBLIC_BASE_URL must be a valid URL."),
+    NEXT_PUBLIC_DEV_MODE: z.string().transform((s) => s === "true").optional(),
   },
 
-  /**
-   * You can't destruct `process.env` as a regular object in the Next.js edge runtimes (e.g.
-   * middlewares) or client-side so we need to destruct manually.
+  /*
+   * Due to how Next.js bundles environment variables on Edge and Client,
+   * we need to manually destructure them to make sure all are included in process.env.
    */
   runtimeEnv: {
-    // Database
+    // Server-side
     DB_HOST: process.env.DB_HOST,
     DB_PORT: process.env.DB_PORT,
     DB_USER: process.env.DB_USER,
     DB_PASSWORD: process.env.DB_PASSWORD,
     DB_DATABASE: process.env.DB_DATABASE,
-    DB_CONNECTION_LIMIT: process.env.DB_CONNECTION_LIMIT,
-    DB_SSL_ENABLED: process.env.DB_SSL_ENABLED,
-    
-    // Auth
     JWT_SECRET: process.env.JWT_SECRET,
-    DEV_LOGIN_ENABLED: process.env.DEV_LOGIN_ENABLED,
-    
-    // Client
-    NEXT_PUBLIC_DEV_MODE: process.env.NEXT_PUBLIC_DEV_MODE,
-    NEXT_PUBLIC_BASE_URL: process.env.NEXT_PUBLIC_BASE_URL,
-
-    // Email
-    SMTP_HOST: process.env.SMTP_HOST,
-    SMTP_PORT: process.env.SMTP_PORT,
-    SMTP_SECURE: process.env.SMTP_SECURE,
-    SMTP_USER: process.env.SMTP_USER,
-    SMTP_PASS: process.env.SMTP_PASS,
-    EMAIL_FROM: process.env.EMAIL_FROM,
     EMAIL_INGEST_SECRET: process.env.EMAIL_INGEST_SECRET,
+    RESEND_API_KEY: process.env.RESEND_API_KEY,
+    EMAIL_FROM: process.env.EMAIL_FROM,
+    DEV_LOGIN_ENABLED: process.env.DEV_LOGIN_ENABLED,
+
+    // Client-side
+    NEXT_PUBLIC_BASE_URL: process.env.NEXT_PUBLIC_BASE_URL,
+    NEXT_PUBLIC_DEV_MODE: process.env.NEXT_PUBLIC_DEV_MODE,
   },
+
   /**
-   * Run `build` or `dev` with `SKIP_ENV_VALIDATION` to skip env validation. This is especially
-   * useful for Docker builds.
+   * Run `build` or `dev` with `SKIP_ENV_VALIDATION` to skip env validation.
+   * This is especially useful for Docker builds and CI pipelines.
    */
   skipValidation: !!process.env.SKIP_ENV_VALIDATION,
-  /**
-   * Makes it so that empty strings are treated as undefined.
-   * `SOME_VAR: z.string()` and `SOME_VAR=''` will throw an error.
-   */
-  emptyStringAsUndefined: true,
 });
