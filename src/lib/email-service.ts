@@ -21,7 +21,7 @@ const smtpConfig = {
     pass: env.SMTP_PASS,
   },
   // --- DIAGNOSTIC OPTIONS ---
-  // The 'tls' option can help bypass issues with self-signed or misconfigured SSL certificates on the mail server.
+  // The 'tls' option can help bypass issues with self-signed or misconfigured SSL/TLS certificates on the mail server.
   // 'rejectUnauthorized: false' is NOT recommended for production environments but is a crucial diagnostic tool.
   // If this setting makes emails work, the issue is with the mail server's SSL/TLS certificate chain.
   tls: {
@@ -101,6 +101,27 @@ export async function sendOSCreationConfirmationEmail(
     <p><a href="${osLink}">Ver OS #${os.numero}</a></p>
     <p>Atenciosamente,<br/>Equipe FreelaOS</p>
   `;
+
+  await sendEmail({
+    to: partnerEmail,
+    subject,
+    text: messageText,
+    html: messageHtml,
+  });
+}
+
+export async function sendOSApprovalEmail(
+  partnerEmail: string, 
+  partnerName: string, 
+  os: OS,
+  newStatus: OSStatus.NA_FILA | OSStatus.RECUSADA,
+  adminName: string
+): Promise<void> {
+  const osLink = `${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:9002'}/os/${os.id}`;
+  const approvalStatus = newStatus === OSStatus.NA_FILA ? 'APROVADA' : 'RECUSADA';
+  const subject = `Sua OS #${os.numero} foi ${approvalStatus}`;
+  const messageText = `Olá ${partnerName},\n\nSua Ordem de Serviço #${os.numero} ("${os.projeto}") foi ${approvalStatus} por ${adminName}.\n\nDetalhes da OS: ${osLink}\n\nAtenciosamente,\nEquipe FreelaOS`;
+  const messageHtml = `<p>Olá ${partnerName},</p><p>Sua Ordem de Serviço #${os.numero} ("${os.projeto}") foi <strong>${approvalStatus}</strong> por ${adminName}.</p><p><a href="${osLink}">Ver OS #${os.numero}</a></p><p>Atenciosamente,<br/>Equipe FreelaOS</p>`;
 
   await sendEmail({
     to: partnerEmail,
