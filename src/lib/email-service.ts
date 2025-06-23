@@ -1,4 +1,3 @@
-
 // src/lib/email-service.ts
 import nodemailer from 'nodemailer';
 import type { OS } from './types';
