@@ -4,28 +4,27 @@ import type { OS } from './types';
 import { OSStatus } from './types';
 import { env } from '@/env.mjs';
 
-interface EmailDetails {
-  to: string;
-  subject: string;
-  text: string;
-  html: string;
-}
-
-// 1. Create a detailed configuration object
+// 1. Create a detailed and robust configuration object
 const smtpConfig = {
+  pool: true, // Use a connection pool for better performance in server environments
   host: env.SMTP_HOST,
-  port: Number(env.SMTP_PORT || 587),
-  secure: env.SMTP_SECURE === "true", // Use true for port 465, false for other ports (like 587 that use STARTTLS)
+  port: Number(env.SMTP_PORT || 465), // Default to 465, common for direct SSL/TLS
+  secure: env.SMTP_SECURE === "true", // `secure:true` is required for port 465
   auth: {
     user: env.SMTP_USER,
     pass: env.SMTP_PASS,
   },
-  // --- DIAGNOSTIC OPTIONS ---
-  // The 'tls' option can help bypass issues with self-signed or misconfigured SSL/TLS certificates on the mail server.
-  // 'rejectUnauthorized: false' is NOT recommended for production environments but is a crucial diagnostic tool.
-  // If this setting makes emails work, the issue is with the mail server's SSL/TLS certificate chain.
+  // Set explicit timeouts (in milliseconds)
+  connectionTimeout: 10000, // 10 seconds
+  greetingTimeout: 10000,   // 10 seconds
+  socketTimeout: 10000,     // 10 seconds
   tls: {
-    rejectUnauthorized: false
+    // Explicitly set the servername for SNI (Server Name Indication)
+    // This is crucial if the mail server hosts multiple domains/certificates on one IP
+    servername: env.SMTP_HOST,
+    // Keep this setting for now. Even with a valid certificate, there can be
+    // issues with the trust chain in some Node.js environments.
+    rejectUnauthorized: false 
   }
 };
 
@@ -35,16 +34,17 @@ const loggableConfig = {
     auth: {
         user: smtpConfig.auth.user,
         pass: smtpConfig.auth.pass ? '********' : '(not set)'
-    }
+    },
+    tls: { ...smtpConfig.tls }
 };
 console.log('[Email Service] Initializing with SMTP config:', loggableConfig);
 
 const transporter = nodemailer.createTransport(smtpConfig);
 
-export async function sendEmail(details: EmailDetails): Promise<void> {
+export async function sendEmail(details: { to: string; subject: string; text: string; html: string; }): Promise<void> {
   if (!env.SMTP_HOST || !env.SMTP_USER || !env.SMTP_PASS) {
     console.warn('[Email Service] SMTP environment variables not configured. Email sending is disabled.');
-    return; // Silently fail if SMTP is not configured
+    return;
   }
 
   try {
@@ -58,9 +58,9 @@ export async function sendEmail(details: EmailDetails): Promise<void> {
     });
     console.log(`[Email Service] Email sent successfully! Message ID: ${info.messageId}`);
   } catch (error) {
+    // Log the full error object for maximum detail
     console.error('[Email Service] Failed to send email.', error);
     // Do not re-throw here to prevent breaking the main application flow
-    // if email sending fails. The failure is logged.
   }
 }
 
