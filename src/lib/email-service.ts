@@ -1,43 +1,43 @@
-
 // src/lib/email-service.ts
 import nodemailer from 'nodemailer';
 import type { OS } from './types';
 import { OSStatus } from './types';
 import { env } from '@/env.mjs';
 
-// 1. Create a detailed and robust configuration object
+// Configuration attempting to match the successful openssl connection as closely as possible.
 const smtpConfig = {
   host: env.SMTP_HOST,
-  port: Number(env.SMTP_PORT || 465), // Default to 465, common for direct SSL/TLS
+  port: Number(env.SMTP_PORT || 465),
   secure: env.SMTP_SECURE === "true", // `secure:true` is required for port 465
-  // Explicitly set the client hostname for the HELO/EHLO command.
-  // Use the exact name from the server's greeting banner.
+  // Explicitly set the client hostname from the server's greeting banner.
   name: 'vps-12913574.rajo.com.br',
   auth: {
     user: env.SMTP_USER,
     pass: env.SMTP_PASS,
   },
   // Set explicit timeouts (in milliseconds)
-  connectionTimeout: 30000, // 30 seconds
-  greetingTimeout: 30000,   // 30 seconds
-  socketTimeout: 30000,     // 30 seconds
+  connectionTimeout: 30000,
+  greetingTimeout: 30000,
+  socketTimeout: 30000,
   tls: {
-    // Explicitly set the servername for SNI (Server Name Indication)
+    // Explicitly set the servername for SNI to match the host
     servername: env.SMTP_HOST,
     rejectUnauthorized: false,
     // Force a modern TLS version, in case the server has issues with negotiation
-    minVersion: 'TLSv1.2'
+    minVersion: 'TLSv1.2',
+    // **KEY CHANGE**: Force the cipher suite reported by the successful openssl test
+    ciphers: 'TLS_AES_256_GCM_SHA384',
   },
   // Add Nodemailer's own debug logging
   debug: true,
   logger: true,
-  // FORÇAR USO DE IPv4 para resolver problemas de timeout
+  // Force IPv4 to resolve potential network stack issues
   dns: {
       family: 4
   }
 };
 
-// 2. Log the configuration being used (masking the password) for easier debugging
+// Log the configuration being used (masking the password) for easier debugging
 const loggableConfig = {
     ...smtpConfig,
     auth: {
@@ -45,8 +45,6 @@ const loggableConfig = {
         pass: smtpConfig.auth.pass ? '********' : '(not set)'
     },
     tls: { ...smtpConfig.tls },
-    debug: smtpConfig.debug,
-    logger: smtpConfig.logger,
     dns: { ...smtpConfig.dns }
 };
 console.log('[Email Service] Initializing with SMTP config:', loggableConfig);
@@ -69,6 +67,10 @@ export async function sendEmail(details: { to: string; subject: string; text: st
       html: details.html,
     });
     console.log(`[Email Service] Email sent successfully! Message ID: ${info.messageId}`);
+    // Log the server response upon successful connection and authentication
+    if (info.response) {
+      console.log(`[Email Service] Server response: ${info.response}`);
+    }
   } catch (error) {
     // Log the full error object for maximum detail
     console.error('[Email Service] Failed to send email.', error);
