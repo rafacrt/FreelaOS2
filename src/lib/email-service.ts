@@ -14,18 +14,20 @@ const smtpConfig = {
     user: env.SMTP_USER,
     pass: env.SMTP_PASS,
   },
-  // Set explicit timeouts (in milliseconds)
-  connectionTimeout: 10000, // 10 seconds
-  greetingTimeout: 10000,   // 10 seconds
-  socketTimeout: 10000,     // 10 seconds
+  // Set explicit timeouts (in milliseconds) - Increased for testing
+  connectionTimeout: 30000, // 30 seconds
+  greetingTimeout: 30000,   // 30 seconds
+  socketTimeout: 30000,     // 30 seconds
   tls: {
     // Explicitly set the servername for SNI (Server Name Indication)
-    // This is crucial if the mail server hosts multiple domains/certificates on one IP
     servername: env.SMTP_HOST,
     // Keep this setting for now. Even with a valid certificate, there can be
     // issues with the trust chain in some Node.js environments.
     rejectUnauthorized: false 
-  }
+  },
+  // Add Nodemailer's own debug logging
+  debug: true, // This will print verbose SMTP commands to the console
+  logger: true // This will also log to the console
 };
 
 // 2. Log the configuration being used (masking the password) for easier debugging
@@ -35,7 +37,9 @@ const loggableConfig = {
         user: smtpConfig.auth.user,
         pass: smtpConfig.auth.pass ? '********' : '(not set)'
     },
-    tls: { ...smtpConfig.tls }
+    tls: { ...smtpConfig.tls },
+    debug: smtpConfig.debug,
+    logger: smtpConfig.logger
 };
 console.log('[Email Service] Initializing with SMTP config:', loggableConfig);
 
