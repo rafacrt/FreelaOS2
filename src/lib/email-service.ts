@@ -1,3 +1,4 @@
+
 // src/lib/email-service.ts
 import nodemailer from 'nodemailer';
 import type { OS } from './types';
@@ -10,8 +11,8 @@ const smtpConfig = {
   port: Number(env.SMTP_PORT || 465), // Default to 465, common for direct SSL/TLS
   secure: env.SMTP_SECURE === "true", // `secure:true` is required for port 465
   // Explicitly set the client hostname for the HELO/EHLO command.
-  // Some servers are picky and might timeout if the hostname is not what they expect.
-  name: env.SMTP_HOST, // Use the SMTP_HOST as the client name.
+  // Use the exact name from the server's greeting banner.
+  name: 'vps-12913574.rajo.com.br',
   auth: {
     user: env.SMTP_USER,
     pass: env.SMTP_PASS,
