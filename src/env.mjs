@@ -2,10 +2,6 @@
 import { createEnv } from "@t3-oss/env-nextjs";
 import { z } from "zod";
 
-// Detect if we are in an edge runtime.
-// `process.env.NEXT_RUNTIME` is set to 'edge' by Next.js in edge environments.
-const isEdge = process.env.NEXT_RUNTIME === 'edge';
-
 export const env = createEnv({
   /*
    * Serverside Environment variables, not available on the client.
@@ -13,31 +9,35 @@ export const env = createEnv({
    */
   server: {
     DB_HOST: z.string().min(1),
-    DB_PORT: z.coerce.number().default(3306),
+    DB_PORT: z.coerce.number().int().positive(),
     DB_USER: z.string().min(1),
     DB_PASSWORD: z.string(),
     DB_DATABASE: z.string().min(1),
-    JWT_SECRET: z.string().min(32, { message: "JWT_SECRET must be at least 32 characters long" }),
-    DEV_LOGIN_ENABLED: z.string().optional().transform(val => val === "true"),
+    DB_CONNECTION_LIMIT: z.coerce.number().int().optional(),
+    DB_SSL_ENABLED: z.string().optional(),
+    DB_SSL_REJECT_UNAUTHORIZED: z.string().optional(),
+    JWT_SECRET: z.string().min(32, { message: "JWT_SECRET must be at least 32 characters long." }).optional(),
+    DEV_LOGIN_ENABLED: z.string().optional(),
+    EMAIL_INGEST_SECRET: z.string().min(16).optional(),
+
+    // RESEND INTEGRATION
     RESEND_API_KEY: z.string().min(1),
     EMAIL_FROM: z.string().email(),
-    EMAIL_INGEST_SECRET: z.string().min(1),
   },
-
   /*
    * Environment variables available on the client (and server).
    *
-   * 💡 You'll get type errors if you try to use server variables in the client.
+   * 💡 You'll get typeerrors if these are not prefixed with NEXT_PUBLIC_.
    */
   client: {
-    NEXT_PUBLIC_DEV_MODE: z.string().optional().transform(val => val === "true"),
+    NEXT_PUBLIC_DEV_MODE: z.string().optional(),
     NEXT_PUBLIC_BASE_URL: z.string().url(),
   },
   /*
-   * Due to how Next.js bundles environment variables on edge and client,
+   * Due to how Next.js bundles environment variables on Edge and Client,
    * we need to manually destructure them to make sure all are included in bundle.
    *
-   * 💡 You'll get type errors if you try to use server variables in the client.
+   * 💡 You'll get typeerrors if not all variables from client are included here.
    */
   runtimeEnv: {
     DB_HOST: process.env.DB_HOST,
@@ -45,24 +45,37 @@ export const env = createEnv({
     DB_USER: process.env.DB_USER,
     DB_PASSWORD: process.env.DB_PASSWORD,
     DB_DATABASE: process.env.DB_DATABASE,
+    DB_CONNECTION_LIMIT: process.env.DB_CONNECTION_LIMIT,
+    DB_SSL_ENABLED: process.env.DB_SSL_ENABLED,
+    DB_SSL_REJECT_UNAUTHORIZED: process.env.DB_SSL_REJECT_UNAUTHORIZED,
     JWT_SECRET: process.env.JWT_SECRET,
     DEV_LOGIN_ENABLED: process.env.DEV_LOGIN_ENABLED,
     NEXT_PUBLIC_DEV_MODE: process.env.NEXT_PUBLIC_DEV_MODE,
+    EMAIL_INGEST_SECRET: process.env.EMAIL_INGEST_SECRET,
+
+    // RESEND INTEGRATION
     RESEND_API_KEY: process.env.RESEND_API_KEY,
     EMAIL_FROM: process.env.EMAIL_FROM,
     NEXT_PUBLIC_BASE_URL: process.env.NEXT_PUBLIC_BASE_URL,
-    EMAIL_INGEST_SECRET: process.env.EMAIL_INGEST_SECRET,
   },
   /**
-   * By default, T3 Env attempts to validate all environment variables at build time.
-   * However, server-side variables (like database credentials) are not available in the
-   * edge runtime (used by middleware). This causes the validation to fail when middleware
-   * imports this file.
+   * By default, this library will feed the environment variables directly to
+   * the Zod validator.
    *
-   * By setting `skipValidation: isEdge`, we tell T3 Env to skip validation ONLY when
-   * running in an edge environment. This allows the middleware to access the few
-   * environment variables it needs (like JWT_SECRET) without crashing the build.
-   * Validation will still run correctly in the server-side (Node.js) environment.
+   * This means that if you have an empty string for a variable that is supposed
+   * to be a number (e.g. `PORT=` in a ".env" file), Zod will rightfully complain
+   * that it expected a number but received a string.
+   *
+   * You can tell zod to empty strings into `undefined` and then make
+   * the variable optional. You can also supply a default value if applicable.
+   *
+   * Check out https://github.com/t3-oss/t3-env/issues/71 for more information.
    */
-  skipValidation: isEdge,
+  emptyStringAsUndefined: true,
+
+  /**
+   * Run `build` or `dev` with `SKIP_ENV_VALIDATION` to skip env validation. This is especially
+   * useful for Docker builds.
+   */
+  skipValidation: !!process.env.SKIP_ENV_VALIDATION || !!process.env.NEXT_RUNTIME,
 });
