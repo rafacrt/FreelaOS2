@@ -49,19 +49,24 @@ const mapDbRowToOS = (row: RowDataPacket): OS => {
   }
 
   let programadoParaFormatted: string | undefined = undefined;
-  if (row.programadoPara && typeof row.programadoPara === 'string') {
-     if (/^\d{4}-\d{2}-\d{2}$/.test(row.programadoPara)) {
-        const parsedDate = parseISO(row.programadoPara + "T00:00:00Z");
-        if (isValid(parsedDate)) {
-            programadoParaFormatted = formatDateFns(parsedDate, 'yyyy-MM-dd');
-        }
-    } else {
-        const parsedDate = parseISO(row.programadoPara);
-        if (isValid(parsedDate)) {
-             programadoParaFormatted = formatDateFns(parsedDate, 'yyyy-MM-dd');
-        }
+  if (row.programadoPara) {
+    try {
+      // The DB can return a Date object or an ISO string. new Date() handles both.
+      // We must specify UTC to avoid timezone shifts when parsing just a date string.
+      const dateString = row.programadoPara.toString();
+      const dateToParse = /^\d{4}-\d{2}-\d{2}$/.test(dateString.substring(0, 10))
+          ? dateString.substring(0, 10) + "T00:00:00Z"
+          : dateString;
+
+      const parsedDate = new Date(dateToParse);
+      if (isValid(parsedDate)) {
+        programadoParaFormatted = formatDateFns(parsedDate, 'yyyy-MM-dd');
+      }
+    } catch (e) {
+      // Ignore errors, will result in undefined
     }
   }
+
 
   let dataInicioProducaoISO: string | undefined = undefined;
   if (row.dataInicioProducao) {
@@ -316,7 +321,7 @@ export async function updateOSInDB(osData: OS): Promise<OS | null> {
     let programadoParaSQL: string | null = null;
     if (osData.programadoPara && osData.programadoPara.trim() !== '') {
       if (/^\d{4}-\d{2}-\d{2}$/.test(osData.programadoPara)) {
-        const parsedDate = parseISO(osData.programadoPara); // Não precisa adicionar T00:00:00Z aqui, já que o formato é só data
+        const parsedDate = parseISO(osData.programadoPara + "T00:00:00.000Z"); // Explicitly parse as UTC
         if (isValid(parsedDate)) {
              programadoParaSQL = osData.programadoPara;
         }
