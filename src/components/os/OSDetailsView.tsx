@@ -63,9 +63,15 @@ const DetailItem = ({ label, value, icon, name, isEditableField, children, class
 
   if (name === 'programadoPara' && typeof value === 'string' && value) {
     try {
-      const date = /^\d{4}-\d{2}-\d{2}$/.test(value) ? parseISO(value + 'T00:00:00Z') : parseISO(value);
-      if (isValidDate(date)) {
-        displayValue = format(date, "dd/MM/yyyy", { locale: ptBR });
+      // Correct way to handle YYYY-MM-DD to DD/MM/YYYY without timezone issues.
+      const parts = value.split('-');
+      if (parts.length === 3) {
+        const year = parseInt(parts[0], 10);
+        const month = parseInt(parts[1], 10);
+        const day = parseInt(parts[2], 10);
+        if (!isNaN(year) && !isNaN(month) && !isNaN(day)) {
+          displayValue = `${String(day).padStart(2, '0')}/${String(month).padStart(2, '0')}/${year}`;
+        }
       }
     } catch { /* fallback to original value */ }
   } else if ((name === 'dataAbertura' || name === 'dataFinalizacao' || name === 'dataInicioProducao' || name === 'dataInicioProducaoAtual') && typeof value === 'string' && value) {
@@ -165,19 +171,9 @@ export default function OSDetailsView({ initialOs, viewMode }: OSDetailsViewProp
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
-  const formatProgramadoParaForInput = useCallback((isoDate?: string) => {
-    if (!isoDate) return '';
-    try {
-      const date = /^\d{4}-\d{2}-\d{2}$/.test(isoDate) ? parseISO(isoDate + 'T00:00:00Z') : parseISO(isoDate);
-      return isValidDate(date) ? format(date, 'yyyy-MM-dd') : '';
-    } catch {
-      return '';
-    }
-  }, []);
-
   const [formData, setFormData] = useState<OS>({
     ...initialOs,
-    programadoPara: formatProgramadoParaForInput(initialOs.programadoPara),
+    programadoPara: initialOs.programadoPara?.substring(0, 10) || '',
     checklist: initialOs.checklist ? [...initialOs.checklist.map(item => ({...item}))] : [],
   });
 
@@ -185,7 +181,7 @@ export default function OSDetailsView({ initialOs, viewMode }: OSDetailsViewProp
     if (!isEditing || initialOs.id !== formData.id) { 
       setFormData({
         ...initialOs,
-        programadoPara: formatProgramadoParaForInput(initialOs.programadoPara),
+        programadoPara: initialOs.programadoPara?.substring(0, 10) || '',
         checklist: initialOs.checklist ? [...initialOs.checklist.map(item => ({...item}))] : [],
       });
       setClientInput(initialOs.cliente || '');
@@ -196,7 +192,7 @@ export default function OSDetailsView({ initialOs, viewMode }: OSDetailsViewProp
     } else if (isEditing && initialOs.id === formData.id) {
        setEditableChecklist(initialOs.checklist ? initialOs.checklist.map(item => ({...item})) : [{id: `item-${Date.now()}`, text: '', completed: false}]);
     }
-  }, [initialOs, isEditing, formatProgramadoParaForInput, formData.id]);
+  }, [initialOs, isEditing, formData.id]);
 
 
   const [clientInput, setClientInput] = useState(initialOs.cliente || '');
