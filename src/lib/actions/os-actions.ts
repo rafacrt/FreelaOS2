@@ -9,7 +9,7 @@ import { findOrCreateClientByName } from './client-actions';
 import { findOrCreatePartnerByName } from './partner-actions';
 import type { ResultSetHeader, RowDataPacket, PoolConnection } from 'mysql2/promise';
 import { parseISO, differenceInSeconds, format as formatDateFns, isValid } from 'date-fns';
-import { sendOSApprovalEmail, sendGeneralStatusUpdateEmail } from '@/lib/email-service';
+import { sendOSApprovalEmail, sendGeneralStatusUpdateEmail, sendOSCreationConfirmationEmail } from '@/lib/email-service';
 
 const generateNewOSNumero = async (connection: PoolConnection): Promise<string> => {
   const [rows] = await connection.query<RowDataPacket[]>("SELECT MAX(CAST(numero AS UNSIGNED)) as maxNumero FROM os_table");
@@ -144,13 +144,8 @@ export async function createOSInDB(data: CreateOSData, creator: { name: string, 
     const newOsNumero = await generateNewOSNumero(connection);
 
     let programadoParaDate: string | null = null;
-    if (data.programadoPara && data.programadoPara.trim() !== '') {
-      if (/^\d{4}-\d{2}-\d{2}$/.test(data.programadoPara)) {
-          const parsedDate = parseISO(data.programadoPara + "T00:00:00.000Z");
-          if (isValid(parsedDate)) {
-            programadoParaDate = data.programadoPara;
-          }
-      }
+    if (data.programadoPara && /^\d{4}-\d{2}-\d{2}$/.test(data.programadoPara)) {
+      programadoParaDate = data.programadoPara;
     }
 
     let checklistJsonForDB: string | null = null;
@@ -318,13 +313,9 @@ export async function updateOSInDB(osData: OS): Promise<OS | null> {
 
 
     let programadoParaSQL: string | null = null;
-    if (osData.programadoPara) {
-      // The form sends a 'yyyy-MM-dd' string. We check if it's a valid date representation.
-      const parsedDate = parseISO(osData.programadoPara);
-      if (isValid(parsedDate)) {
-        // We can pass the 'yyyy-MM-dd' string directly to MySQL
-        programadoParaSQL = osData.programadoPara;
-      }
+    // We only validate the format. We don't parse it into a Date object to avoid timezone issues.
+    if (osData.programadoPara && /^\d{4}-\d{2}-\d{2}$/.test(osData.programadoPara)) {
+      programadoParaSQL = osData.programadoPara;
     }
 
 
