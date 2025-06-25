@@ -52,19 +52,17 @@ const mapDbRowToOS = (row: RowDataPacket): OS => {
   let programadoParaFormatted: string | undefined = undefined;
   if (row.programadoPara) {
     try {
-      const date = new Date(row.programadoPara);
-      if (isValid(date)) {
-        // This is the definitive fix for the timezone issue.
-        // It constructs the date string from UTC components, ignoring the server's local timezone.
-        // This prevents '2025-07-02' from being interpreted as midnight UTC and then shifting to '2025-07-01' in a local timezone.
-        const year = date.getUTCFullYear();
-        const month = date.getUTCMonth() + 1; // getUTCMonth is 0-indexed
-        const day = date.getUTCDate();
-        
-        programadoParaFormatted = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      // The most robust way to handle this without timezone issues.
+      // 1. Convert whatever we got (Date object or string) to a standard ISO string (e.g., '2025-07-01T21:00:00.000Z')
+      // 2. Take the first 10 characters ('YYYY-MM-DD').
+      // This completely avoids any timezone math.
+      const dateAsString = new Date(row.programadoPara).toISOString();
+      if (dateAsString) {
+        programadoParaFormatted = dateAsString.substring(0, 10);
       }
     } catch (e) {
-        programadoParaFormatted = undefined;
+      // If parsing fails, leave it undefined.
+      programadoParaFormatted = undefined;
     }
   }
 
