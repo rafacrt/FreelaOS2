@@ -1,3 +1,4 @@
+
 // src/lib/actions/os-actions.ts
 'use server';
 
@@ -51,14 +52,17 @@ const mapDbRowToOS = (row: RowDataPacket): OS => {
   let programadoParaFormatted: string | undefined = undefined;
   if (row.programadoPara) {
     try {
-      // new Date() is robust enough to handle Date objects or various string formats from DB
-      const parsedDate = new Date(row.programadoPara);
-      if (isValid(parsedDate)) {
-        // Always format to yyyy-MM-dd for consistency with the form input
-        programadoParaFormatted = formatDateFns(parsedDate, 'yyyy-MM-dd');
-      }
+        // Handle both Date objects and string dates from the database
+        const dateString = row.programadoPara.toISOString ? row.programadoPara.toISOString() : String(row.programadoPara);
+        // We only care about the date part, ignore time and timezone from the DB
+        programadoParaFormatted = dateString.split('T')[0];
+
+        // Final check to ensure it's a valid format before assigning
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(programadoParaFormatted)) {
+            programadoParaFormatted = undefined;
+        }
     } catch (e) {
-      // Silently ignore parsing errors
+        programadoParaFormatted = undefined;
     }
   }
 
