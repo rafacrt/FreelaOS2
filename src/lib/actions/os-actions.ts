@@ -8,7 +8,7 @@ import { OSStatus } from '@/lib/types';
 import { findOrCreateClientByName } from './client-actions';
 import { findOrCreatePartnerByName } from './partner-actions';
 import type { ResultSetHeader, RowDataPacket, PoolConnection } from 'mysql2/promise';
-import { parseISO, differenceInSeconds, format as formatDateFns, isValid } from 'date-fns';
+import { parseISO, differenceInSeconds, format, isValid } from 'date-fns';
 import { sendOSApprovalEmail, sendGeneralStatusUpdateEmail, sendOSCreationConfirmationEmail } from '@/lib/email-service';
 
 const generateNewOSNumero = async (connection: PoolConnection): Promise<string> => {
@@ -52,15 +52,17 @@ const mapDbRowToOS = (row: RowDataPacket): OS => {
   let programadoParaFormatted: string | undefined = undefined;
   if (row.programadoPara) {
     try {
-        // Handle both Date objects and string dates from the database
-        const dateString = row.programadoPara.toISOString ? row.programadoPara.toISOString() : String(row.programadoPara);
-        // We only care about the date part, ignore time and timezone from the DB
-        programadoParaFormatted = dateString.split('T')[0];
-
-        // Final check to ensure it's a valid format before assigning
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(programadoParaFormatted)) {
-            programadoParaFormatted = undefined;
-        }
+      const date = new Date(row.programadoPara);
+      if (isValid(date)) {
+        // This is the definitive fix for the timezone issue.
+        // It constructs the date string from UTC components, ignoring the server's local timezone.
+        // This prevents '2025-07-02' from being interpreted as midnight UTC and then shifting to '2025-07-01' in a local timezone.
+        const year = date.getUTCFullYear();
+        const month = date.getUTCMonth() + 1; // getUTCMonth is 0-indexed
+        const day = date.getUTCDate();
+        
+        programadoParaFormatted = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      }
     } catch (e) {
         programadoParaFormatted = undefined;
     }
