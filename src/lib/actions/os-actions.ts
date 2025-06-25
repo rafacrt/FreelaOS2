@@ -51,19 +51,14 @@ const mapDbRowToOS = (row: RowDataPacket): OS => {
   let programadoParaFormatted: string | undefined = undefined;
   if (row.programadoPara) {
     try {
-      // The DB can return a Date object or an ISO string. new Date() handles both.
-      // We must specify UTC to avoid timezone shifts when parsing just a date string.
-      const dateString = row.programadoPara.toString();
-      const dateToParse = /^\d{4}-\d{2}-\d{2}$/.test(dateString.substring(0, 10))
-          ? dateString.substring(0, 10) + "T00:00:00Z"
-          : dateString;
-
-      const parsedDate = new Date(dateToParse);
+      // new Date() is robust enough to handle Date objects or various string formats from DB
+      const parsedDate = new Date(row.programadoPara);
       if (isValid(parsedDate)) {
+        // Always format to yyyy-MM-dd for consistency with the form input
         programadoParaFormatted = formatDateFns(parsedDate, 'yyyy-MM-dd');
       }
     } catch (e) {
-      // Ignore errors, will result in undefined
+      // Silently ignore parsing errors
     }
   }
 
@@ -319,12 +314,12 @@ export async function updateOSInDB(osData: OS): Promise<OS | null> {
 
 
     let programadoParaSQL: string | null = null;
-    if (osData.programadoPara && osData.programadoPara.trim() !== '') {
-      if (/^\d{4}-\d{2}-\d{2}$/.test(osData.programadoPara)) {
-        const parsedDate = parseISO(osData.programadoPara + "T00:00:00.000Z"); // Explicitly parse as UTC
-        if (isValid(parsedDate)) {
-             programadoParaSQL = osData.programadoPara;
-        }
+    if (osData.programadoPara) {
+      // The form sends a 'yyyy-MM-dd' string. We check if it's a valid date representation.
+      const parsedDate = parseISO(osData.programadoPara);
+      if (isValid(parsedDate)) {
+        // We can pass the 'yyyy-MM-dd' string directly to MySQL
+        programadoParaSQL = osData.programadoPara;
       }
     }
 
