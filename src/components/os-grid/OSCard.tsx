@@ -1,4 +1,3 @@
-
 'use client';
 
 import Link from 'next/link';
@@ -190,8 +189,10 @@ export default function OSCard({ os, viewMode = 'admin' }: OSCardProps) {
         <a className={`text-decoration-none d-block h-100 ${hoverEffectClass}`}>
             <div className={cardClasses}>
                 <div className={`card-header p-2 pb-1 d-flex justify-content-between align-items-center ${headerBgClass()}`}>
-                    <div className="d-flex flex-column">
-                        <span className={`fw-bold small font-monospace ${osNumeroColorClass}`}>OS: {os.numero}</span>
+                    <div className="d-flex flex-column" style={{ minWidth: 0 }}>
+                        <span className={`fw-bold small font-monospace text-truncate ${osNumeroColorClass}`} title={`OS: ${os.numero} - ${os.projeto}`}>
+                            OS: {os.numero} - {os.projeto}
+                        </span>
                     </div>
                     {viewMode === 'admin' && os.isUrgent && !isAwaitingApproval && !isRefused && (
                         <span className={`badge bg-danger text-white rounded-pill px-2 py-1 small d-flex align-items-center ms-auto`} style={{fontSize: '0.7em'}}>
@@ -215,9 +216,9 @@ export default function OSCard({ os, viewMode = 'admin' }: OSCardProps) {
                             <span className="text-muted small text-break">{truncateText(os.parceiro, 30)}</span>
                         </div>
                     )}
-                    <div className="mb-2" title={`Projeto: ${os.projeto}`}>
-                        <Briefcase size={14} className="me-1 text-muted align-middle" />
-                        <span className="small text-muted text-break">{truncateText(os.projeto, 40)}</span>
+                    <div className="mb-2" title={`Tarefa: ${os.tarefa}`}>
+                        <FileText size={14} className="me-1 text-muted align-middle" />
+                        <span className="small text-muted text-break">{truncateText(os.tarefa, 40)}</span>
                     </div>
 
                     <div className="mt-auto pt-1 border-top">
