@@ -1,4 +1,3 @@
-
 import db from '@/lib/db'; // Changed to default import
 
 export async function GET() {
@@ -9,7 +8,7 @@ export async function GET() {
     connection.release();
     return Response.json({ status: 'ok', db: 'connected' });
   } catch (err: any) {
-    // console.error('[Health Check] DB connection error:', err.message);
+    // DB connection error
     return Response.json({ status: 'error', db: 'disconnected', error: err.message }, { status: 500 });
   }
 }

@@ -1,4 +1,3 @@
-
 // src/lib/actions/os-actions.ts
 'use server';
 
@@ -502,15 +501,13 @@ export async function updateOSStatusInDB(osId: string, newStatus: OSStatus, admi
                 const partnerEmail = partnerDetails.execution_partner_email || partnerDetails.creator_partner_email;
                 const partnerName = partnerDetails.execution_partner_name || partnerDetails.creator_partner_name;
                 if (partnerEmail && partnerName) {
-                    console.log(`[Email Trigger] General Status Change. Notifying Partner: ${partnerName}, Email: ${partnerEmail}`);
                     await sendGeneralStatusUpdateEmail(partnerEmail, partnerName, osDataForEmail, originalStatus, newStatus, adminApproverName || 'um administrador');
                 } else {
-                     console.log(`[Email Trigger] General Status Change. Partner email not found for OS #${osId}.`);
                 }
             }
         }
       } catch (emailError: any) {
-        console.error(`[os-actions] Background email sending failed for OS ID ${osId}. Error:`, emailError);
+        // console.error(`[os-actions] Background email sending failed for OS ID ${osId}. Error:`, emailError);
       } finally {
         if (bgConnection) bgConnection.release();
       }
@@ -529,7 +526,7 @@ export async function updateOSStatusInDB(osId: string, newStatus: OSStatus, admi
 
   } catch (error: any) {
     if (connection) await connection.rollback();
-    console.error(`[os-actions] DB Error during status update for OS ID ${osId}:`, error);
+    // console.error(`[os-actions] DB Error during status update for OS ID ${osId}:`, error);
     return null;
   } finally {
     if (connection) connection.release();

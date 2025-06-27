@@ -1,4 +1,3 @@
-
 // src/lib/auth-edge.ts
 import type { User, PartnerSessionData, SessionPayload } from './types'; // Updated imports
 import { SignJWT, jwtVerify } from 'jose';

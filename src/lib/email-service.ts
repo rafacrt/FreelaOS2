@@ -6,16 +6,15 @@ import { env } from '@/env.mjs';
 
 const resend = new Resend(env.RESEND_API_KEY);
 
-console.log('[Email Service] Initializing with Resend API.');
 
 export async function sendEmail(details: { to: string; subject: string; text: string; html: string; }): Promise<void> {
   if (!env.RESEND_API_KEY || !env.EMAIL_FROM) {
-    console.warn('[Email Service] Resend API Key or Email From address not configured. Email sending is disabled.');
+    // console.warn('[Email Service] Resend API Key or Email From address not configured. Email sending is disabled.');
     return;
   }
 
   try {
-    console.log(`[Email Service] Attempting to send email via Resend to: ${details.to} with subject: "${details.subject}"`);
+    // console.log(`[Email Service] Attempting to send email via Resend to: ${details.to} with subject: "${details.subject}"`);
     const { data, error } = await resend.emails.send({
       from: env.EMAIL_FROM,
       to: details.to,
@@ -25,14 +24,14 @@ export async function sendEmail(details: { to: string; subject: string; text: st
     });
 
     if (error) {
-      console.error('[Email Service] Failed to send email via Resend.', error);
+      // console.error('[Email Service] Failed to send email via Resend.', error);
       // We don't re-throw here to prevent breaking the main application flow
       return;
     }
 
-    console.log(`[Email Service] Email sent successfully via Resend! Message ID: ${data?.id}`);
+    // console.log(`[Email Service] Email sent successfully via Resend! Message ID: ${data?.id}`);
   } catch (error) {
-    console.error('[Email Service] An unexpected exception occurred while sending email.', error);
+    // console.error('[Email Service] An unexpected exception occurred while sending email.', error);
   }
 }
 

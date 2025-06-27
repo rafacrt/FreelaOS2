@@ -1,4 +1,3 @@
-
 'use client'; // Error components must be Client Components
 
 import { useEffect } from 'react';
@@ -12,7 +11,7 @@ export default function DashboardError({
   reset: () => void;
 }) {
   useEffect(() => {
-    // console.error("Dashboard Error Boundary Caught:", error); // Log the error to an error reporting service
+    // Log the error to an error reporting service
   }, [error]);
 
   return (

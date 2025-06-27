@@ -1,4 +1,3 @@
-
 'use client';
 
 import Link from 'next/link';
@@ -37,11 +36,9 @@ export default function Header({ session }: HeaderProps) {
 
   useEffect(() => {
     if (logoutState?.type === 'success' && logoutState?.redirect) {
-      console.log(`[Header] Logout success. Redirecting to: ${logoutState.redirect}`);
       router.push(logoutState.redirect);
     } else if (logoutState?.type === 'error') {
-      console.error(`[Header] Logout error: ${logoutState.message}`);
-      // Você pode adicionar um toast de erro aqui, se desejar.
+      // You can add an error toast here if you wish.
     }
   }, [logoutState, router]);
 

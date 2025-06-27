@@ -77,7 +77,7 @@ export async function GET(request: NextRequest) {
     });
 
   } catch (error: any) {
-    console.error('[CRON_JOB_ERROR] /api/cron/pause-timers:', error);
+    // console.error('[CRON_JOB_ERROR] /api/cron/pause-timers:', error);
     return NextResponse.json(
       { error: 'An internal server error occurred.', details: error.message },
       { status: 500 }
