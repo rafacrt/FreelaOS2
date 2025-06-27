@@ -10,14 +10,23 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic'; // Ensure it runs dynamically every time
 
 export async function GET(request: NextRequest) {
-  // 1. Check authorization header for the secret key
+  // 1. Check if the CRON_SECRET is configured on the server
+  if (!env.CRON_SECRET) {
+    // console.error('[CRON_JOB_ERROR] CRON_SECRET environment variable is not set on the server.');
+    return NextResponse.json(
+      { error: 'Internal Server Configuration Error', message: 'The CRON_SECRET is not set on the server.' },
+      { status: 500 }
+    );
+  }
+  
+  // 2. Check authorization header for the secret key
   const authHeader = request.headers.get('authorization');
   if (authHeader !== `Bearer ${env.CRON_SECRET}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   try {
-    // 2. Get current time in São Paulo timezone
+    // 3. Get current time in São Paulo timezone
     const now = new Date();
     // Use toLocaleString to get the hour in the correct timezone, regardless of server location
     const saoPauloHour = parseInt(
@@ -29,7 +38,7 @@ export async function GET(request: NextRequest) {
       10
     );
 
-    // 3. Check if it's outside working hours (before 8 AM or 11 PM or later)
+    // 4. Check if it's outside working hours (before 8 AM or 11 PM or later)
     const isOutsideWorkingHours = saoPauloHour < 8 || saoPauloHour >= 23;
 
     if (!isOutsideWorkingHours) {
@@ -40,7 +49,7 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // 4. If outside working hours, find all OS with active timers
+    // 5. If outside working hours, find all OS with active timers
     const connection = await db.getConnection();
     const [activeOSRows] = await connection.query<RowDataPacket[]>(
       "SELECT id FROM os_table WHERE status = 'Em Produção' AND dataInicioProducaoAtual IS NOT NULL"
@@ -55,7 +64,7 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // 5. Pause each active timer
+    // 6. Pause each active timer
     const pausedOSIds: string[] = [];
     for (const row of activeOSRows) {
       const osId = String(row.id);
@@ -66,7 +75,7 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // 6. Return a success response
+    // 7. Return a success response
     return NextResponse.json({
       success: true,
       message: `Outside working hours. Paused ${pausedOSIds.length} timers.`,
