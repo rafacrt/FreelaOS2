@@ -1,6 +1,6 @@
+
 // src/app/api/cron/pause-timers/route.ts
 import { NextResponse, type NextRequest } from 'next/server';
-import { env } from '@/env.mjs';
 import db from '@/lib/db';
 import type { RowDataPacket } from 'mysql2/promise';
 import { toggleOSProductionTimerInDB } from '@/lib/actions/os-actions';
@@ -10,9 +10,9 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic'; // Ensure it runs dynamically every time
 
 export async function GET(request: NextRequest) {
-  // 1. Check if the CRON_SECRET is configured on the server
-  if (!env.CRON_SECRET) {
-    // console.error('[CRON_JOB_ERROR] CRON_SECRET environment variable is not set on the server.');
+  // 1. Check if the CRON_SECRET is configured on the server by reading directly from the process environment
+  const cronSecret = process.env.CRON_SECRET;
+  if (!cronSecret) {
     return NextResponse.json(
       { error: 'Internal Server Configuration Error', message: 'The CRON_SECRET is not set on the server.' },
       { status: 500 }
@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
   
   // 2. Check authorization header for the secret key
   const authHeader = request.headers.get('authorization');
-  if (authHeader !== `Bearer ${env.CRON_SECRET}`) {
+  if (authHeader !== `Bearer ${cronSecret}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -86,7 +86,6 @@ export async function GET(request: NextRequest) {
     });
 
   } catch (error: any) {
-    // console.error('[CRON_JOB_ERROR] /api/cron/pause-timers:', error);
     return NextResponse.json(
       { error: 'An internal server error occurred.', details: error.message },
       { status: 500 }
