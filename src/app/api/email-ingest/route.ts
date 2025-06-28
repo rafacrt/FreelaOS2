@@ -5,7 +5,6 @@ import { createOSInDB } from '@/lib/actions/os-actions';
 import { sendOSCreationConfirmationEmail } from '@/lib/email-service';
 import type { CreateOSData } from '@/lib/types';
 import { OSStatus } from '@/lib/types';
-import { env } from '@/env.mjs';
 import { notify } from '@/store/notification-store';
 
 // This is a server-side only file
@@ -25,7 +24,8 @@ export const runtime = 'nodejs';
 export async function POST(request: NextRequest) {
   // 1. Check authorization header for the secret key
   const authHeader = request.headers.get('authorization');
-  if (authHeader !== `Bearer ${env.EMAIL_INGEST_SECRET}`) {
+  // Read directly from process.env, bypassing the T3-env validation layer
+  if (authHeader !== `Bearer ${process.env.EMAIL_INGEST_SECRET}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
