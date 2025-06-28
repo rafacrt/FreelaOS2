@@ -1,3 +1,4 @@
+
 'use client';
 
 import Link from 'next/link';
@@ -11,6 +12,7 @@ import { useTheme } from '@/hooks/useTheme';
 import { useSession } from '@/hooks/useSession';
 import React, { useMemo, useState } from 'react';
 import ChronometerDisplay from '@/components/os/ChronometerDisplay';
+import { useSettingsStore } from '@/store/settings-store';
 
 
 interface OSCardProps {
@@ -67,6 +69,7 @@ export default function OSCard({ os, viewMode = 'admin' }: OSCardProps) {
   const { updateOSStatus, toggleUrgent, duplicateOS, toggleProductionTimer } = useOSStore();
   const { theme } = useTheme();
   const session = useSession();
+  const { showChronometer } = useSettingsStore();
   const [isUpdating, setIsUpdating] = useState(false);
 
   const statusCardClasses = getStatusClass(os.status, os.isUrgent, theme);
@@ -236,14 +239,16 @@ export default function OSCard({ os, viewMode = 'admin' }: OSCardProps) {
                                 </span>
                             </div>
                         )}
-                         <div className="mb-2">
-                            <ChronometerDisplay
-                                startTimeISO={os.dataInicioProducaoAtual}
-                                accumulatedSeconds={os.tempoGastoProducaoSegundos}
-                                isRunningClientOverride={os.status === OSStatus.EM_PRODUCAO && !!os.dataInicioProducaoAtual}
-                                osStatus={os.status}
-                            />
-                        </div>
+                        {showChronometer && (
+                            <div className="mb-2">
+                                <ChronometerDisplay
+                                    startTimeISO={os.dataInicioProducaoAtual}
+                                    accumulatedSeconds={os.tempoGastoProducaoSegundos}
+                                    isRunningClientOverride={os.status === OSStatus.EM_PRODUCAO && !!os.dataInicioProducaoAtual}
+                                    osStatus={os.status}
+                                />
+                            </div>
+                        )}
                     </div>
 
                     {viewMode === 'admin' ? (
@@ -304,13 +309,13 @@ export default function OSCard({ os, viewMode = 'admin' }: OSCardProps) {
                                     className="btn btn-info btn-sm w-100 d-flex align-items-center justify-content-center"
                                     onClick={handleFinalizeOS}
                                     style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem' }}
-                                    disabled={isUpdating || isTimerRunning}
-                                    title={isTimerRunning ? "Pause o timer para finalizar" : "Finalizar Ordem de Serviço"}
+                                    disabled={isUpdating || (isTimerRunning && showChronometer)}
+                                    title={(isTimerRunning && showChronometer) ? "Pause o timer para finalizar" : "Finalizar Ordem de Serviço"}
                                 >
                                     <CheckSquare size={14} className="me-1" /> Finalizar OS
                                 </button>
                             )}
-                            {!isFinalized && !isAwaitingApproval && !isRefused && (
+                            {showChronometer && !isFinalized && !isAwaitingApproval && !isRefused && (
                                 <div className="d-flex gap-1 mb-1">
                                     {isTimerRunning ? (
                                         <button

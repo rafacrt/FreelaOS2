@@ -16,6 +16,7 @@ import { ptBR } from 'date-fns/locale';
 import { useOSStore } from '@/store/os-store';
 import { OSStatus, ALL_OS_STATUSES } from '@/lib/types';
 import ChronometerDisplay from './ChronometerDisplay';
+import { useSettingsStore } from '@/store/settings-store';
 
 const getStatusHeaderClasses = (status: OSStatus, isEditing: boolean, isUrgentGlobal: boolean): string => {
   if (isUrgentGlobal && !isEditing && status !== OSStatus.AGUARDANDO_APROVACAO && status !== OSStatus.RECUSADA) return 'bg-danger-subtle text-danger-emphasis'; 
@@ -63,15 +64,9 @@ const DetailItem = ({ label, value, icon, name, isEditableField, children, class
 
   if (name === 'programadoPara' && typeof value === 'string' && value) {
     try {
-      // Correct way to handle YYYY-MM-DD to DD/MM/YYYY without timezone issues.
-      const parts = value.split('-');
-      if (parts.length === 3) {
-        const year = parseInt(parts[0], 10);
-        const month = parseInt(parts[1], 10);
-        const day = parseInt(parts[2], 10);
-        if (!isNaN(year) && !isNaN(month) && !isNaN(day)) {
-          displayValue = `${String(day).padStart(2, '0')}/${String(month).padStart(2, '0')}/${year}`;
-        }
+      const date = parseISO(value);
+      if (isValidDate(date)) {
+        displayValue = format(date, 'dd/MM/yyyy', { locale: ptBR, timeZone: 'UTC' });
       }
     } catch { /* fallback to original value */ }
   } else if ((name === 'dataAbertura' || name === 'dataFinalizacao' || name === 'dataInicioProducao' || name === 'dataInicioProducaoAtual') && typeof value === 'string' && value) {
@@ -167,6 +162,7 @@ interface OSDetailsViewProps {
 export default function OSDetailsView({ initialOs, viewMode }: OSDetailsViewProps) {
   const { updateOS, updateOSStatus, partners, clients, toggleProductionTimer } = useOSStore();
   const router = useRouter();
+  const { showChronometer } = useSettingsStore();
 
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -497,8 +493,8 @@ export default function OSDetailsView({ initialOs, viewMode }: OSDetailsViewProp
             <button
               className="btn btn-info btn-sm"
               onClick={handleFinalizeOS}
-              disabled={isSaving || isTimerCurrentlyRunning}
-              title={isTimerCurrentlyRunning ? "Pause o timer primeiro para finalizar" : "Finalizar Ordem de Serviço"}
+              disabled={isSaving || (isTimerCurrentlyRunning && showChronometer)}
+              title={(isTimerCurrentlyRunning && showChronometer) ? "Pause o timer primeiro para finalizar" : "Finalizar Ordem de Serviço"}
             >
               <CheckSquareIcon size={16} className="me-1" /> Finalizar OS
             </button>
@@ -561,7 +557,7 @@ export default function OSDetailsView({ initialOs, viewMode }: OSDetailsViewProp
         </div>
         <div className="card-body p-4">
 
-          {viewMode === 'admin' && initialOs.status !== OSStatus.FINALIZADO && initialOs.status !== OSStatus.AGUARDANDO_APROVACAO && initialOs.status !== OSStatus.RECUSADA && (
+          {showChronometer && viewMode === 'admin' && initialOs.status !== OSStatus.FINALIZADO && initialOs.status !== OSStatus.AGUARDANDO_APROVACAO && initialOs.status !== OSStatus.RECUSADA && (
             <div className="card bg-light-subtle p-2 mb-3 shadow-sm small">
               <h6 className="card-title text-primary mb-2 d-flex align-items-center">
                   <Clock3 size={18} className="me-2" /> Detalhes do Cronômetro
@@ -713,7 +709,7 @@ export default function OSDetailsView({ initialOs, viewMode }: OSDetailsViewProp
 
                 <DetailItem
                   label="Programado Para"
-                  value={isEditing && viewMode === 'admin' ? formData.programadoPara : initialOs.programadoPara}
+                  value={isEditing ? formData.programadoPara : initialOs.programadoPara}
                   icon={<CalendarIcon size={16} className="me-2 text-info" />}
                   name="programadoPara"
                   isEditableField={true}
@@ -769,29 +765,31 @@ export default function OSDetailsView({ initialOs, viewMode }: OSDetailsViewProp
                     </label>
                   </div>
                 </DetailItem>
-                 <DetailItem
-                    label="Tempo (Cronômetro)"
-                    icon={<Clock3 size={16} className="me-2 text-secondary" />}
-                    name="tempoTrabalhado"
-                    isEditableField={false}
-                    isEditingMode={isEditing}
-                    viewMode={viewMode}
-                    value={
-                        <ChronometerDisplay
-                            startTimeISO={initialOs.dataInicioProducaoAtual}
-                            accumulatedSeconds={initialOs.tempoGastoProducaoSegundos}
-                            isRunningClientOverride={isTimerCurrentlyRunning}
-                            osStatus={initialOs.status}
-                        />
-                    }
-                    currentOsStatus={initialOs.status}
+                {showChronometer && (
+                    <DetailItem
+                        label="Tempo (Cronômetro)"
+                        icon={<Clock3 size={16} className="me-2 text-secondary" />}
+                        name="tempoTrabalhado"
+                        isEditableField={false}
+                        isEditingMode={isEditing}
+                        viewMode={viewMode}
+                        value={
+                            <ChronometerDisplay
+                                startTimeISO={initialOs.dataInicioProducaoAtual}
+                                accumulatedSeconds={initialOs.tempoGastoProducaoSegundos}
+                                isRunningClientOverride={isTimerCurrentlyRunning}
+                                osStatus={initialOs.status}
+                            />
+                        }
+                        currentOsStatus={initialOs.status}
                     />
+                )}
               </dl>
             </div>
 
             <div className="col-md-6">
               <dl className="mb-0">
-                {viewMode === 'admin' && !isFinalized && !isAwaitingApproval && !isRefused && (
+                {showChronometer && viewMode === 'admin' && !isFinalized && !isAwaitingApproval && !isRefused && (
                   <div className="row py-2 border-bottom mb-2">
                     <dt className="col-sm-4 col-lg-3 text-muted d-flex align-items-center small fw-medium">
                        Controle Timer
