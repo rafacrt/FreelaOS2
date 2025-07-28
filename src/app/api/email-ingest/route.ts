@@ -5,7 +5,6 @@ import { createOSInDB } from '@/lib/actions/os-actions';
 import { sendOSCreationConfirmationEmail } from '@/lib/email-service';
 import type { CreateOSData } from '@/lib/types';
 import { OSStatus } from '@/lib/types';
-import { notify } from '@/store/notification-store';
 
 // This is a server-side only file
 export const runtime = 'nodejs';
