@@ -1,4 +1,3 @@
-
 // src/app/api/cron/pause-timers/route.ts
 import { NextResponse, type NextRequest } from 'next/server';
 import db from '@/lib/db';
@@ -26,30 +25,10 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // 3. Get current time in São Paulo timezone
-    const now = new Date();
-    // Use toLocaleString to get the hour in the correct timezone, regardless of server location
-    const saoPauloHour = parseInt(
-      now.toLocaleString('en-US', {
-        timeZone: 'America/Sao_Paulo',
-        hour: '2-digit',
-        hour12: false,
-      }),
-      10
-    );
+    // A responsabilidade de verificar o horário agora é do serviço de cron job externo.
+    // Esta API irá pausar todos os timers ativos sempre que for chamada.
 
-    // 4. Check if it's outside working hours (before 8 AM or 11 PM or later)
-    const isOutsideWorkingHours = saoPauloHour < 8 || saoPauloHour >= 23;
-
-    if (!isOutsideWorkingHours) {
-      return NextResponse.json({
-        message: 'Within working hours. No timers paused.',
-        checked_at: now.toISOString(),
-        sao_paulo_hour: saoPauloHour,
-      });
-    }
-
-    // 5. If outside working hours, find all OS with active timers
+    // 1. Find all OS with active timers
     const connection = await db.getConnection();
     const [activeOSRows] = await connection.query<RowDataPacket[]>(
       "SELECT id FROM os_table WHERE status = 'Em Produção' AND dataInicioProducaoAtual IS NOT NULL"
@@ -58,13 +37,14 @@ export async function GET(request: NextRequest) {
 
     if (activeOSRows.length === 0) {
       return NextResponse.json({
-        message: 'Outside working hours, but no active timers found.',
-        checked_at: now.toISOString(),
-        sao_paulo_hour: saoPauloHour,
+        success: true,
+        message: 'No active production timers found to pause.',
+        paused_count: 0,
+        checked_at: new Date().toISOString(),
       });
     }
 
-    // 6. Pause each active timer
+    // 2. Pause each active timer
     const pausedOSIds: string[] = [];
     for (const row of activeOSRows) {
       const osId = String(row.id);
@@ -75,14 +55,13 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // 7. Return a success response
+    // 3. Return a success response
     return NextResponse.json({
       success: true,
-      message: `Outside working hours. Paused ${pausedOSIds.length} timers.`,
+      message: `Successfully paused ${pausedOSIds.length} active production timer(s).`,
       paused_count: pausedOSIds.length,
       paused_ids: pausedOSIds,
-      checked_at: now.toISOString(),
-      sao_paulo_hour: saoPauloHour,
+      checked_at: new Date().toISOString(),
     });
 
   } catch (error: any) {
