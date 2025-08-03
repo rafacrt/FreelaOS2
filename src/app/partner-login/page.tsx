@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import PartnerAuthForm from '@/components/auth/PartnerAuthForm'; 
 import Link from 'next/link';
 import { AlertCircle } from 'lucide-react';
@@ -19,6 +20,12 @@ export default function PartnerLoginPage({
 }: {
   searchParams?: { [key: string]: string | string[] | undefined };
 }) {
+  const [isClient, setIsClient] = useState(false);
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
   const statusQuery = searchParams?.status;
   let initialMessage = '';
   let messageType : 'success' | 'error' | undefined = undefined;
@@ -43,11 +50,21 @@ export default function PartnerLoginPage({
             <p className="text-muted">Login Parceiro</p>
           </div>
 
-          <PartnerAuthForm initialMessage={initialMessage} initialMessageType={messageType} />
+          {isClient ? (
+            <>
+              <PartnerAuthForm initialMessage={initialMessage} initialMessageType={messageType} />
 
-          {isDevMode && (
-            <div className="mt-2">
-                <SimulatedPartnerLoginButton />
+              {isDevMode && (
+                <div className="mt-2">
+                    <SimulatedPartnerLoginButton />
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="d-flex justify-content-center p-3">
+              <div className="spinner-border text-primary" role="status">
+                <span className="visually-hidden">Carregando...</span>
+              </div>
             </div>
           )}
 
