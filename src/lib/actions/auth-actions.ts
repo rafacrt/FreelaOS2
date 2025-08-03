@@ -135,7 +135,6 @@ export async function partnerLoginAction(
 }
 
 
-// devLoginAction and simulatePartnerLoginAction can be kept for testing but won't be directly accessible from UI
 export async function devLoginAction(prevState: AuthActionState, formData: FormData): Promise<AuthActionState> {
   const adminSession: SessionPayload = {
     sessionType: 'admin',
@@ -148,7 +147,7 @@ export async function devLoginAction(prevState: AuthActionState, formData: FormD
   try {
     await createSessionCookie(adminSession);
     nextRedirect('/dashboard');
-  } catch (error: any) {
+  } catch (error: any) { 
     if (error.message === 'NEXT_REDIRECT') { 
         throw error;
     }

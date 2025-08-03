@@ -15,6 +15,7 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   const publicPaths = ['/login', '/register', '/health', '/partner-login'];
+  const sharedProtectedPaths = ['/settings'];
 
   if (
     pathname.startsWith('/_next/') ||
@@ -39,6 +40,22 @@ export async function middleware(request: NextRequest) {
     }
     return NextResponse.next(); // Allow access to public paths if no conflicting session
   }
+
+  // Handle shared protected routes that both admins and partners can access
+  if (sharedProtectedPaths.some(p => pathname.startsWith(p))) {
+    if (!session) {
+      return NextResponse.redirect(new URL('/login', request.url));
+    }
+    if (!session.isApproved) {
+      const loginUrl = new URL(session.sessionType === 'admin' ? '/login' : '/partner-login', request.url);
+      loginUrl.searchParams.set('status', 'not_approved');
+      const response = NextResponse.redirect(loginUrl);
+      response.cookies.delete(AUTH_COOKIE_NAME);
+      return response;
+    }
+    return NextResponse.next();
+  }
+
 
   // Handle protected admin routes (e.g., /dashboard, /entities, /reports)
   if (pathname.startsWith('/dashboard') || pathname.startsWith('/entities') || pathname.startsWith('/reports') || pathname.startsWith('/calendar') || pathname.startsWith('/os/')) {

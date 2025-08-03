@@ -1,9 +1,9 @@
-
 'use client';
 
 import PartnerAuthForm from '@/components/auth/PartnerAuthForm'; 
 import Link from 'next/link';
 import { AlertCircle } from 'lucide-react';
+import SimulatedPartnerLoginButton from '@/components/auth/SimulatedPartnerLoginButton';
 
 const FreelaOSPartnerLoginLogo = () => (
   <svg width="48" height="48" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" className="mb-2">
@@ -22,6 +22,8 @@ export default function PartnerLoginPage({
   const statusQuery = searchParams?.status;
   let initialMessage = '';
   let messageType : 'success' | 'error' | undefined = undefined;
+
+  const isDevMode = process.env.NEXT_PUBLIC_DEV_MODE === 'true';
 
   if (statusQuery === 'logged_out') {
     initialMessage = 'Você foi desconectado com sucesso.';
@@ -42,6 +44,12 @@ export default function PartnerLoginPage({
           </div>
 
           <PartnerAuthForm initialMessage={initialMessage} initialMessageType={messageType} />
+
+          {isDevMode && (
+            <div className="mt-2">
+                <SimulatedPartnerLoginButton />
+            </div>
+          )}
 
           <div className="text-center mt-4">
              <p className="mb-1 small text-muted">Outras opções:</p>

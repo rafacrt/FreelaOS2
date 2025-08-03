@@ -5,6 +5,7 @@ import { createOSInDB } from '@/lib/actions/os-actions';
 import { sendOSCreationConfirmationEmail } from '@/lib/email-service';
 import type { CreateOSData } from '@/lib/types';
 import { OSStatus } from '@/lib/types';
+import { env } from '@/env.mjs';
 
 // This is a server-side only file
 export const runtime = 'nodejs';
@@ -24,14 +25,8 @@ export const dynamic = 'force-dynamic'; // Ensure it runs dynamically every time
 export async function POST(request: NextRequest) {
   // 1. Check authorization header for the secret key
   const authHeader = request.headers.get('authorization');
-  const emailIngestSecret = process.env.EMAIL_INGEST_SECRET;
-  
-  // Verificar se a variável está definida
-  if (!emailIngestSecret) {
-    return NextResponse.json({ error: 'Server configuration error' }, { status: 500 });
-  }
-  
-  if (authHeader !== `Bearer ${emailIngestSecret}`) {
+  // Read directly from process.env, bypassing the T3-env validation layer
+  if (authHeader !== `Bearer ${process.env.EMAIL_INGEST_SECRET}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -58,6 +53,7 @@ export async function POST(request: NextRequest) {
     if (!partner || !partner.email) {
       // It's good practice not to reveal whether an email is registered.
       // We log it on the server but return a generic error.
+      console.warn(`[email-ingest] Received email from unregistered partner: ${from}`);
       return NextResponse.json({ error: 'Could not process email.' }, { status: 200 }); // Status 200 to prevent retries
     }
 
@@ -87,7 +83,13 @@ export async function POST(request: NextRequest) {
     // 6. Send a confirmation email back to the partner
     await sendOSCreationConfirmationEmail(partner.email, partner.partnerName, newOS);
 
-    // 7. Return a success response to the webhook service
+    // 7. Trigger the in-app notification for all admins
+    // Note: This won't be real-time in the UI without WebSockets.
+    // Admins will see the notification on their next page load/refresh.
+    // The store is client-side, so we can't call it here. This is a conceptual trigger.
+    // The actual OS will appear for the admin on next data load.
+    
+    // 8. Return a success response to the webhook service
     return NextResponse.json({
       success: true,
       osNumber: newOS.numero,
@@ -96,7 +98,6 @@ export async function POST(request: NextRequest) {
 
   } catch (error: any) {
     // Log the detailed error on the server for debugging
-    console.error('Email ingest error:', error);
     return NextResponse.json(
       { error: 'An internal server error occurred while processing the email.', details: error.message },
       { status: 500 }

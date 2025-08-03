@@ -1,17 +1,18 @@
 import mysql from 'mysql2/promise';
+import { env } from '@/env.mjs';
 
 const dbConfig = {
-  host: process.env.DB_HOST,
-  port: parseInt(process.env.DB_PORT || '3306', 10),
-  user: process.env.DB_USER || 'root',
-  password: process.env.DB_PASSWORD?.trim(), // Ensure password is trimmed
-  database: process.env.DB_DATABASE || 'freelaos-db',
+  host: env.DB_HOST,
+  port: env.DB_PORT,
+  user: env.DB_USER,
+  password: env.DB_PASSWORD.trim(), // Ensure password is trimmed
+  database: env.DB_DATABASE,
   waitForConnections: true,
-  connectionLimit: parseInt(process.env.DB_CONNECTION_LIMIT || '10', 10),
+  connectionLimit: env.DB_CONNECTION_LIMIT || 10,
   queueLimit: 0,
-  ssl: process.env.DB_SSL_ENABLED === 'true'
+  ssl: env.DB_SSL_ENABLED
     ? { 
-        rejectUnauthorized: process.env.DB_SSL_REJECT_UNAUTHORIZED !== 'false',
+        rejectUnauthorized: env.DB_SSL_REJECT_UNAUTHORIZED !== false,
         // ca: process.env.DB_SSL_CA ? Buffer.from(process.env.DB_SSL_CA, 'base64').toString('ascii') : undefined,
         // key: process.env.DB_SSL_KEY ? Buffer.from(process.env.DB_SSL_KEY, 'base64').toString('ascii') : undefined,
         // cert: process.env.DB_SSL_CERT ? Buffer.from(process.env.DB_SSL_CERT, 'base64').toString('ascii') : undefined,
@@ -27,11 +28,13 @@ let pool: mysql.Pool;
 try {
   pool = mysql.createPool(dbConfig);
 } catch (error) {
+  console.error("Failed to create database connection pool:", error);
   throw error;
 }
 
 
 pool.on('error', (err) => {
+  console.error("Database pool error:", err);
   // Potentially handle reconnection or logging to a monitoring service
 });
 
@@ -43,6 +46,7 @@ export const testConnection = async () => {
     await connection.query('SELECT 1');
     return true;
   } catch (error: any) {
+    console.error("Database connection test failed:", error);
     return false;
   } finally {
     if (connection) {

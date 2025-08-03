@@ -5,20 +5,21 @@ import { env } from '@/env.mjs'; // Import env variables correctly
 
 let key: Uint8Array | null = null; 
 const jwtSecretFromEnv = env.JWT_SECRET;
-const devLoginEnabled = env.DEV_LOGIN_ENABLED === "true";
-const nextPublicDevMode = env.NEXT_PUBLIC_DEV_MODE === "true";
+
+// No longer needed as env validation handles defaults/presence
+// const devLoginEnabled = env.DEV_LOGIN_ENABLED === true;
+// const nextPublicDevMode = env.NEXT_PUBLIC_DEV_MODE === true;
 
 if (jwtSecretFromEnv) {
   try {
     key = new TextEncoder().encode(jwtSecretFromEnv);
   } catch (error: any) {
+    console.error("Failed to encode JWT_SECRET:", error);
   }
 } else {
-  // Use fallback key if JWT_SECRET is not set AND (DEV_LOGIN_ENABLED is true OR NEXT_PUBLIC_DEV_MODE is true)
-  if (devLoginEnabled || nextPublicDevMode) {
-    key = new TextEncoder().encode("DEFAULT_INSECURE_FALLBACK_SECRET_FOR_DEV_LOGIN_ONLY_MIN_32_CHARS");
-  } else {
-  }
+  // This else block is less critical now because t3-env will throw an error if JWT_SECRET is missing.
+  // It's kept as a fallback for scenarios where validation might be skipped.
+  console.error("FATAL: JWT_SECRET environment variable is not set. The application will not function securely.");
 }
 
 // payload here should be SessionPayload
@@ -36,6 +37,7 @@ export async function encryptPayload(payload: SessionPayload) {
 
 export async function decryptPayload(token: string): Promise<SessionPayload | null> {
   if (!key) {
+    console.error("JWT key not initialized for decryption.");
     return null;
   }
   try {
@@ -48,8 +50,11 @@ export async function decryptPayload(token: string): Promise<SessionPayload | nu
     } else if (payload.sessionType === 'partner' && payload.id && payload.username && payload.partnerName && typeof payload.isApproved === 'boolean') {
         return payload as SessionPayload;
     }
+    console.warn("Decrypted JWT payload has an invalid structure:", payload);
     return null;
   } catch (error) {
+    // This is expected for invalid or expired tokens, so a simple console.log is fine.
+    // console.log("JWT verification failed:", error);
     return null;
   }
 }
