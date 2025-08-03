@@ -1,8 +1,8 @@
-
 // src/lib/auth.ts
 import type { User, PartnerSessionData } from './types'; 
 import type { RowDataPacket } from 'mysql2/promise';
 import db from './db'; 
+// Re-export everything from auth-edge so server-side code can import from one place
 export * from './auth-edge'; 
 
 // For Admin/Internal Users

@@ -1,14 +1,11 @@
 // src/lib/auth-edge.ts
 import type { User, PartnerSessionData, SessionPayload } from './types'; // Updated imports
 import { SignJWT, jwtVerify } from 'jose';
-import { env } from '@/env.mjs'; // Import env variables correctly
+
+// Direct access to process.env for Edge compatibility
+const jwtSecretFromEnv = process.env.JWT_SECRET;
 
 let key: Uint8Array | null = null; 
-const jwtSecretFromEnv = env.JWT_SECRET;
-
-// No longer needed as env validation handles defaults/presence
-// const devLoginEnabled = env.DEV_LOGIN_ENABLED === true;
-// const nextPublicDevMode = env.NEXT_PUBLIC_DEV_MODE === true;
 
 if (jwtSecretFromEnv) {
   try {
@@ -17,8 +14,6 @@ if (jwtSecretFromEnv) {
     console.error("Failed to encode JWT_SECRET:", error);
   }
 } else {
-  // This else block is less critical now because t3-env will throw an error if JWT_SECRET is missing.
-  // It's kept as a fallback for scenarios where validation might be skipped.
   console.error("FATAL: JWT_SECRET environment variable is not set. The application will not function securely.");
 }
 
@@ -64,9 +59,11 @@ export async function getSessionFromToken(tokenValue?: string): Promise<SessionP
     return null;
   }
   const decryptedPayload = await decryptPayload(tokenValue);
+  
   if (!decryptedPayload) {
     return null;
   }
+
   // Basic validation of the payload structure based on sessionType
   if (decryptedPayload.sessionType === 'admin') {
     const adminPayload = decryptedPayload as { sessionType: 'admin' } & User;
