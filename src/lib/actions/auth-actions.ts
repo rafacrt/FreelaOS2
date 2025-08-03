@@ -161,17 +161,17 @@ export async function simulatePartnerLoginAction(
   formData: FormData 
 ): Promise<AuthActionState> {
   try {
-    const simulatedPartner = await ensureSimulatedPartnerExists(); 
-
-    const partnerSession: SessionPayload = {
+    // Cria uma sessão de parceiro fictícia sem consultar o banco de dados.
+    const simulatedPartnerSession: SessionPayload = {
       sessionType: 'partner',
-      id: simulatedPartner.id, 
-      username: simulatedPartner.username!, 
-      partnerName: simulatedPartner.name,
-      email: simulatedPartner.email,
-      isApproved: simulatedPartner.is_approved!, 
+      id: 'dev-partner-001', 
+      username: 'dev_partner_user', 
+      partnerName: 'Parceiro de Desenvolvimento',
+      email: 'dev.partner@example.com',
+      isApproved: true, 
     };
-    await createSessionCookie(partnerSession);
+
+    await createSessionCookie(simulatedPartnerSession);
     nextRedirect('/partner/dashboard');
   } catch (error: any) { 
     if (error.message === 'NEXT_REDIRECT') { 
