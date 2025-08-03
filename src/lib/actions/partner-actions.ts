@@ -1,3 +1,4 @@
+
 'use server';
 
 import db from '@/lib/db';
@@ -165,21 +166,21 @@ export async function findOrCreatePartnerByName(partnerName: string, existingCon
       return mapPartnerRowToPartner(p);
     }
 
-    const defaultUsername = `parceiro_${Date.now()}`; 
-    const defaultEmail = `${defaultUsername}@placeholder.invalid`; // Placeholder email
+    // Para parceiros criados dinamicamente (ex: ao digitar um novo nome em uma OS)
+    // Criamos uma entrada mínima sem credenciais de login.
+    const defaultUsername = `parceiro_${Date.now()}`;
     const [result] = await connection.execute<ResultSetHeader>(
-      'INSERT INTO partners (name, username, email, is_approved, created_at, updated_at) VALUES (?, ?, ?, ?, NOW(), NOW())',
-      [trimmedPartnerName, defaultUsername, defaultEmail, false] 
+      'INSERT INTO partners (name, username, is_approved, created_at, updated_at) VALUES (?, ?, ?, NOW(), NOW())',
+      [trimmedPartnerName, defaultUsername, false] // Não aprovado por padrão
     );
 
     if (result.insertId) {
-      return { 
-          id: String(result.insertId), 
-          name: trimmedPartnerName, 
-          username: defaultUsername,
-          email: defaultEmail,
-          is_approved: false 
-        };
+      return {
+        id: String(result.insertId),
+        name: trimmedPartnerName,
+        username: defaultUsername,
+        is_approved: false
+      };
     } else {
       throw new Error('Failed to create partner: No valid insertId returned.');
     }

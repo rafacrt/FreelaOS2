@@ -1,3 +1,4 @@
+
 'use server';
 
 import { cookies } from 'next/headers';
@@ -167,7 +168,7 @@ export async function simulatePartnerLoginAction(
       id: simulatedPartner.id, 
       username: simulatedPartner.username!, 
       partnerName: simulatedPartner.name,
-      email: simulatedPartner.email, // Ensure email from simulated partner is included
+      email: simulatedPartner.email,
       isApproved: simulatedPartner.is_approved!, 
     };
     await createSessionCookie(partnerSession);
@@ -176,6 +177,8 @@ export async function simulatePartnerLoginAction(
     if (error.message === 'NEXT_REDIRECT') { 
         throw error;
     }
+    // Melhorando o log de erro
+    console.error('[simulatePartnerLoginAction] Erro:', error);
     return { message: `Erro ao simular login de parceiro: ${error.message}`, type: 'error' };
   }
 }
