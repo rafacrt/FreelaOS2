@@ -8,6 +8,7 @@ import { OSStatus } from '@/lib/types';
 
 // This is a server-side only file
 export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic'; // Adicionar para garantir execução dinâmica
 
 /**
  * Handles incoming POST requests to create an OS from an email.
@@ -23,8 +24,14 @@ export const runtime = 'nodejs';
 export async function POST(request: NextRequest) {
   // 1. Check authorization header for the secret key
   const authHeader = request.headers.get('authorization');
-  // Read directly from process.env, bypassing the T3-env validation layer
-  if (authHeader !== `Bearer ${process.env.EMAIL_INGEST_SECRET}`) {
+  const emailIngestSecret = process.env.EMAIL_INGEST_SECRET;
+  
+  // Verificar se a variável está definida
+  if (!emailIngestSecret) {
+    return NextResponse.json({ error: 'Server configuration error' }, { status: 500 });
+  }
+  
+  if (authHeader !== `Bearer ${emailIngestSecret}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -95,6 +102,7 @@ export async function POST(request: NextRequest) {
 
   } catch (error: any) {
     // Log the detailed error on the server for debugging
+    console.error('Email ingest error:', error);
     return NextResponse.json(
       { error: 'An internal server error occurred while processing the email.', details: error.message },
       { status: 500 }
