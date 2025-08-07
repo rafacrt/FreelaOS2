@@ -8,7 +8,7 @@ import { OSStatus } from '@/lib/types';
 
 // This is a server-side only file
 export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic'; // Adicionar para garantir execução dinâmica
+export const dynamic = 'force-dynamic'; // Ensure it runs dynamically every time
 
 /**
  * Handles incoming POST requests to create an OS from an email.
@@ -87,13 +87,7 @@ export async function POST(request: NextRequest) {
     // 6. Send a confirmation email back to the partner
     await sendOSCreationConfirmationEmail(partner.email, partner.partnerName, newOS);
 
-    // 7. Trigger the in-app notification for all admins
-    // Note: This won't be real-time in the UI without WebSockets.
-    // Admins will see the notification on their next page load/refresh.
-    // The store is client-side, so we can't call it here. This is a conceptual trigger.
-    // The actual OS will appear for the admin on next data load.
-    
-    // 8. Return a success response to the webhook service
+    // 7. Return a success response to the webhook service
     return NextResponse.json({
       success: true,
       osNumber: newOS.numero,

@@ -49,7 +49,6 @@ interface OSState {
   getOSById: (osId: string) => OS | undefined;
   duplicateOS: (osId: string, adminUsername: string) => Promise<OS | null>;
   toggleUrgent: (osId: string) => Promise<void>;
-  toggleProductionTimer: (osId: string, action: 'play' | 'pause') => Promise<OS | null>;
 
   addPartnerEntity: (partnerData: CreatePartnerData) => Promise<Partner | null>; 
   updatePartnerEntity: (updatedPartnerData: UpdatePartnerDetailsData) => Promise<Partner | null>; 
@@ -259,33 +258,6 @@ export const useOSStore = create<OSState>()(
           return null;
         } catch (error: any) {
           throw error;
-        }
-      },
-      
-      toggleProductionTimer: async (osId: string, action: 'play' | 'pause') => {
-        try {
-            const updatedOS = await toggleOSProductionTimerInDB(osId, action);
-            if (updatedOS) {
-                const updatedOSWithDefaults = {
-                    ...updatedOS,
-                    checklist: updatedOS.checklist || [],
-                };
-                set((state) => ({
-                    osList: state.osList.map((os) =>
-                        os.id === osId ? { ...updatedOSWithDefaults } : os 
-                    ).sort((a, b) => { 
-                        if (a.isUrgent && !b.isUrgent) return -1;
-                        if (!a.isUrgent && b.isUrgent) return 1;
-                        if (a.status === OSStatus.AGUARDANDO_APROVACAO && b.status !== OSStatus.AGUARDANDO_APROVACAO) return -1;
-                        if (a.status !== OSStatus.AGUARDANDO_APROVACAO && b.status === OSStatus.AGUARDANDO_APROVACAO) return 1;
-                        return new Date(b.dataAbertura).getTime() - new Date(a.dataAbertura).getTime();
-                    }),
-                }));
-                return updatedOSWithDefaults;
-            }
-            return null;
-        } catch (error: any) {
-            throw error;
         }
       },
 
