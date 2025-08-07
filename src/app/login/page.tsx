@@ -1,5 +1,7 @@
+
 'use client'; 
 
+import { useState, useEffect } from 'react';
 import AuthForm from '@/components/auth/AuthForm'; 
 import Link from 'next/link';
 import { AlertCircle } from 'lucide-react'; 
@@ -19,6 +21,12 @@ export default function LoginPage({
 }: {
   searchParams?: { [key: string]: string | string[] | undefined };
 }) {
+  const [isClient, setIsClient] = useState(false);
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
   const statusQuery = searchParams?.status;
   let initialMessage = '';
   let messageType : 'success' | 'error' | undefined = undefined;
@@ -46,11 +54,21 @@ export default function LoginPage({
             <p className="text-muted">Login Administrador</p>
           </div>
           
-          <AuthForm initialMessage={initialMessage} initialMessageType={messageType} />
+          {isClient ? (
+            <>
+              <AuthForm initialMessage={initialMessage} initialMessageType={messageType} />
 
-          {isDevMode && (
-            <div className="mt-2">
-                <DevLoginButton />
+              {isDevMode && (
+                <div className="mt-2">
+                    <DevLoginButton />
+                </div>
+              )}
+            </>
+          ) : (
+             <div className="d-flex justify-content-center p-3">
+              <div className="spinner-border text-primary" role="status">
+                <span className="visually-hidden">Carregando...</span>
+              </div>
             </div>
           )}
 
